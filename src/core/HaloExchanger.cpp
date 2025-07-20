@@ -39,7 +39,7 @@ HaloExchanger::HaloExchanger(const Grid& grid)
               << ", Y- (Bottom): " << neighbors_y_[0] << ", Y+ (Top): " << neighbors_y_[1] << std::endl;
 }
 
-// Main method
+// Main method for a field
 void HaloExchanger::exchange_halos(Field& field) const {
     nvtxRangePushA("HaloExchange_X");
     exchange_halo_x(field);
@@ -48,6 +48,15 @@ void HaloExchanger::exchange_halos(Field& field) const {
     nvtxRangePushA("HaloExchange_Y");
     exchange_halo_y(field);
     nvtxRangePop();
+}
+
+// Main method for State
+void HaloExchanger::exchange_halos(State& state) const {
+    for (auto& field_pair : state) {
+        nvtxRangePushA(field_pair.second.get_name().c_str());
+        exchange_halos(field_pair.second);
+        nvtxRangePop();
+    }
 }
 
 void HaloExchanger::exchange_halo_x(Field& field) const {

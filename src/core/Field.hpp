@@ -1,3 +1,7 @@
+// Field class is a Kokkos::View-based data structure
+// that represents a 3D field in the simulation grid.
+// It provides methods for initialization, data access, and printing field information.
+
 #ifndef VVM_CORE_FIELD_HPP
 #define VVM_CORE_FIELD_HPP
 
@@ -49,6 +53,8 @@ public:
 
     // Get a Kokkos::View on the HostSpace (for CPU side access, involves deep_copy)
     Kokkos::View<double***, Kokkos::HostSpace> get_host_data() const;
+
+    void update_device_from_host(Kokkos::View<const double***, Kokkos::LayoutRight, Kokkos::HostSpace> host_view);
 
     // --- Getters for Field Dimensions ---
     const std::string& get_name() const { return name_; }

@@ -8,6 +8,7 @@
 #include "core/Grid.hpp"
 #include "core/Field.hpp"
 #include "core/HaloExchanger.hpp"
+#include "core/State.hpp"
 
 template <class ExecutionSpace>
 void matrix_multiply(Kokkos::View<double**, Kokkos::LayoutRight, ExecutionSpace> A,
@@ -56,47 +57,81 @@ int main(int argc, char* argv[]) {
             config.print_config(); // Print loaded configuration
         }
 
+        
+
         // Create a VVM model instance and run the simulation
         VVM::Core::Grid grid(config);
+        VVM::Core::ModelParameters model_params(grid, config);
         grid.print_info();
 
-        // VVM::VVMModel model(grid, config);
-        // model.run_simulation();
-
-
-        VVM::Core::Field my_scalar_field(grid, "my_scalar_field");
-        auto field_data_mutable = my_scalar_field.get_mutable_device_data();
         const int nz_total = grid.get_local_total_points_z();
         const int ny_total = grid.get_local_total_points_y();
         const int nx_total = grid.get_local_total_points_x();
-        Kokkos::parallel_for("InitFieldForHaloTest",
+
+        VVM::Core::HaloExchanger halo_exchanger(grid);
+
+        // Field test
+        // VVM::Core::Field my_scalar_field(grid, "my_scalar_field");
+        // auto field_data_mutable = my_scalar_field.get_mutable_device_data();
+        
+        // Kokkos::parallel_for("InitFieldForHaloTest",
+        //     Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz_total, ny_total, nx_total}),
+        //     KOKKOS_LAMBDA(const int k, const int j, const int i) {
+        //         field_data_mutable(k, j, i) = static_cast<double>(100*rank + 10*j + i);
+        //     }
+        // );
+        // Kokkos::fence(); 
+
+
+        // if (rank == 0) {
+        //     std::cout << "\n--- Field State BEFORE Halo Exchange ---" << std::endl;
+        // }
+        // my_scalar_field.print_field_info();
+        // my_scalar_field.print_slice_z_at_k(grid, 0);
+        // my_scalar_field.print_slice_z_at_k(grid, grid.get_halo_cells());
+
+        // halo_exchanger.exchange_halos(my_scalar_field);
+
+        // if (rank == 0) {
+        //     std::cout << "\n--- Field State AFTER Halo Exchange ---" << std::endl;
+        // }
+        // my_scalar_field.print_field_info();
+        // // Print the first physical z slice after halo exchange
+        // my_scalar_field.print_slice_z_at_k(grid, grid.get_halo_cells());
+
+
+
+        // State test
+        VVM::Core::State state(grid, config, model_params);
+
+        // Initialize one of the fields for testing
+        auto& var_eta = state.get_field("eta");
+        auto eta_mutable = var_eta.get_mutable_device_data();
+        Kokkos::parallel_for("EtaHaloTest",
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz_total, ny_total, nx_total}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                field_data_mutable(k, j, i) = static_cast<double>(100*rank + 10*j + i);
+                eta_mutable(k, j, i) = static_cast<double>(100*rank + 10*j + i);
             }
         );
         Kokkos::fence(); 
 
-        VVM::Core::HaloExchanger halo_exchanger(grid);
 
         if (rank == 0) {
             std::cout << "\n--- Field State BEFORE Halo Exchange ---" << std::endl;
         }
-        my_scalar_field.print_field_info();
-        my_scalar_field.print_slice_z_at_k(grid, 0);
-        my_scalar_field.print_slice_z_at_k(grid, grid.get_halo_cells());
+        var_eta.print_slice_z_at_k(grid, grid.get_halo_cells());
 
-        halo_exchanger.exchange_halos(my_scalar_field);
+        // Perform halo exchange on the entire state
+        halo_exchanger.exchange_halos(state);
 
         if (rank == 0) {
             std::cout << "\n--- Field State AFTER Halo Exchange ---" << std::endl;
         }
-        my_scalar_field.print_field_info();
-        // Print the first physical z slice after halo exchange
-        my_scalar_field.print_slice_z_at_k(grid, grid.get_halo_cells());
+        var_eta.print_slice_z_at_k(grid, grid.get_halo_cells());
 
 
-        
+
+        // Example of matrix multiplication using Kokkos
         // if (rank == 0) {
         //     // Matrix dimensions
         //     const int N = 512;

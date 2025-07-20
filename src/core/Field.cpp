@@ -71,6 +71,11 @@ Kokkos::View<double***, Kokkos::HostSpace> Field::get_host_data() const {
     return host_data;
 }
 
+void Field::update_device_from_host(Kokkos::View<const double***, Kokkos::LayoutRight, Kokkos::HostSpace> host_view) {
+    Kokkos::deep_copy(data_, host_view);
+    Kokkos::fence();
+}
+
 void Field::print_field_info() const {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);

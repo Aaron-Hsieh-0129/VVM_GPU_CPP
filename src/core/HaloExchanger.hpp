@@ -1,10 +1,15 @@
-// In HaloExchanger.hpp
+// HaloExchange processes halo data exchange between neighboring MPI ranks
+// in a distributed grid simulation. It uses Kokkos for parallel execution
+// and MPI for inter-process communication. The class provides methods to
+// exchange halo data in the X, Y, and Z dimensions, ensuring that each rank
+// has the necessary data from its neighbors for accurate computations.
 
 #ifndef VVM_CORE_HALOEXCHANGER_HPP
 #define VVM_CORE_HALOEXCHANGER_HPP
 
 #include "Grid.hpp"
 #include "Field.hpp"
+#include "State.hpp"
 
 namespace VVM {
 namespace Core {
@@ -23,6 +28,9 @@ public:
 
     // Main public interface
     void exchange_halos(Field& field) const;
+
+    // overload exchange halos for State
+    void exchange_halos(State& state) const;
 
     // --- MOVED TO PUBLIC ---
     // NOTE: These are moved to public due to a nvcc compiler limitation
