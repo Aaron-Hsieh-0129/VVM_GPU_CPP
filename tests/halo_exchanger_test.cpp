@@ -3,7 +3,6 @@
 #include <Kokkos_Core.hpp>
 #include <iostream>
 
-// 包含您需要測試的類別
 #include "../src/utils/ConfigurationManager.hpp"
 #include "../src/core/Grid.hpp"
 #include "../src/core/Field.hpp"
@@ -21,7 +20,7 @@ protected:
         // Clean resources if needed
     }
 
-    // 輔助函式，用於初始化 Field 資料
+    // Helper function to initialize Field data
     void initialize_field(VVM::Core::Field& field, const VVM::Core::Grid& grid) {
         auto field_data_host = Kokkos::create_mirror_view(field.get_mutable_device_data());
         
@@ -30,16 +29,15 @@ protected:
         const int nx = grid.get_local_physical_points_x();
         const int h = grid.get_halo_cells();
         
-        // 僅填滿物理區域
+        // Only initialize the local physical points
         for (int k = 0; k < nz; ++k) {
             for (int j = 0; j < ny; ++j) {
                 for (int i = 0; i < nx; ++i) {
-                    // 計算這一點的全域座標
+                    // Calculate global coordinates
                     int global_y = grid.get_local_physical_start_y() + j;
                     int global_x = grid.get_local_physical_start_x() + i;
-                    
-                    // 使用獨一無二的公式賦值: rank * 1M + global_y * 1k + global_x
-                    // 這樣我們就可以從 halo 點的值反推出它應該來自哪個 rank 的哪個座標
+
+                    // Assign values through: rank * 100 + global_y * 10 + global_x
                     double value = rank * 100 + global_y * 10 + global_x;
                     field_data_host(k + h, j + h, i + h) = value;
                 }
@@ -49,8 +47,8 @@ protected:
         Kokkos::deep_copy(field.get_mutable_device_data(), field_data_host);
         Kokkos::fence();
     }
-    
-    // 輔助函式，用於計算期望值
+
+    // Helper function to calculate expected values
     double get_expected_value(int neighbor_rank, int global_y, int global_x) {
         return neighbor_rank * 100 + global_y * 10 + global_x;
     }
