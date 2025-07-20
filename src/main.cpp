@@ -69,11 +69,10 @@ int main(int argc, char* argv[]) {
         const int nz_total = grid.get_local_total_points_z();
         const int ny_total = grid.get_local_total_points_y();
         const int nx_total = grid.get_local_total_points_x();
-        const int rank_val = rank;
         Kokkos::parallel_for("InitFieldForHaloTest",
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz_total, ny_total, nx_total}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                field_data_mutable(k, j, i) = static_cast<double>(rank_val * 100 + i);
+                field_data_mutable(k, j, i) = static_cast<double>(100*rank + 10*j + i);
             }
         );
         Kokkos::fence(); 
@@ -93,9 +92,8 @@ int main(int argc, char* argv[]) {
             std::cout << "\n--- Field State AFTER Halo Exchange ---" << std::endl;
         }
         my_scalar_field.print_field_info();
-        // --- 測試步驟 4: 列印交換後的 Field 資訊和切片，進行驗證 ---
-        // my_scalar_field.print_slice_z_at_k(grid, 0); // 打印 Z=0 的切片 (包含光暈)
-        my_scalar_field.print_slice_z_at_k(grid, grid.get_halo_cells()); // 打印 Z=halo_cells 的切片 (第一個物理層)
+        // Print the first physical z slice after halo exchange
+        my_scalar_field.print_slice_z_at_k(grid, grid.get_halo_cells());
 
 
         
