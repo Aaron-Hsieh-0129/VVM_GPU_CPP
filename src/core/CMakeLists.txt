@@ -1,8 +1,6 @@
 add_library(vvm_core STATIC
-    Grid.cpp
-    Field.cpp
-    HaloExchanger.cpp
     State.cpp
+    Grid.cpp
 )
 
 target_include_directories(vvm_core
