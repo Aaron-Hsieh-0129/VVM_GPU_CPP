@@ -4,8 +4,8 @@
 namespace VVM {
 namespace Core {
 
-State::State(const Grid& grid, const Utils::ConfigurationManager& config)
-    : grid_ref_(grid), config_ref_(config) {
+State::State(const Grid& grid, const Utils::ConfigurationManager& config, const ModelParameters& params)
+    : grid_ref_(grid), config_ref_(config), model_parameters_(params) {
     initialize_fields();
 }
 
