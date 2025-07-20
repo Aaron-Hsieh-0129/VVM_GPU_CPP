@@ -34,7 +34,7 @@ private:
 };
 
 // ====================================================================
-// Template method implementations (must be in header file or .tpp file and included)
+// Template method implementations
 // ====================================================================
 
 template<typename T>

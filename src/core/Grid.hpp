@@ -1,3 +1,8 @@
+// Grid class defines the grid and domain decomposition for the simulation.
+// Kokkos is used for parallel execution and MPI for inter-process communication.
+// The class provides methods to access grid dimensions, local physical points,
+// and halo cells, ensuring efficient data exchange between neighboring ranks.
+
 #ifndef VVM_CORE_GRID_HPP
 #define VVM_CORE_GRID_HPP
 

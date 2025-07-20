@@ -22,5 +22,9 @@
     "output": {
         "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/test",
         "enable_netcdf": true
+    },
+    "constants": {
+        "gravity": 9.81,
+        "Rd": 287.0
     }
 }
