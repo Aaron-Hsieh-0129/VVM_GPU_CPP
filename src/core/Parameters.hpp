@@ -22,9 +22,7 @@ struct ModelParameters {
     const double rdy2 = rdy * rdy;
     const double rdz2 = rdz * rdz;
 
-    // A Kokkos-accessible constructor to initialize members.
-    // This allows the struct to be created on the host and used on the device.
-    KOKKOS_INLINE_FUNCTION
+    // This is put on CPU side only
     ModelParameters(const Grid& grid, const Utils::ConfigurationManager& config) : 
         gravity(config.get_value<double>("constants.gravity")),
         Rd(config.get_value<double>("constants.Rd")),
