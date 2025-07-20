@@ -28,8 +28,18 @@ target_link_libraries(run_field_state_tests ${VVM_TEST_LIBS})
 
 # Halo Exchanger Tests
 add_test(
-    NAME HaloExchange.Periodic.2x2
-    COMMAND mpirun -np 4 $<TARGET_FILE:run_halo_tests> --gtest_filter=HaloExchangerTest.Periodic2x2Grid
+    NAME HaloExchange.2DField
+    COMMAND mpirun -np 4 $<TARGET_FILE:run_halo_tests> --gtest_filter=HaloExchangerTest.Periodic2DField
+)
+
+add_test(
+    NAME HaloExchange.3DField
+    COMMAND mpirun -np 4 $<TARGET_FILE:run_halo_tests> --gtest_filter=HaloExchangerTest.Periodic3DField
+)
+
+add_test(
+    NAME HaloExchange.4DField
+    COMMAND mpirun -np 4 $<TARGET_FILE:run_halo_tests> --gtest_filter=HaloExchangerTest.Periodic4DField
 )
 
 # Field State Tests
