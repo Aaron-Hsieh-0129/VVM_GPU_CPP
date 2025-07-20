@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF) # Prefer standard C++ for portability
 set(Kokkos_ENABLE_CUDA ON CACHE BOOL "Enable CUDA backend for Kokkos" FORCE)
 set(Kokkos_ENABLE_OPENMP ON CACHE BOOL "Enable OpenMP backend for Kokkos" FORCE)
+option(BUILD_TESTS "Build the unit and integration tests" ON)
+
+message(STATUS "Build tests: ${BUILD_TESTS}")
 
 # Find MPI
 find_package(MPI REQUIRED)
@@ -43,3 +46,17 @@ endif()
 
 add_subdirectory(src)
 
+# Build tests if requested
+if(BUILD_TESTS)
+    enable_testing()
+
+    FetchContent_Declare(
+        googletest
+        URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz
+    )
+    # This makes the GTest::gtest_main target available
+    FetchContent_MakeAvailable(googletest)
+
+    # Add the tests subdirectory, which will now find GTest
+    add_subdirectory(tests)
+endif()

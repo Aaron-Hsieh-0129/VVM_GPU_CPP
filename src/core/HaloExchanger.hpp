@@ -9,6 +9,13 @@
 namespace VVM {
 namespace Core {
 
+enum class HaloExchangeTags {
+    X_LEFT_TO_RIGHT, // = 0
+    X_RIGHT_TO_LEFT, // = 1
+    Y_BOTTOM_TO_TOP, // = 2
+    Y_TOP_TO_BOTTOM  // = 3
+};
+
 class HaloExchanger {
 public:
     // Constructor
