@@ -1,14 +1,19 @@
 cmake_minimum_required(VERSION 3.16)
 project(VVM LANGUAGES CXX)
 
+cmake_policy(SET CMP0135 NEW)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF) # Prefer standard C++ for portability
+
+
 set(Kokkos_ENABLE_CUDA ON CACHE BOOL "Enable CUDA backend for Kokkos" FORCE)
 set(Kokkos_ENABLE_OPENMP ON CACHE BOOL "Enable OpenMP backend for Kokkos" FORCE)
-option(BUILD_TESTS "Build the unit and integration tests" ON)
+option(BUILD_TESTS "Build the unit and integration tests" OFF)
 
 message(STATUS "Build tests: ${BUILD_TESTS}")
+
 
 # Find MPI
 find_package(MPI REQUIRED)
@@ -21,7 +26,7 @@ else()
 endif()
 
 # Find OpenMP
-find_package(OpenMP REQUIRED COMPONENTS CXX)
+find_package(OpenMP)
 if (OpenMP_FOUND)
     message(STATUS "OpenMP found and configured for CXX.")
 else()
@@ -42,6 +47,19 @@ else()
     FetchContent_MakeAvailable(Kokkos)
 endif()
 
+set(PNETCDF_INSTALL_DIR "/work/aaron900129/Pnetcdf_install")
+set(PNETCDF_INCLUDE_DIR "${PNETCDF_INSTALL_DIR}/include")
+set(PNETCDF_LIBRARIES "-L${PNETCDF_INSTALL_DIR}/lib -lpnetcdf -lm")
+# Find PnetCDF
+find_path(PNETCDF_INCLUDE_DIR pnetcdf.h HINTS "${PNETCDF_INCLUDE_DIR}" NO_DEFAULT_PATH)
+find_library(PNETCDF_LIBRARY NAMES pnetcdf HINTS "${PNETCDF_INSTALL_DIR}/lib" NO_DEFAULT_PATH)
+if (PNETCDF_INCLUDE_DIR AND PNETCDF_LIBRARY)
+    message(STATUS "PnetCDF found manually.")
+    message(STATUS "PnetCDF include directory: ${PNETCDF_INCLUDE_DIR}")
+    message(STATUS "PnetCDF libraries: ${PNETCDF_LIBRARY}")
+else()
+    message(FATAL_ERROR "PnetCDF headers or libraries not found manually. Check paths.")
+endif()
 
 
 add_subdirectory(src)
@@ -49,7 +67,7 @@ add_subdirectory(src)
 # Build tests if requested
 if(BUILD_TESTS)
     enable_testing()
-
+    include(FetchContent)
     FetchContent_Declare(
         googletest
         URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz

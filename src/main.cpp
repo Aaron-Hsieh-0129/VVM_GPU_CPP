@@ -10,6 +10,7 @@
 #include "core/HaloExchanger.hpp"
 #include "core/State.hpp"
 #include "core/Parameters.hpp"
+#include "core/OutputManager.hpp"
 
 template <class ExecutionSpace>
 void matrix_multiply(Kokkos::View<double**, Kokkos::LayoutRight, ExecutionSpace> A,
@@ -64,6 +65,7 @@ int main(int argc, char* argv[]) {
         VVM::Core::Grid grid(config);
         VVM::Core::ModelParameters model_params(grid, config);
         grid.print_info();
+        VVM::Core::OutputManager output_manager(config, grid, MPI_COMM_WORLD);
 
         const int nz_total = grid.get_local_total_points_z();
         const int ny_total = grid.get_local_total_points_y();
@@ -72,9 +74,8 @@ int main(int argc, char* argv[]) {
 
         // 3D Field and its halo exchange test
         VVM::Core::State state(config, model_params);
-        state.add_field<3>("eta", {nz_total, ny_total, nx_total});
 
-        auto& var_eta = state.get_field<3>("eta");
+        auto& var_eta = state.get_field<3>("etam");
         auto eta_mutable = var_eta.get_mutable_device_data();
 
         Kokkos::parallel_for("EtaHaloTest",
@@ -103,10 +104,6 @@ int main(int argc, char* argv[]) {
         if (rank == 0) {
             std::cout << "\n--- Testing 2D Field ---" << std::endl;
         }
-        state.add_field<2>("htflx_sfc", {
-            grid.get_local_total_points_y(),
-            grid.get_local_total_points_x()
-        });
         auto& htflx_sfc = state.get_field<2>("htflx_sfc");
         auto htflx_sfc_mutable = htflx_sfc.get_mutable_device_data();
         Kokkos::parallel_for("InitHeatFluxField",
@@ -135,12 +132,6 @@ int main(int argc, char* argv[]) {
         if (rank == 0) {
             std::cout << "\n--- Testing 4D Field ---" << std::endl;
         }
-        state.add_field<4>("d_eta", {
-            2,
-            grid.get_local_total_points_z(),
-            grid.get_local_total_points_y(),
-            grid.get_local_total_points_x()
-        });
         auto& d_eta = state.get_field<4>("d_eta");
         auto d_eta_mutable = d_eta.get_mutable_device_data();
         Kokkos::parallel_for("InitDetaField",
@@ -163,6 +154,7 @@ int main(int argc, char* argv[]) {
 
         d_eta.print_slice_z_at_k(grid, 1, 0);
 
+        // output_manager.write_output(state, 0.0);
 
         // Example of matrix multiplication using Kokkos
         if (rank == 0) {

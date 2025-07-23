@@ -10,7 +10,7 @@
 #include "Grid.hpp"
 #include "Field.hpp"
 #include "State.hpp"
-#include <nvtx3/nvToolsExt.h>
+// #include <nvtx3/vToolsExt.h>
 
 namespace VVM {
 namespace Core {
@@ -32,31 +32,31 @@ public:
     template<size_t Dim>
     void exchange_halos(Field<Dim>& field) const {
         if constexpr (Dim == 2) {
-            nvtxRangePushA("HaloExchange_Y_2D");
+            // nvtxRangePushA("HaloExchange_Y_2D");
             exchange_halo_y_2d(field);
-            nvtxRangePop();
+            // nvtxRangePop();
 
-            nvtxRangePushA("HaloExchange_X_2D");
+            // nvtxRangePushA("HaloExchange_X_2D");
             exchange_halo_x_2d(field);
-            nvtxRangePop();
+            // nvtxRangePop();
         }
         else if constexpr (Dim == 3) {
-            nvtxRangePushA("HaloExchange_Y_3D");
+            // nvtxRangePushA("HaloExchange_Y_3D");
             exchange_halo_y_3d(field);
-            nvtxRangePop();
+            // nvtxRangePop();
             
-            nvtxRangePushA("HaloExchange_X_3D");
+            // nvtxRangePushA("HaloExchange_X_3D");
             exchange_halo_x_3d(field);
-            nvtxRangePop();
+            // nvtxRangePop();
         }
         else if constexpr (Dim == 4) {
-            nvtxRangePushA("HaloExchange_Y_4D");
+            // nvtxRangePushA("HaloExchange_Y_4D");
             exchange_halo_y_4d(field);
-            nvtxRangePop();
+            // nvtxRangePop();
             
-            nvtxRangePushA("HaloExchange_X_4D");
+            // nvtxRangePushA("HaloExchange_X_4D");
             exchange_halo_x_4d(field);
-            nvtxRangePop();
+            // nvtxRangePop();
         }
     }
 
@@ -98,9 +98,9 @@ inline void HaloExchanger::exchange_halos(State& state) const {
         std::visit([this](auto& field) {
             using T = std::decay_t<decltype(field)>;
             if constexpr (!std::is_same_v<T, std::monostate>) {
-                nvtxRangePushA(field.get_name().c_str());
+                // nvtxRangePushA(field.get_name().c_str());
                 this->exchange_halos(field);
-                nvtxRangePop();
+                // nvtxRangePop();
             }
         }, field_pair.second);
     }
@@ -198,7 +198,7 @@ inline void HaloExchanger::exchange_halo_x_3d(Field<3>& field) const {
 
     Kokkos::MDRangePolicy<Kokkos::Rank<3>> policy({0, 0, 0}, {nz, ny, num_halo});
     
-    nvtxRangePushA("Pack_X");
+    // nvtxRangePushA("Pack_X");
     // Step 1: Pack data
     // Pack right-most physical data to send to the RIGHT neighbor
     if (neighbors_x_[1] != MPI_PROC_NULL) {
@@ -213,9 +213,9 @@ inline void HaloExchanger::exchange_halo_x_3d(Field<3>& field) const {
         });
     }
     Kokkos::fence();
-    nvtxRangePop();
+    // nvtxRangePop();
 
-    nvtxRangePushA("MPI_SendRecv_X");
+    // nvtxRangePushA("MPI_SendRecv_X");
     // Step 2: MPI Communication
     MPI_Request requests[4];
     int req_count = 0;
@@ -241,9 +241,9 @@ inline void HaloExchanger::exchange_halo_x_3d(Field<3>& field) const {
     }
     
     MPI_Waitall(req_count, requests, MPI_STATUSES_IGNORE);
-    nvtxRangePop();
+    // nvtxRangePop();
 
-    nvtxRangePushA("Unpack_X");
+    // nvtxRangePushA("Unpack_X");
     // Step 3: Unpack data
     // Data from LEFT neighbor goes into the LEFT halo
     if (neighbors_x_[0] != MPI_PROC_NULL) {
@@ -258,7 +258,7 @@ inline void HaloExchanger::exchange_halo_x_3d(Field<3>& field) const {
         });
     }
     Kokkos::fence();
-    nvtxRangePop();
+   //  nvtxRangePop();
 }
 
 inline void HaloExchanger::exchange_halo_y_3d(Field<3>& field) const {
@@ -281,7 +281,7 @@ inline void HaloExchanger::exchange_halo_y_3d(Field<3>& field) const {
 
     Kokkos::MDRangePolicy<Kokkos::Rank<3>> policy({0, 0, 0}, {nz, num_halo, nx});
     
-    nvtxRangePushA("Pack_Y");
+    // nvtxRangePushA("Pack_Y");
     // Step 1: Pack data
     // Pack top-most physical data to send to the TOP neighbor
     if (neighbors_y_[1] != MPI_PROC_NULL) {
@@ -296,9 +296,9 @@ inline void HaloExchanger::exchange_halo_y_3d(Field<3>& field) const {
         });
     }
     Kokkos::fence();
-    nvtxRangePop();
+    // nvtxRangePop();
 
-    nvtxRangePushA("MPI_SendRecv_Y");
+    // nvtxRangePushA("MPI_SendRecv_Y");
     // Step 2: MPI Communication
     MPI_Request requests[4];
     int req_count = 0;
@@ -324,9 +324,9 @@ inline void HaloExchanger::exchange_halo_y_3d(Field<3>& field) const {
     }
     
     MPI_Waitall(req_count, requests, MPI_STATUSES_IGNORE);
-    nvtxRangePop();
+    // nvtxRangePop();
 
-    nvtxRangePushA("Unpack_Y");
+    // nvtxRangePushA("Unpack_Y");
     // Step 3: Unpack data
     // Data from BOTTOM neighbor goes into the BOTTOM halo
     if (neighbors_y_[0] != MPI_PROC_NULL) {
@@ -341,7 +341,7 @@ inline void HaloExchanger::exchange_halo_y_3d(Field<3>& field) const {
         });
     }
     Kokkos::fence();
-    nvtxRangePop();
+    // nvtxRangePop();
 }
 
 

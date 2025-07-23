@@ -1,9 +1,9 @@
 {
     "grid": {
-        "nx": 16,
-        "ny": 16,
+        "nx": 8,
+        "ny": 8,
         "nz": 1,
-        "n_halo_cells": 1,
+        "n_halo_cells": 2,
         "dx": 200.0,
         "dy": 200.0,
         "dz": 200.0
@@ -21,7 +21,20 @@
     },
     "output": {
         "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/test",
-        "enable_netcdf": true
+        "enable_netcdf": true,
+        "output_filename_prefix": "vvm_output",
+        "fields_to_output": ["htflx_sfc", "d_eta", "thm"],
+        "output_grid": {
+            "x_start": 0,
+            "x_end": 3,
+            "x_stride": 1,
+            "y_start": 0,
+            "y_end": 3,
+            "y_stride": 1,
+            "z_start": 0,
+            "z_end": -1,
+            "z_stride": 1
+        }
     },
     "constants": {
         "gravity": 9.81,

@@ -10,6 +10,7 @@ set_target_properties(vvm PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 
+target_compile_options(vvm PRIVATE "--extended-lambda")
 
 target_link_libraries(vvm
     PUBLIC
