@@ -50,15 +50,14 @@ endif()
 set(PNETCDF_INSTALL_DIR "/work/aaron900129/Pnetcdf_install")
 set(PNETCDF_INCLUDE_DIR "${PNETCDF_INSTALL_DIR}/include")
 set(PNETCDF_LIBRARIES "-L${PNETCDF_INSTALL_DIR}/lib -lpnetcdf -lm")
-# Find PnetCDF
-find_path(PNETCDF_INCLUDE_DIR pnetcdf.h HINTS "${PNETCDF_INCLUDE_DIR}" NO_DEFAULT_PATH)
-find_library(PNETCDF_LIBRARY NAMES pnetcdf HINTS "${PNETCDF_INSTALL_DIR}/lib" NO_DEFAULT_PATH)
-if (PNETCDF_INCLUDE_DIR AND PNETCDF_LIBRARY)
-    message(STATUS "PnetCDF found manually.")
-    message(STATUS "PnetCDF include directory: ${PNETCDF_INCLUDE_DIR}")
-    message(STATUS "PnetCDF libraries: ${PNETCDF_LIBRARY}")
+
+
+# Find ADIOS2
+find_package(ADIOS2 REQUIRED)
+if (ADIOS2_FOUND)
+    message(STATUS "ADIOS2 found.")
 else()
-    message(FATAL_ERROR "PnetCDF headers or libraries not found manually. Check paths.")
+    message(FATAL_ERROR "ADIOS2 not found.")
 endif()
 
 
