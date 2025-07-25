@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    omp_set_num_threads(16);
+    omp_set_num_threads(72/size);
 
     if (rank == 0) {
         std::cout << "OpenMP Threads: " << omp_get_max_threads() << std::endl;
@@ -88,7 +88,7 @@ int main(int argc, char* argv[]) {
         if (rank == 0) {
             std::cout << "\n--- Field State BEFORE Halo Exchange ---" << std::endl;
         }
-        var_eta.print_slice_z_at_k(grid, 0, grid.get_halo_cells());
+        // var_eta.print_slice_z_at_k(grid, 0, grid.get_halo_cells());
 
 
         if (rank == 0) {
@@ -97,9 +97,11 @@ int main(int argc, char* argv[]) {
         VVM::Core::HaloExchanger halo_exchanger(grid);
         halo_exchanger.exchange_halos(state);
 
-        var_eta.print_slice_z_at_k(grid, 0, grid.get_halo_cells());
+        if (rank == 0) {
+            var_eta.print_slice_z_at_k(grid, 0, grid.get_halo_cells());
+        }
         Kokkos::fence(); 
-        
+
         // 2D field test
         if (rank == 0) {
             std::cout << "\n--- Testing 2D Field ---" << std::endl;
@@ -116,15 +118,15 @@ int main(int argc, char* argv[]) {
             std::cout << "\n--- Field State BEFORE Halo Exchange ---" << std::endl;
         }
 
-        htflx_sfc.print_slice_z_at_k(grid, 0, grid.get_halo_cells());
+        // htflx_sfc.print_slice_z_at_k(grid, 0, grid.get_halo_cells());
 
-        halo_exchanger.exchange_halos(htflx_sfc);
+        // halo_exchanger.exchange_halos(htflx_sfc);
 
         if (rank == 0) {
             std::cout << "\n--- Field State AFTER Halo Exchange ---" << std::endl;
         }
 
-        htflx_sfc.print_slice_z_at_k(grid, 0, grid.get_halo_cells());
+        // htflx_sfc.print_slice_z_at_k(grid, 0, grid.get_halo_cells());
         Kokkos::fence(); 
 
 
@@ -144,7 +146,7 @@ int main(int argc, char* argv[]) {
             std::cout << "\n--- Field State BEFORE Halo Exchange ---" << std::endl;
         }
 
-        d_eta.print_slice_z_at_k(grid, 0, 0);
+        // d_eta.print_slice_z_at_k(grid, 0, 0);
 
         halo_exchanger.exchange_halos(d_eta);
 
@@ -152,59 +154,64 @@ int main(int argc, char* argv[]) {
             std::cout << "\n--- Field State AFTER Halo Exchange ---" << std::endl;
         }
 
-        d_eta.print_slice_z_at_k(grid, 1, 0);
+        // d_eta.print_slice_z_at_k(grid, 1, 0);
 
-        // output_manager.write_output(state, 0.0);
+        std::cout << "\n--- Outputting Fields ---" << std::endl;
+        output_manager.write(state, 0.0);
+
+
+        std::cout << "Dims: " << htflx_sfc.get_device_data().extent(0) << ", " << htflx_sfc.get_device_data().extent(1) << std::endl;
+
 
         // Example of matrix multiplication using Kokkos
-        if (rank == 0) {
-            // Matrix dimensions
-            const int N = 512;
+        // if (rank == 0) {
+        //     // Matrix dimensions
+        //     const int N = 512;
 
-            // Define views for CPU and GPU
-            using HostSpace = Kokkos::HostSpace;
-            using DeviceSpace = Kokkos::DefaultExecutionSpace;
+        //     // Define views for CPU and GPU
+        //     using HostSpace = Kokkos::HostSpace;
+        //     using DeviceSpace = Kokkos::DefaultExecutionSpace;
 
-            Kokkos::View<double**, Kokkos::LayoutRight, HostSpace> A_host("A_host", N, N);
-            Kokkos::View<double**, Kokkos::LayoutRight, HostSpace> B_host("B_host", N, N);
-            Kokkos::View<double**, Kokkos::LayoutRight, HostSpace> C_host("C_host", N, N);
+        //     Kokkos::View<double**, Kokkos::LayoutRight, HostSpace> A_host("A_host", N, N);
+        //     Kokkos::View<double**, Kokkos::LayoutRight, HostSpace> B_host("B_host", N, N);
+        //     Kokkos::View<double**, Kokkos::LayoutRight, HostSpace> C_host("C_host", N, N);
 
-            Kokkos::View<double**, Kokkos::LayoutRight, DeviceSpace> A_device("A_device", N, N);
-            Kokkos::View<double**, Kokkos::LayoutRight, DeviceSpace> B_device("B_device", N, N);
-            Kokkos::View<double**, Kokkos::LayoutRight, DeviceSpace> C_device("C_device", N, N);
+        //     Kokkos::View<double**, Kokkos::LayoutRight, DeviceSpace> A_device("A_device", N, N);
+        //     Kokkos::View<double**, Kokkos::LayoutRight, DeviceSpace> B_device("B_device", N, N);
+        //     Kokkos::View<double**, Kokkos::LayoutRight, DeviceSpace> C_device("C_device", N, N);
 
-            // Initialize matrices with random values
-            for (int i = 0; i < N; i++) {
-                for (int j = 0; j < N; j++) {
-                    A_host(i,j) = static_cast<double>(rand()) / RAND_MAX;
-                    B_host(i,j) = static_cast<double>(rand()) / RAND_MAX;
-                }
-            }
+        //     // Initialize matrices with random values
+        //     for (int i = 0; i < N; i++) {
+        //         for (int j = 0; j < N; j++) {
+        //             A_host(i,j) = static_cast<double>(rand()) / RAND_MAX;
+        //             B_host(i,j) = static_cast<double>(rand()) / RAND_MAX;
+        //         }
+        //     }
 
-            // Copy data to device
-            Kokkos::deep_copy(A_device, A_host);
-            Kokkos::deep_copy(B_device, B_host);
+        //     // Copy data to device
+        //     Kokkos::deep_copy(A_device, A_host);
+        //     Kokkos::deep_copy(B_device, B_host);
 
-            // CPU execution with OpenMP
-            auto start_cpu = std::chrono::high_resolution_clock::now();
-            matrix_multiply<Kokkos::OpenMP>(A_host, B_host, C_host, N);
-            Kokkos::fence();
-            auto end_cpu = std::chrono::high_resolution_clock::now();
-            auto cpu_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_cpu - start_cpu).count();
+        //     // CPU execution with OpenMP
+        //     auto start_cpu = std::chrono::high_resolution_clock::now();
+        //     matrix_multiply<Kokkos::OpenMP>(A_host, B_host, C_host, N);
+        //     Kokkos::fence();
+        //     auto end_cpu = std::chrono::high_resolution_clock::now();
+        //     auto cpu_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_cpu - start_cpu).count();
 
-            // GPU execution
-            auto start_gpu = std::chrono::high_resolution_clock::now();
-            matrix_multiply<DeviceSpace>(A_device, B_device, C_device, N);
-            Kokkos::fence();
-            auto end_gpu = std::chrono::high_resolution_clock::now();
-            auto gpu_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_gpu - start_gpu).count();
+        //     // GPU execution
+        //     auto start_gpu = std::chrono::high_resolution_clock::now();
+        //     matrix_multiply<DeviceSpace>(A_device, B_device, C_device, N);
+        //     Kokkos::fence();
+        //     auto end_gpu = std::chrono::high_resolution_clock::now();
+        //     auto gpu_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_gpu - start_gpu).count();
 
-            // Output results
-            std::cout << "Matrix size: " << N << " x " << N << std::endl;
-            std::cout << "CPU (OpenMP) execution time: " << cpu_duration << " ms" << std::endl;
-            std::cout << "GPU execution time: " << gpu_duration << " ms" << std::endl;
-            std::cout << "Speedup (CPU/GPU): " << static_cast<double>(cpu_duration) / gpu_duration << "x" << std::endl;
-        }
+        //     // Output results
+        //     std::cout << "Matrix size: " << N << " x " << N << std::endl;
+        //     std::cout << "CPU (OpenMP) execution time: " << cpu_duration << " ms" << std::endl;
+        //     std::cout << "GPU execution time: " << gpu_duration << " ms" << std::endl;
+        //     std::cout << "Speedup (CPU/GPU): " << static_cast<double>(cpu_duration) / gpu_duration << "x" << std::endl;
+        // }
 
     }
     Kokkos::finalize();

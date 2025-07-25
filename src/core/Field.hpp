@@ -27,7 +27,8 @@ public:
 
     // Kokkos::View to store the field data
     // The dimensions will be (total_z_points, total_y_points, total_x_points)
-    // using LayoutRight for C/C++ style indexing (last dimension fastest changing)
+    // Here we don't specify the layout, because it can be determined by Kokkos default. 
+    // LayoutRight is often used for CPU and LayoutLeft for GPU.
     using ViewType = typename ViewTypeHelper<Dim>::type;
     using HostMirrorType = typename ViewType::HostMirror;
 
@@ -105,7 +106,8 @@ inline void Field<Dim>::print_slice_z_at_k(const Grid& grid, int N_idx, int k_lo
             }
             std::cout << std::endl;
         }
-    } else if constexpr (Dim == 3) {
+    } 
+    else if constexpr (Dim == 3) {
         if (k_local_idx < 0 || k_local_idx >= host_data.extent(0)) {
             std::cerr << "Warning: Z-slice index " << k_local_idx << " out of bounds for field '" << name_ << "'." << std::endl;
             return;
@@ -117,7 +119,8 @@ inline void Field<Dim>::print_slice_z_at_k(const Grid& grid, int N_idx, int k_lo
             }
             std::cout << std::endl;
         }
-    } else if constexpr (Dim == 2) {
+    } 
+    else if constexpr (Dim == 2) {
         // For a 2D field, we ignore indices and print the whole field
         std::cout << "  Full 2D data:" << std::endl;
         for (int j = 0; j < host_data.extent(0); ++j) {
@@ -126,7 +129,8 @@ inline void Field<Dim>::print_slice_z_at_k(const Grid& grid, int N_idx, int k_lo
             }
             std::cout << std::endl;
         }
-    } else {
+    } 
+    else {
         // For other dimensions, this function is not applicable
         if (rank == 0) {
             std::cout << "  Printing is not implemented for " << Dim << "D fields." << std::endl;

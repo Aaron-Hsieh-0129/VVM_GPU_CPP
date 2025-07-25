@@ -30,17 +30,19 @@ target_include_directories(vvm_core
         ${CMAKE_CURRENT_SOURCE_DIR}/../utils
         ${MPI_INCLUDE_PATH}
         ${PNETCDF_INCLUDE_DIR}
+        ${ADIOS2_INCLUDE_DIRS}
 )
 
 
 target_link_libraries(vvm_core
     PUBLIC
         MPI::MPI_CXX
-	${NVCPUMATH_LIBRARY}
+	    ${NVCPUMATH_LIBRARY}
         ${PNETCDF_LIBRARY}
+        adios2::adios2
     PRIVATE
         Kokkos::kokkos
         ${MPI_LIBRARIES}
         ${OpenMP_LIBRARIES}
-	${NVTOOLSEXT_LIBRARY}
+	    ${NVTOOLSEXT_LIBRARY}
 )
