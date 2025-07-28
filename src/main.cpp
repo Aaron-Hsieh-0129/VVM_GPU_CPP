@@ -5,12 +5,14 @@
 #include <chrono>
 
 #include "utils/ConfigurationManager.hpp"
+#include "io/OutputManager.hpp"
 #include "core/Grid.hpp"
 #include "core/Field.hpp"
 #include "core/HaloExchanger.hpp"
+#include "core/BoundaryConditionManager.hpp"
 #include "core/State.hpp"
 #include "core/Parameters.hpp"
-#include "core/OutputManager.hpp"
+#include "core/Initializer.hpp"
 
 template <class ExecutionSpace>
 void matrix_multiply(Kokkos::View<double**, Kokkos::LayoutRight, ExecutionSpace> A,
@@ -63,9 +65,9 @@ int main(int argc, char* argv[]) {
 
         // Create a VVM model instance and run the simulation
         VVM::Core::Grid grid(config);
-        VVM::Core::ModelParameters model_params(grid, config);
+        VVM::Core::Parameters parameters(config, grid);
         grid.print_info();
-        VVM::Core::OutputManager output_manager(config, grid, MPI_COMM_WORLD);
+        VVM::IO::OutputManager output_manager(config, grid, MPI_COMM_WORLD);
 
         const int nz_total = grid.get_local_total_points_z();
         const int ny_total = grid.get_local_total_points_y();
@@ -73,7 +75,7 @@ int main(int argc, char* argv[]) {
 
 
         // 3D Field and its halo exchange test
-        VVM::Core::State state(config, model_params);
+        VVM::Core::State state(config, parameters);
 
         auto& var_eta = state.get_field<3>("etam");
         auto eta_mutable = var_eta.get_mutable_device_data();
@@ -95,6 +97,7 @@ int main(int argc, char* argv[]) {
             std::cout << "\n--- Field State AFTER Halo Exchange ---" << std::endl;
         }
         VVM::Core::HaloExchanger halo_exchanger(grid);
+        VVM::Core::BoundaryConditionManager bc_manager(grid, config);
         halo_exchanger.exchange_halos(state);
 
         if (rank == 0) {
@@ -159,9 +162,12 @@ int main(int argc, char* argv[]) {
         std::cout << "\n--- Outputting Fields ---" << std::endl;
         output_manager.write(state, 0.0);
 
+        VVM::Core::Initializer init(config, grid, parameters, state);
 
-        std::cout << "Dims: " << htflx_sfc.get_device_data().extent(0) << ", " << htflx_sfc.get_device_data().extent(1) << std::endl;
-
+        // 1D field
+        if (rank == 0) parameters.z_mid.print_profile(grid, 0, 0, 0);
+        if (rank == 0) parameters.dz_mid.print_profile(grid, 0, 0, 0);
+        if (rank == 0) parameters.flex_height_coef_mid.print_profile(grid, 0, 0, 0);
 
         // Example of matrix multiplication using Kokkos
         // if (rank == 0) {

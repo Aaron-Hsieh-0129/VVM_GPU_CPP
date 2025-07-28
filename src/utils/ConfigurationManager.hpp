@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <iostream>
 
-#include "../../lib/json/json.hpp"
+#include "externals/json/json.hpp"
 
 namespace VVM {
 namespace Utils {

@@ -1,5 +1,5 @@
-#ifndef VVM_CORE_OutputManager_HPP
-#define VVM_CORE_OutputManager_HPP
+#ifndef VVM_IO_OutputManager_HPP
+#define VVM_IO_OutputManager_HPP
 
 #include <string>
 #include <vector>
@@ -7,16 +7,16 @@
 #include <adios2.h>
 #include <Kokkos_Core.hpp>
 
-#include "Grid.hpp"
-#include "State.hpp"
-#include "../utils/ConfigurationManager.hpp"
+#include "core/Grid.hpp"
+#include "core/State.hpp"
+#include "utils/ConfigurationManager.hpp"
 
 namespace VVM {
-namespace Core {
+namespace IO {
 
 class OutputManager {
 public:
-    OutputManager(const Utils::ConfigurationManager& config, const Grid& grid, MPI_Comm comm);
+    OutputManager(const Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, MPI_Comm comm);
     ~OutputManager();
 
     OutputManager(const OutputManager&) = delete;
@@ -24,10 +24,10 @@ public:
     OutputManager(OutputManager&&) = delete;
     OutputManager& operator=(OutputManager&&) = delete;
 
-    void write(const State& state, double time);
+    void write(const VVM::Core::State& state, double time);
 
 private:
-    const Grid& grid_;
+    const VVM::Core::Grid& grid_;
     std::string output_dir_;
     std::string filename_prefix_;
     std::vector<std::string> fields_to_output_;
@@ -44,10 +44,10 @@ private:
     size_t output_x_end_, output_y_end_, output_z_end_;
     size_t output_x_stride_, output_y_stride_, output_z_stride_;
 
-    void define_variables(const State& state);
+    void define_variables(const VVM::Core::State& state);
 };
 
-} // namespace Core
+} // namespace IO
 } // namespace VVM
 
 #endif // VVM_CORE_OutputManager_HPP

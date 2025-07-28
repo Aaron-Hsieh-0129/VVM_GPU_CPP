@@ -6,9 +6,9 @@
 
 
 namespace VVM {
-namespace Core {
+namespace IO {
 
-OutputManager::OutputManager(const Utils::ConfigurationManager& config, const Grid& grid, MPI_Comm comm)
+OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, MPI_Comm comm)
     : grid_(grid), comm_(comm), adios_(comm) {
     rank_ = 0;
     mpi_size_ = 1;
@@ -48,7 +48,7 @@ OutputManager::~OutputManager() {
     }
 }
 
-void OutputManager::define_variables(const State& state) {
+void OutputManager::define_variables(const VVM::Core::State& state) {
 
     const size_t gnx = grid_.get_global_points_x();
     const size_t gny = grid_.get_global_points_y();
@@ -82,7 +82,7 @@ void OutputManager::define_variables(const State& state) {
     }
 }
 
-void OutputManager::write(const State& state, double time) {
+void OutputManager::write(const VVM::Core::State& state, double time) {
     if (field_variables_.empty()) {
         define_variables(state);
     }
@@ -117,46 +117,46 @@ void OutputManager::write(const State& state, double time) {
                         const size_t lnz = grid_.get_local_physical_points_z();
 
                         if constexpr (T::DimValue == 2) {
-                            const adios2::Box<adios2::Dims> mem_selection({h, h}, {lny, lnx});
-                            adios_var.SetMemorySelection(mem_selection);
-                            writer_.Put<double>(adios_var, full_data_view.data());
+                            // const adios2::Box<adios2::Dims> mem_selection({h, h}, {lny, lnx});
+                            // adios_var.SetMemorySelection(mem_selection);
+                            // writer_.Put<double>(adios_var, full_data_view.data());
 
-                            // Kokkos::View<double**> phys_data("phys_data_2d", lny, lnx);
-                            // auto subview = Kokkos::subview(full_data_view, 
-                            //                                std::make_pair(h, h + lny), 
-                            //                                std::make_pair(h, h + lnx));
-                            // Kokkos::deep_copy(phys_data, subview);
-                            // writer_.Put<double>(adios_var, phys_data.data());
+                            Kokkos::View<double**> phys_data("phys_data_2d", lny, lnx);
+                            auto subview = Kokkos::subview(full_data_view, 
+                                                           std::make_pair(h, h + lny), 
+                                                           std::make_pair(h, h + lnx));
+                            Kokkos::deep_copy(phys_data, subview);
+                            writer_.Put<double>(adios_var, phys_data.data());
                         } 
                         else if constexpr (T::DimValue == 3) {
-                            const adios2::Box<adios2::Dims> mem_selection({h, h, h}, {lnz, lny, lnx});
-                            adios_var.SetMemorySelection(mem_selection);
-                            writer_.Put<double>(adios_var, full_data_view.data());
+                            // const adios2::Box<adios2::Dims> mem_selection({h, h, h}, {lnz, lny, lnx});
+                            // adios_var.SetMemorySelection(mem_selection);
+                            // writer_.Put<double>(adios_var, full_data_view.data());
 
-                            // Kokkos::View<double***> phys_data("phys_data_3d", lnz, lny, lnx);
-                            // auto subview = Kokkos::subview(full_data_view,
-                            //                                std::make_pair(h, h + lnz),
-                            //                                std::make_pair(h, h + lny),
-                            //                                std::make_pair(h, h + lnx));
-                            // Kokkos::deep_copy(phys_data, subview);
-                            // writer_.Put<double>(adios_var, phys_data.data());
+                            Kokkos::View<double***> phys_data("phys_data_3d", lnz, lny, lnx);
+                            auto subview = Kokkos::subview(full_data_view,
+                                                           std::make_pair(h, h + lnz),
+                                                           std::make_pair(h, h + lny),
+                                                           std::make_pair(h, h + lnx));
+                            Kokkos::deep_copy(phys_data, subview);
+                            writer_.Put<double>(adios_var, phys_data.data());
                         }
                         else if constexpr (T::DimValue == 4) {
-                            const size_t dim4 = full_data_view.extent(0);
-                            // No halo points at the fourth dimension
-                            const adios2::Box<adios2::Dims> mem_selection({0, h, h, h}, {dim4, lnz, lny, lnx});
-                            adios_var.SetMemorySelection(mem_selection);
-                            writer_.Put<double>(adios_var, full_data_view.data());
-
                             // const size_t dim4 = full_data_view.extent(0);
-                            // Kokkos::View<double****> phys_data("phys_data_4d", dim4, lnz, lny, lnx);
-                            // auto subview = Kokkos::subview(full_data_view,
-                            //                                Kokkos::ALL(),
-                            //                                std::make_pair(h, h + lnz),
-                            //                                std::make_pair(h, h + lny),
-                            //                                std::make_pair(h, h + lnx));
-                            // Kokkos::deep_copy(phys_data, subview);
-                            // writer_.Put<double>(adios_var, phys_data.data());
+                            // No halo points at the fourth dimension
+                            // const adios2::Box<adios2::Dims> mem_selection({0, h, h, h}, {dim4, lnz, lny, lnx});
+                            // adios_var.SetMemorySelection(mem_selection);
+                            // writer_.Put<double>(adios_var, full_data_view.data());
+
+                            const size_t dim4 = full_data_view.extent(0);
+                            Kokkos::View<double****> phys_data("phys_data_4d", dim4, lnz, lny, lnx);
+                            auto subview = Kokkos::subview(full_data_view,
+                                                           Kokkos::ALL(),
+                                                           std::make_pair(h, h + lnz),
+                                                           std::make_pair(h, h + lny),
+                                                           std::make_pair(h, h + lnx));
+                            Kokkos::deep_copy(phys_data, subview);
+                            writer_.Put<double>(adios_var, phys_data.data());
                         }
                     }
                 }, it->second);
@@ -167,5 +167,5 @@ void OutputManager::write(const State& state, double time) {
     writer_.EndStep();
 }
 
-} // namespace Core
+} // namespace IO
 } // namespace VVM

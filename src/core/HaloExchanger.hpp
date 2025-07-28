@@ -52,7 +52,7 @@ inline HaloExchanger::HaloExchanger(const Grid& grid)
         std::cerr << "Rank " << rank << ": HaloExchanger initialized with NULL communicator!" << std::endl;
         MPI_Abort(MPI_COMM_WORLD, -1);
     }
-    // 維度 1 是 X (左右), 維度 0 是 Y (上下)
+    // Dim 1 is X (left-right), Dim 0 is y (up-down)
     MPI_Cart_shift(cart_comm_, 1, 1, &neighbor_left_, &neighbor_right_);
     MPI_Cart_shift(cart_comm_, 0, 1, &neighbor_bottom_, &neighbor_top_);
 }

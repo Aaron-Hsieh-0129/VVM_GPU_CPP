@@ -9,7 +9,7 @@
 #include <mpi.h>
 #include <Kokkos_Core.hpp>
 
-#include "../utils/ConfigurationManager.hpp"
+#include "utils/ConfigurationManager.hpp"
 
 namespace VVM {
 namespace Core {
