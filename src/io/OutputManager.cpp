@@ -70,6 +70,7 @@ void OutputManager::define_variables(const VVM::Core::State& state) {
             std::visit([&](const auto& field) {
                 using T = std::decay_t<decltype(field)>;
                 if constexpr (!std::is_same_v<T, std::monostate>) {
+                    if constexpr (T::DimValue == 1) field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gnz}, {offset_z}, {lnz});
                     if constexpr (T::DimValue == 2) field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gny, gnx}, {offset_y, offset_x}, {lny, lnx});
                     else if constexpr (T::DimValue == 3) field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gnz, gny, gnx}, {offset_z, offset_y, offset_x}, {lnz, lny, lnx});
                     else if constexpr (T::DimValue == 4) {
@@ -116,7 +117,15 @@ void OutputManager::write(const VVM::Core::State& state, double time) {
                         const size_t lny = grid_.get_local_physical_points_y();
                         const size_t lnz = grid_.get_local_physical_points_z();
 
-                        if constexpr (T::DimValue == 2) {
+                        if constexpr (T::DimValue == 1) {
+                            if (rank_ == 0) {
+                                Kokkos::View<double*> phys_data("phys_data_1d", lnz);
+                                auto subview = Kokkos::subview(full_data_view, std::make_pair(h, h + lnz));
+                                Kokkos::deep_copy(phys_data, subview);
+                                writer_.Put<double>(adios_var, phys_data.data());
+                            }
+                        }
+                        else if constexpr (T::DimValue == 2) {
                             // const adios2::Box<adios2::Dims> mem_selection({h, h}, {lny, lnx});
                             // adios_var.SetMemorySelection(mem_selection);
                             // writer_.Put<double>(adios_var, full_data_view.data());
