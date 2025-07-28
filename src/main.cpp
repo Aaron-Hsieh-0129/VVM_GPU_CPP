@@ -61,8 +61,6 @@ int main(int argc, char* argv[]) {
             config.print_config(); // Print loaded configuration
         }
 
-        
-
         // Create a VVM model instance and run the simulation
         VVM::Core::Grid grid(config);
         VVM::Core::Parameters parameters(config, grid);
@@ -72,6 +70,16 @@ int main(int argc, char* argv[]) {
         VVM::Core::HaloExchanger halo_exchanger(grid);
         VVM::Core::BoundaryConditionManager bc_manager(grid, config);
 
+        const int ny_total = grid.get_local_total_points_y();
+        const int nx_total = grid.get_local_total_points_x();
+        auto& htflx_sfc = state.get_field<2>("htflx_sfc");
+        auto htflx_sfc_mutable = htflx_sfc.get_mutable_device_data();
+        Kokkos::parallel_for("InitHeatFluxField",
+            Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny_total, nx_total}),
+            KOKKOS_LAMBDA(const int j, const int i) {
+                htflx_sfc_mutable(j, i) = static_cast<double>(100*rank + 10*j + i);
+            }
+        );
 
         VVM::Core::Initializer init(config, grid, parameters, state);
         init.initialize_state(state);
