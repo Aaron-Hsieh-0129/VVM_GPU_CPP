@@ -25,7 +25,7 @@
         "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/test",
         "enable_netcdf": true,
         "output_filename_prefix": "vvm_output",
-        "fields_to_output": ["htflx_sfc"],
+        "fields_to_output": ["thbar"],
         "output_grid": {
             "x_start": 0,
             "x_end": 15,

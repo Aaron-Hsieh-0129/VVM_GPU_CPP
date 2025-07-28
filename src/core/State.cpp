@@ -16,13 +16,11 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     int nz_total = grid.get_local_total_points_z();
 
     // 1D field
-    add_field<1>("z_mid", {nz_total});
-    add_field<1>("z_up", {nz_total});
-    add_field<1>("flex_height_coef_mid", {nz_total});
-    add_field<1>("flex_height_coef_up", {nz_total});
-    add_field<1>("dz_mid", {nz_total});
-    add_field<1>("dz_up", {nz_total});
     add_field<1>("thbar", {nz_total});
+    add_field<1>("rhobar", {nz_total});
+    add_field<1>("rhobar_up", {nz_total});
+    add_field<1>("pbar", {nz_total});
+    add_field<1>("pibar", {nz_total});
 
     // 2D field
     add_field<2>("htflx_sfc", {ny_total, nx_total});
