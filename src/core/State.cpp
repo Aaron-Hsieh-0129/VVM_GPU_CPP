@@ -3,8 +3,8 @@
 namespace VVM {
 namespace Core {
 
-State::State(const Utils::ConfigurationManager& config, const ModelParameters& params)
-    : config_ref_(config), model_parameters_(params) {
+State::State(const Utils::ConfigurationManager& config, const Parameters& params)
+    : config_ref_(config), parameters_(params) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
@@ -14,6 +14,15 @@ State::State(const Utils::ConfigurationManager& config, const ModelParameters& p
     int nx_total = grid.get_local_total_points_x();
     int ny_total = grid.get_local_total_points_y();
     int nz_total = grid.get_local_total_points_z();
+
+    // 1D field
+    add_field<1>("z_mid", {nz_total});
+    add_field<1>("z_up", {nz_total});
+    add_field<1>("flex_height_coef_mid", {nz_total});
+    add_field<1>("flex_height_coef_up", {nz_total});
+    add_field<1>("dz_mid", {nz_total});
+    add_field<1>("dz_up", {nz_total});
+    add_field<1>("thbar", {nz_total});
 
     // 2D field
     add_field<2>("htflx_sfc", {ny_total, nx_total});

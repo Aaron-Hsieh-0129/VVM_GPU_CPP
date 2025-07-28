@@ -1,9 +1,18 @@
-add_library(vvm_utils STATIC
+set(VVM_UTILS_SOURCES
     ConfigurationManager.cpp
 )
 
-target_include_directories(vvm_utils
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_SOURCE_DIR}/lib/json
+set(VVM_UTILS_HEADERS
+    ConfigurationManager.hpp
 )
+
+add_library(vvm_utils STATIC
+    ${VVM_UTILS_SOURCES}
+    ${VVM_UTILS_HEADERS}
+)
+
+target_link_libraries(vvm_utils
+    PUBLIC
+        Kokkos::kokkos
+)
+

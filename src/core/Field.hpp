@@ -76,6 +76,7 @@ public:
     // --- Printing/Debugging Methods ---
     void print_field_info() const;
     void print_slice_z_at_k(const Grid& grid, int N_idx, int k_local_idx) const;
+    void print_profile(const Grid& grid, int N_idx, int j_local_idx, int i_local_idx) const;
 
 private:
     std::string name_; // Name of the field for identification
@@ -139,6 +140,47 @@ inline void Field<Dim>::print_slice_z_at_k(const Grid& grid, int N_idx, int k_lo
     std::cout << "--------------------------------------" << std::endl;
 }
 
+
+template<size_t Dim>
+inline void Field<Dim>::print_profile(const Grid& grid, int N_idx, int j_local_idx, int i_local_idx) const {
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    auto host_data = get_host_data();
+
+    std::cout << "Rank " << rank << ": Field '" << name_ << "'" << std::endl;
+
+    // Use if constexpr to handle different dimensions at compile time
+    if constexpr (Dim == 4) {
+        std::cout << "  Slice at N=" << N_idx << ", j=" << j_local_idx << ", i=" << i_local_idx<< std::endl;
+        for (int k = 0; k < host_data.extent(1); ++k) {
+            std::cout << host_data(N_idx, k, j_local_idx, i_local_idx) << "\t";
+        }
+        std::cout << std::endl;
+    } 
+    else if constexpr (Dim == 3) {
+        std::cout << ", j=" << j_local_idx << ", i=" << i_local_idx<< std::endl;
+        for (int k = 0; k < host_data.extent(0); ++k) {
+            std::cout << host_data(k, j_local_idx, i_local_idx) << "\t";
+        }
+        std::cout << std::endl;
+    } 
+    else if constexpr (Dim == 1) {
+        // For a 2D field, we ignore indices and print the whole field
+        std::cout << "  1D profile:" << std::endl;
+        for (int k = 0; k < host_data.extent(0); ++k) {
+            std::cout << host_data(k) << "\t";
+        }
+        std::cout << std::endl;
+    } 
+    else {
+        // For other dimensions, this function is not applicable
+        if (rank == 0) {
+            std::cout << "  Printing is not implemented for " << Dim << "D fields." << std::endl;
+        }
+    }
+    std::cout << "--------------------------------------" << std::endl;
+}
 
 } // namespace Core
 } // namespace VVM

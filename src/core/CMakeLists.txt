@@ -1,7 +1,21 @@
-add_library(vvm_core STATIC
+set(VVM_CORE_SOURCES
     State.cpp
     Grid.cpp
-    OutputManager.cpp
+    Initializer.cpp
+    BoundaryConditionManager.cpp
+)
+
+set(VVM_CORE_HEADERS
+    State.hpp
+    Grid.hpp
+    HaloExchanger.hpp
+    Initializer.hpp
+    BoundaryConditionManager.hpp
+)
+
+add_library(vvm_core STATIC
+    ${VVM_CORE_SOURCES}
+    ${VVM_CORE_HEADERS}
 )
 
 find_library(NVTOOLSEXT_LIBRARY nvToolsExt
@@ -26,20 +40,17 @@ endif()
 
 target_include_directories(vvm_core
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/../utils
-        ${MPI_INCLUDE_PATH}
-        ${PNETCDF_INCLUDE_DIR}
-        ${ADIOS2_INCLUDE_DIRS}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
 
 target_link_libraries(vvm_core
     PUBLIC
+        vvm_utils
+        vvm_io
         MPI::MPI_CXX
 	    ${NVCPUMATH_LIBRARY}
         ${PNETCDF_LIBRARY}
-        adios2::adios2
     PRIVATE
         Kokkos::kokkos
         ${MPI_LIBRARIES}

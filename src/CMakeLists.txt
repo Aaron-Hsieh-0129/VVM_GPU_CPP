@@ -1,5 +1,6 @@
 add_subdirectory(utils)
 add_subdirectory(core)
+add_subdirectory(io)
 
 add_executable(vvm 
     main.cpp
@@ -20,4 +21,5 @@ target_link_libraries(vvm
 
         vvm_utils
         vvm_core
+        vvm_io
 )

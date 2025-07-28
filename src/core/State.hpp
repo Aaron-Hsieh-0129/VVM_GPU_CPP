@@ -5,7 +5,7 @@
 
 #include "Grid.hpp"
 #include "Field.hpp"
-#include "../utils/ConfigurationManager.hpp"
+#include "utils/ConfigurationManager.hpp"
 #include "Parameters.hpp"
 #include <map>
 #include <string>
@@ -27,7 +27,7 @@ using AnyField = std::variant<
 class State {
 public:
     // Constructor
-    State(const Utils::ConfigurationManager& config, const ModelParameters& params);
+    State(const Utils::ConfigurationManager& config, const Parameters& params);
 
     template<size_t Dim>
     void add_field(const std::string& name, std::initializer_list<int> dims_list) {
@@ -74,7 +74,7 @@ public:
 
 private:
     const Utils::ConfigurationManager& config_ref_;
-    const ModelParameters model_parameters_;
+    const Parameters& parameters_;
     std::map<std::string, AnyField> fields_;
 };
 
