@@ -38,5 +38,37 @@
     "constants": {
         "gravity": 9.81,
         "Rd": 287.0
+    },
+    "dynamics": {
+        "prognostic_variables": {
+            "th": {
+                "temporal_scheme": "AdamsBashforth2",
+                "tendency_terms": {
+                    "advection": {
+                        "spatial_scheme": "Takacs"
+                    },
+                    "diffusion": {
+                        "spatial_scheme": "Takacs"
+                        "enable": false,
+                    }
+                }
+            },
+            "xi": {
+                "temporal_scheme": "AdamsBashforth2",
+                "tendency_terms": {
+                    "advection": {
+                        "spatial_scheme": "Takacs"
+                    },
+                }
+            },
+            "eta": {
+                "temporal_scheme": "AdamsBashforth2",
+                "tendency_terms": {
+                    "advection": {
+                        "spatial_scheme": "Takacs"
+                    },
+                }
+            }
+        }
     }
 }
