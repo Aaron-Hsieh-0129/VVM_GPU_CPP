@@ -11,6 +11,8 @@ set(VVM_CORE_HEADERS
     HaloExchanger.hpp
     Initializer.hpp
     BoundaryConditionManager.hpp
+    Parameters.hpp
+    Field.hpp
 )
 
 add_library(vvm_core STATIC
@@ -47,7 +49,6 @@ target_include_directories(vvm_core
 target_link_libraries(vvm_core
     PUBLIC
         vvm_utils
-        vvm_io
         MPI::MPI_CXX
 	    ${NVCPUMATH_LIBRARY}
         ${PNETCDF_LIBRARY}
