@@ -17,13 +17,17 @@ namespace Dynamics {
 class DynamicalCore {
 public:
     // 根據設定檔建立所有需要的物件
-    DynamicalCore(const Utils::ConfigurationManager& config, const Core::Grid& grid, const Core::Parameters& params);
+    DynamicalCore(const Utils::ConfigurationManager& config, 
+                  const Core::Grid& grid, 
+                  const Core::Parameters& params,
+                  Core::State& state);
     ~DynamicalCore();
 
     // 執行一個完整的時間步
     void step(Core::State& state, double dt);
 
 private:
+    Core::State& state_;
     const Core::Grid& grid_;
     const Core::Parameters& params_;
     

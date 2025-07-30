@@ -22,6 +22,10 @@ public:
         const Core::Parameters& params,
         double dt
     ) const = 0;
+
+    virtual std::vector<std::string> get_required_state_suffixes() const {
+        return {};
+    }
 };
 
 } // namespace Dynamics
