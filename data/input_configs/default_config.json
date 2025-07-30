@@ -53,8 +53,8 @@
                         "spatial_scheme": "Takacs"
                     },
                     "diffusion": {
-                        "spatial_scheme": "Takacs"
-                        "enable": false,
+                        "spatial_scheme": "Takacs",
+                        "enable": false
                     }
                 }
             },
@@ -63,7 +63,7 @@
                 "tendency_terms": {
                     "advection": {
                         "spatial_scheme": "Takacs"
-                    },
+                    }
                 }
             },
             "eta": {
@@ -71,7 +71,7 @@
                 "tendency_terms": {
                     "advection": {
                         "spatial_scheme": "Takacs"
-                    },
+                    }
                 }
             }
         }

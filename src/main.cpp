@@ -89,6 +89,11 @@ int main(int argc, char* argv[]) {
         // if (rank == 0) parameters.dz_mid.print_profile(grid, 0, 0, 0);
         // if (rank == 0) parameters.flex_height_coef_mid.print_profile(grid, 0, 0, 0);
         output_manager.write(state, 0.0);
+
+
+        // VVM::Dynamics::Takacs takacs_scheme;
+        //
+        std::cout << "params_nx: " << parameters.get_value_host(parameters.nx) << std::endl;
     }
     Kokkos::finalize();
     MPI_Finalize();
