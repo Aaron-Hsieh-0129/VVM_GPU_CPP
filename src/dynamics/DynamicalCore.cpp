@@ -15,8 +15,48 @@ std::unique_ptr<TemporalScheme> create_temporal_scheme_for_variable(
     
     std::string scheme_name = config.at("time_scheme");
 
+    auto prognostic_config = config.get_value<nlohmann::json>("dynamics.prognostic_variables");
+    
+    for (auto& [var_name, conf] : prognostic_config.items()) {
+        prognostic_variables_.push_back(var_name);
+        
+        // 1. 創建時間積分方案的實例
+        variable_schemes_[var_name] = create_temporal_scheme_for_variable(var_name, conf);
+        
+        // 2. 詢問此方案需要哪些額外的狀態變數
+        auto required_suffixes = variable_schemes_[var_name]->get_required_state_suffixes();
+        
+        // 3. 自動在 State 中宣告這些變數
+        for (const auto& suffix : required_suffixes) {
+            std::string shadow_field_name = var_name + suffix;
+            
+            // 假設所有預報變數都是 3D 的 (您可以根據需求擴充)
+            int nz = grid.get_local_total_points_z();
+            int ny = grid.get_local_total_points_y();
+            int nx = grid.get_local_total_points_x();
+            
+            // 檢查變數是否已存在，避免重複宣告
+            // (這需要為 State 類別增加一個 has_field 的方法)
+            // if (!state.has_field(shadow_field_name)) {
+                state.add_field<3>(shadow_field_name, {nz, ny, nx});
+                std::cout << "DynamicalCore: Automatically declared state variable '" << shadow_field_name << "' for prognostic variable '" << var_name << "'." << std::endl;
+            // }
+        }
+
+        // ... (自動宣告 4D tendency 變數的邏輯也可以整合進來)
+    }
+
     if (scheme_name == "AdamsBashforth2") {
-        std::vector<std::unique_ptr<TendencyTerm>> terms;
+        // ...就自動宣告一個對應的 4D 變數
+        std::string tendency_field_name = "d_" + var;
+
+        // Adams-Bashforth 2 階方案需要儲存前一個時間步的傾向，
+        // 所以 4D 變數的第一維大小是 2
+        int nz = grid.get_local_total_points_z();
+        int ny = grid.get_local_total_points_y();
+        int nx = grid.get_local_total_points_x();
+
+        state.add_field<4>(tendency_field_name, {2, nz, ny, nx});
 
         // 根據設定建立 AdvectionTerm
         if (config.contains("advection")) {

@@ -14,6 +14,11 @@
         "dt_s": 1.0,
         "output_interval_s": 300.0
     },
+    "add_model_fields": {
+        "3d": [
+            "tracer1"
+        ]
+    },
     "initial_conditions": {
         "format": "txt",
         "source_file": "/work/aaron900129/VVM_GPU_CPP/data/initial_conditions/profile.txt",

@@ -21,23 +21,20 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<1>("rhobar_up", {nz_total});
     add_field<1>("pbar", {nz_total});
     add_field<1>("pibar", {nz_total});
+    add_field<1>("U", {nz_total});
 
     // 2D field
     add_field<2>("htflx_sfc", {ny_total, nx_total});
 
-
     // 3D field
-    add_field<3>("etam", {nz_total, ny_total, nx_total});
-    add_field<3>("etap", {nz_total, ny_total, nx_total});
-    add_field<3>("thm", {nz_total, ny_total, nx_total});
-    add_field<3>("thp", {nz_total, ny_total, nx_total});
+    add_field<3>("th", {nz_total, ny_total, nx_total});
+    add_field<3>("xi", {nz_total, ny_total, nx_total});
+    add_field<3>("eta", {nz_total, ny_total, nx_total});
+    add_field<3>("zeta", {nz_total, ny_total, nx_total});
     add_field<3>("u", {nz_total, ny_total, nx_total});
     add_field<3>("w", {nz_total, ny_total, nx_total});
 
-
-    // 4D field
-    add_field<4>("d_eta", {2, nz_total, ny_total, nx_total});
-    add_field<4>("d_th", {2, nz_total, ny_total, nx_total});
+    // TODO: Add tracer auto loading from configuration file
 }
 
 // get_field is now a template in the header file.
