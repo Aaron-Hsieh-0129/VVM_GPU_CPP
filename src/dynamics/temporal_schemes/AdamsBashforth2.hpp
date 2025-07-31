@@ -26,8 +26,7 @@ public:
 
 private:
     std::vector<std::unique_ptr<TendencyTerm>> tendency_terms_;
-    // AB2 需要儲存上一個時間步的傾向，這可以用 mutable 或其他方式管理
-    // mutable Core::Field<3> previous_tendency_; 
+    mutable size_t time_step_count_ = 0;
 };
 
 } // namespace Dynamics

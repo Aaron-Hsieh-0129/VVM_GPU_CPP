@@ -12,6 +12,8 @@
 #include <memory>
 #include <variant>
 
+namespace VVM { namespace Dynamics { class AdamsBashforth2; } }
+
 namespace VVM {
 namespace Core {
 
@@ -25,6 +27,7 @@ using AnyField = std::variant<
 >;
 
 class State {
+    friend class VVM::Dynamics::AdamsBashforth2;
 public:
     // Constructor
     State(const Utils::ConfigurationManager& config, const Parameters& params);
@@ -36,6 +39,11 @@ public:
         }
         std::array<int, Dim> dims;
         std::copy(dims_list.begin(), dims_list.end(), dims.begin());
+        fields_.try_emplace(name, std::in_place_type_t<Field<Dim>>(), name, dims);
+    }
+
+    template<size_t Dim>
+    void add_field(const std::string& name, const std::array<int, Dim>& dims) {
         fields_.try_emplace(name, std::in_place_type_t<Field<Dim>>(), name, dims);
     }
 
