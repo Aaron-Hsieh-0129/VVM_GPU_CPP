@@ -51,10 +51,6 @@
                 "tendency_terms": {
                     "advection": {
                         "spatial_scheme": "Takacs"
-                    },
-                    "diffusion": {
-                        "spatial_scheme": "Takacs",
-                        "enable": false
                     }
                 }
             },

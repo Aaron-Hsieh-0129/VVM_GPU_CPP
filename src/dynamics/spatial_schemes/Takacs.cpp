@@ -3,14 +3,38 @@
 namespace VVM {
 namespace Dynamics {
 
-Core::Field<3> Takacs::calculate_flux_divergence_x(
-    const Core::Field<3>& scalar, const Core::Field<3>& u, const Core::Field<3>& w,
-    const Core::Grid& grid, const Core::Parameters& params) const {
-    // Core::Field<3> flux("Flux", {params.nz, params.ny, params.nx});
+void Takacs::calculate_flux_divergence_x(
+    const Core::Field<3>& scalar, const Core::Field<3>& u_field,
+    const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency) const {
 
-    // std::cout << "Flux dim: " << flux.extent(0) << ", " << flux.extent(1) << ", " << flux.extent(2) << std::endl;
-    
-    return Core::Field<3>("empty_tendency", {1,1,1});
+    const int nz = grid.get_local_physical_points_z();
+    const int ny = grid.get_local_physical_points_y();
+    const int nx = grid.get_local_physical_points_x();
+
+    auto& u = u_field.get_device_data();
+    auto& q = scalar.get_device_data();
+    auto& flux = out_tendency.get_mutable_device_data();
+
+    Kokkos::View<double***> uplus("uplus", nz, ny, nx);
+    Kokkos::View<double***> uminus("uminus", nz, ny, nx);
+
+    Kokkos::parallel_for("flux_divergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz,ny,nx}),
+        KOKKOS_LAMBDA(int k, int j, int i) {
+            uplus(k,j,i) = 0.5*(u(k,j,i)+Kokkos::abs(u(k,j,i)));
+            uminus(k,j,i) = 0.5*(u(k,j,i)-Kokkos::abs(u(k,j,i)));
+    });
+
+    Kokkos::parallel_for("flux_divergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({1,1,1}, {nz-1,ny-1,nx-1}),
+        KOKKOS_LAMBDA(int k, int j, int i) {
+            flux(k,j,i) = u(k,j,i)*(q(k,j,i+1)+q(k,j,i)) - 
+                          1./3.*( 
+                            uplus(k,j,i)*(q(k,j,i+1)-q(k,j,i)) - Kokkos::sqrt(uplus(k,j,i))*Kokkos::sqrt(uplus(k,j,i-1))*(q(k,j,i)-q(k,j,i-1)) - 
+                            uminus(k,j,i)*(q(k,j,i+1)-q(k,j,i)) - Kokkos::sqrt(uminus(k,j,i))*Kokkos::sqrt(uminus(k,j,i+1))*(q(k,j,i+2)-q(k,j,i+1)) 
+                          );
+
+            flux(k,j,i) = 10000.;
+    });
+    return;
 }
 
 } // namespace Dynamics

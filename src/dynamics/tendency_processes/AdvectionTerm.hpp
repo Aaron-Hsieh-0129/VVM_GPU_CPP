@@ -16,7 +16,7 @@ public:
 
     void compute_tendency(
         const Core::State& state, 
-        Core::State& tendencies, 
+        Core::State& tendencies,
         const Core::Grid& grid,
         const Core::Parameters& params) const override;
 private:

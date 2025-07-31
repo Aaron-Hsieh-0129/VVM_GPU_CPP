@@ -13,23 +13,7 @@
 #include "core/State.hpp"
 #include "core/Parameters.hpp"
 #include "core/Initializer.hpp"
-
-template <class ExecutionSpace>
-void matrix_multiply(Kokkos::View<double**, Kokkos::LayoutRight, ExecutionSpace> A,
-                     Kokkos::View<double**, Kokkos::LayoutRight, ExecutionSpace> B,
-                     Kokkos::View<double**, Kokkos::LayoutRight, ExecutionSpace> C,
-                     int N) {
-    using Policy = Kokkos::MDRangePolicy<ExecutionSpace, Kokkos::Rank<2>>;
-    Kokkos::parallel_for("MatrixMultiply",
-                         Policy({0, 0}, {N, N}),
-                         KOKKOS_LAMBDA(const int i, const int j) {
-                             double sum = 0.0;
-                             for (int k = 0; k < N; k++) {
-                                 sum += A(i,k) * B(k,j);
-                             }
-                             C(i,j) = sum;
-                         });
-}
+#include "dynamics/DynamicalCore.hpp"
 
 int main(int argc, char* argv[]) {
     MPI_Init(&argc, &argv);
@@ -91,9 +75,8 @@ int main(int argc, char* argv[]) {
         output_manager.write(state, 0.0);
 
 
-        // VVM::Dynamics::Takacs takacs_scheme;
-        //
-        std::cout << "params_nx: " << parameters.get_value_host(parameters.nx) << std::endl;
+        VVM::Dynamics::DynamicalCore dynamical_core(config, grid, parameters, state);
+        dynamical_core.step(state, parameters.get_value_host(parameters.dt));
     }
     Kokkos::finalize();
     MPI_Finalize();

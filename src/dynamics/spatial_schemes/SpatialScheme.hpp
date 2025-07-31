@@ -15,9 +15,9 @@ public:
     virtual ~SpatialScheme() = default;
 
     // ∇⋅(ρvφ)
-    virtual Core::Field<3> calculate_flux_divergence_x(
-        const Core::Field<3>& scalar, const Core::Field<3>& u, const Core::Field<3>& w,
-        const Core::Grid& grid, const Core::Parameters& params) const = 0;
+    virtual void calculate_flux_divergence_x(
+        const Core::Field<3>& scalar, const Core::Field<3>& u,
+        const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency) const = 0;
     // virtual Core::Field<3> calculate_flux_convergence_y(
     //     const Core::Field<3>& scalar, const Core::Field<3>& u, 
     //     const Core::Grid& grid, const Core::Parameters& params) const = 0;

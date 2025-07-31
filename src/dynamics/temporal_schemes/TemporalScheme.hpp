@@ -4,7 +4,7 @@
 #include "core/State.hpp"
 #include "core/Grid.hpp"
 #include "core/Parameters.hpp"
-#include "../tendency_processes/TendencyTerm.hpp" // 注意路徑
+#include "dynamics/tendency_processes/TendencyTerm.hpp" // 注意路徑
 #include <vector>
 #include <memory>
 

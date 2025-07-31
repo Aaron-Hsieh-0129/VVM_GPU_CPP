@@ -24,7 +24,8 @@ std::unique_ptr<TemporalScheme> DynamicalCore::create_temporal_scheme(
             std::unique_ptr<SpatialScheme> spatial_scheme;
             if (advection_scheme_name == "Takacs") {
                 spatial_scheme = std::make_unique<Takacs>();
-            } else {
+            } 
+            else {
                 throw std::runtime_error("Unknown spatial scheme: " + advection_scheme_name);
             }
             terms.push_back(std::make_unique<AdvectionTerm>(std::move(spatial_scheme), var_name));
@@ -84,7 +85,7 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
         if (var_conf.contains("temporal_scheme") && var_conf.at("temporal_scheme") == "AdamsBashforth2") {
             // Adams-Bashforth 2 階方案需要儲存前一個時間步的傾向，
             // 所以 4D 變數的第一維大小是 2
-            std::string tendency_field_name_prev = "d_" + var_name + "_prev"; 
+            std::string tendency_field_name_prev = "d_" + var_name; 
             // 這裡假設所有 Tendency 的結果是 3D，儲存歷史 Tendency 時增加一個時間步維度變成 4D
             state_.add_field<4>(tendency_field_name_prev, {2, nz, ny, nx});
             std::cout << "DynamicalCore: Automatically declared 4D state variable '" << tendency_field_name_prev << "' for AdamsBashforth2 scheme of '" << var_name << "'." << std::endl;
