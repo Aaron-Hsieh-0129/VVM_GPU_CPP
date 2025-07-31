@@ -3,6 +3,7 @@
 #include <iostream>
 #include <omp.h>
 #include <chrono>
+#include <cmath> // For std::exp
 
 #include "utils/ConfigurationManager.hpp"
 #include "io/OutputManager.hpp"
@@ -80,9 +81,28 @@ int main(int argc, char* argv[]) {
 
         auto& th = state.get_field<3>("th").get_mutable_device_data();
         auto& thbar = state.get_field<1>("thbar").get_device_data();
-        Kokkos::parallel_for("th_init", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz_total, ny_total, nx_total}),
+        
+        // --- 修改 th 的初始條件以測試平流 ---
+        const double dx = grid.get_dx();
+        const double nx_global = grid.get_global_points_x();
+        const double x_center = nx_global * dx / 2.0; // 總域中心
+        const double x_sigma = nx_global * dx / 8.0;   // 調整峰值寬度
+        const double perturbation_amplitude = 10.0; // 擾動幅度
+
+        int nx_start = grid.get_local_physical_start_x();
+        Kokkos::parallel_for("th_init_with_perturbation", 
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz_total, ny_total, nx_total}),
             KOKKOS_LAMBDA(int k, int j, int i) {
-                th(k,j,i) = thbar(k);
+                // 從 thbar 讀取基本場
+                double base_th = thbar(k);
+
+                // 計算當前點的全局 x 座標
+                double global_x = (nx_start + i) * dx;
+
+                // 疊加一個高斯擾動
+                double perturbation = perturbation_amplitude * std::exp(-std::pow(global_x - x_center, 2) / (2 * x_sigma * x_sigma));
+                
+                th(k,j,i) = base_th + perturbation;
         });
         
 
@@ -94,8 +114,25 @@ int main(int argc, char* argv[]) {
 
 
         VVM::Dynamics::DynamicalCore dynamical_core(config, grid, parameters, state);
-        dynamical_core.step(state, parameters.get_value_host(parameters.dt));
-        output_manager.write(state, 1.0);
+
+        // Simulation loop parameters
+        double total_time = config.get_value<double>("simulation.total_time_s");
+        double dt = parameters.get_value_host(parameters.dt);
+        double output_interval = config.get_value<double>("simulation.output_interval_s");
+        double current_time = 0.0;
+        double next_output_time = output_interval;
+
+        // Simulation loop
+        while (current_time < total_time) {
+            dynamical_core.step(state, dt);
+            current_time += dt;
+
+            // Output data at specified intervals
+            if (current_time >= next_output_time) {
+                output_manager.write(state, current_time);
+                next_output_time += output_interval;
+            }
+        }
     }
     Kokkos::finalize();
     MPI_Finalize();
