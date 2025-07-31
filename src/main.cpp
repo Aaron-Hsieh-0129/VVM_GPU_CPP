@@ -54,6 +54,7 @@ int main(int argc, char* argv[]) {
         VVM::Core::HaloExchanger halo_exchanger(grid);
         VVM::Core::BoundaryConditionManager bc_manager(grid, config);
 
+        const int nz_total = grid.get_local_total_points_z();
         const int ny_total = grid.get_local_total_points_y();
         const int nx_total = grid.get_local_total_points_x();
         auto& htflx_sfc = state.get_field<2>("htflx_sfc");
@@ -68,6 +69,23 @@ int main(int argc, char* argv[]) {
         VVM::Core::Initializer init(config, grid, parameters, state);
         init.initialize_state(state);
 
+
+        // B.C. process
+        bc_manager.apply_z_bcs_to_field(state.get_field<1>("thbar"));
+        bc_manager.apply_z_bcs_to_field(state.get_field<1>("rhobar"));
+        bc_manager.apply_z_bcs_to_field(state.get_field<1>("rhobar_up"));
+        bc_manager.apply_z_bcs_to_field(state.get_field<1>("pbar"));
+        bc_manager.apply_z_bcs_to_field(state.get_field<1>("pibar"));
+        bc_manager.apply_z_bcs_to_field(state.get_field<1>("U"));
+
+        auto& th = state.get_field<3>("th").get_mutable_device_data();
+        auto& thbar = state.get_field<1>("thbar").get_device_data();
+        Kokkos::parallel_for("th_init", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz_total, ny_total, nx_total}),
+            KOKKOS_LAMBDA(int k, int j, int i) {
+                th(k,j,i) = thbar(k);
+        });
+        
+
         // 1D field
         if (rank == 0) state.get_field<1>("thbar").print_profile(grid, 0, 0, 0);
         // if (rank == 0) parameters.dz_mid.print_profile(grid, 0, 0, 0);
@@ -77,6 +95,7 @@ int main(int argc, char* argv[]) {
 
         VVM::Dynamics::DynamicalCore dynamical_core(config, grid, parameters, state);
         dynamical_core.step(state, parameters.get_value_host(parameters.dt));
+        output_manager.write(state, 1.0);
     }
     Kokkos::finalize();
     MPI_Finalize();

@@ -51,44 +51,26 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
         prognostic_variables_.push_back(var_name);
         
         // 1. 創建時間積分方案的實例
-        // 這裡直接呼叫成員函式 create_temporal_scheme
         variable_schemes_[var_name] = create_temporal_scheme(var_name, var_conf);
         
-        // 2. 詢問此方案需要哪些額外的狀態變數後，自動在 State 中宣告這些變數
-        // 這裡需要確保 prognostic_variables_ 是 3D 的。
-        // 未來如果需要支援不同維度，可能需要從設定檔讀取維度資訊，或者在 TemporalScheme 介面中加入獲取場維度的方法。
+        // 2. 自動在 State 中宣告方案所需的額外變數
         int nz = grid_.get_local_total_points_z();
         int ny = grid_.get_local_total_points_y();
         int nx = grid_.get_local_total_points_x();
-
-        // 宣告預報變數本身 (例如 'th')
-        // 由於 State 建構子已經預設宣告，這裡僅為自動宣告額外變數做示範
-        // 實際應用中，確保 prognostic_variables_ 在 State 中被正確初始化
-        // 例如：state_.add_field<3>(var_name, {nz, ny, nx}); // 如果 State 初始沒有宣告
 
         // 宣告時間積分方案所需的影子變數 (例如 'th_m')
         auto required_suffixes = variable_schemes_[var_name]->get_required_state_suffixes();
         for (const auto& suffix : required_suffixes) {
             std::string shadow_field_name = var_name + suffix;
-            
-            // 檢查變數是否已存在，避免重複宣告
-            // 這裡需要 State 類別有一個 has_field 的方法來實現
-            // if (!state_.has_field(shadow_field_name)) {
-                // 假設所有這些額外變數也都是 3D 的
-                state_.add_field<3>(shadow_field_name, {nz, ny, nx});
-                std::cout << "DynamicalCore: Automatically declared state variable '" << shadow_field_name << "' for prognostic variable '" << var_name << "'." << std::endl;
-            // }
+            state_.add_field<3>(shadow_field_name, {nz, ny, nx});
+            std::cout << "DynamicalCore: Automatically declared state variable '" << shadow_field_name << "' for prognostic variable '" << var_name << "'." << std::endl;
         }
 
-        // 針對 AdamsBashforth2，如果它需要一個 4D 的 tendency 變數，也在此宣告
-        // 檢查 var_conf 是否有 "temporal_scheme" 且其值為 "AdamsBashforth2"
+        // 針對 AdamsBashforth2，宣告 4D 的 tendency 變數
         if (var_conf.contains("temporal_scheme") && var_conf.at("temporal_scheme") == "AdamsBashforth2") {
-            // Adams-Bashforth 2 階方案需要儲存前一個時間步的傾向，
-            // 所以 4D 變數的第一維大小是 2
-            std::string tendency_field_name_prev = "d_" + var_name; 
-            // 這裡假設所有 Tendency 的結果是 3D，儲存歷史 Tendency 時增加一個時間步維度變成 4D
-            state_.add_field<4>(tendency_field_name_prev, {2, nz, ny, nx});
-            std::cout << "DynamicalCore: Automatically declared 4D state variable '" << tendency_field_name_prev << "' for AdamsBashforth2 scheme of '" << var_name << "'." << std::endl;
+            std::string tendency_field_name = "d_" + var_name; 
+            state_.add_field<4>(tendency_field_name, {2, nz, ny, nx});
+            std::cout << "DynamicalCore: Automatically declared 4D state variable '" << tendency_field_name << "' for AdamsBashforth2 scheme of '" << var_name << "'." << std::endl;
         }
     }
 }
@@ -97,7 +79,6 @@ DynamicalCore::~DynamicalCore() = default;
 
 void DynamicalCore::step(Core::State& state, double dt) {
     for (const auto& var_name : prognostic_variables_) {
-        // 使用 this->state_ 確保操作的是正確的 State 物件
         variable_schemes_.at(var_name)->step(state, grid_, params_, dt);
     }
 }

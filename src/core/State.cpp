@@ -1,4 +1,5 @@
 #include "State.hpp"
+#include "BoundaryConditionManager.hpp"
 
 namespace VVM {
 namespace Core {
@@ -33,6 +34,10 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<3>("zeta", {nz_total, ny_total, nx_total});
     add_field<3>("u", {nz_total, ny_total, nx_total});
     add_field<3>("w", {nz_total, ny_total, nx_total});
+
+
+    auto& u_data = get_field<3>("u").get_mutable_device_data();
+    Kokkos::deep_copy(u_data, 10.0);
 
     // TODO: Add tracer auto loading from configuration file
 }
