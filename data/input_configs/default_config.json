@@ -30,14 +30,14 @@
         "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/test",
         "enable_netcdf": true,
         "output_filename_prefix": "vvm_output",
-        "fields_to_output": ["thbar", "htflx_sfc"],
+        "fields_to_output": ["thbar", "htflx_sfc", "u", "th"],
         "output_grid": {
-            "x_start": 5,
-            "x_end": 13,
-            "y_start": 10,
-            "y_end": 11,
-            "z_start": 10,
-            "z_end": 30
+            "x_start": 0,
+            "x_end": -1,
+            "y_start": 0,
+            "y_end": -1,
+            "z_start": 0,
+            "z_end": -1
         }
     },
     "constants": {

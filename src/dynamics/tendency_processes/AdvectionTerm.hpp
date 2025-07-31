@@ -16,9 +16,9 @@ public:
 
     void compute_tendency(
         const Core::State& state, 
-        Core::State& tendencies,
         const Core::Grid& grid,
-        const Core::Parameters& params) const override;
+        const Core::Parameters& params, 
+        Core::Field<3>& out_tendency) const override;
 private:
     std::unique_ptr<SpatialScheme> scheme_;
     std::string variable_name_;

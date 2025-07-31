@@ -12,12 +12,11 @@ class TendencyTerm {
 public:
     virtual ~TendencyTerm() = default;
     
-    // 計算此過程產生的傾向，並「累加」到 tendencies 物件中
     virtual void compute_tendency(
         const Core::State& state, 
-        Core::State& tendencies,
         const Core::Grid& grid,
-        const Core::Parameters& params) const = 0;
+        const Core::Parameters& params, 
+        Core::Field<3>& out_tendency) const = 0;
 };
 
 } // namespace Dynamics
