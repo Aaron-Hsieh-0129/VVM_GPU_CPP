@@ -95,15 +95,18 @@ int main(int argc, char* argv[]) {
             KOKKOS_LAMBDA(int k, int j, int i) {
                 // 從 thbar 讀取基本場
                 double base_th = thbar(k);
-
-                // 計算當前點的全局 x 座標
-                double global_x = (nx_start + i) * dx;
-
-                // 疊加一個高斯擾動
-                double perturbation = perturbation_amplitude * std::exp(-std::pow(global_x - x_center, 2) / (2 * x_sigma * x_sigma));
                 
-                th(k,j,i) = base_th + perturbation;
+                th(k,j,i) = base_th;
+                if (j == ny_total/2 && i == nx_total/2) th(k,j,i) += 5;
         });
+
+        halo_exchanger.exchange_halos(state.get_field<3>("th"));
+
+        if (rank == 0) {
+            std::cout << "\n--- Field State AFTER Halo Exchange ---" << std::endl;
+        }
+
+        // state.get_field<3>("th").print_slice_z_at_k(grid, 0, 1);
         
 
         // 1D field
@@ -126,6 +129,9 @@ int main(int argc, char* argv[]) {
         while (current_time < total_time) {
             dynamical_core.step(state, dt);
             current_time += dt;
+            halo_exchanger.exchange_halos(state);
+
+            std::cout << current_time << std::endl;
 
             // Output data at specified intervals
             if (current_time >= next_output_time) {
