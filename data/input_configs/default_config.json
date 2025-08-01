@@ -10,9 +10,9 @@
         "dz1": 100.0
     },
     "simulation": {
-        "total_time_s": 3600.0,
+        "total_time_s": 300.0,
         "dt_s": 1.0,
-        "output_interval_s": 300.0
+        "output_interval_s": 1.0
     },
     "add_model_fields": {
         "3d": [
@@ -47,22 +47,6 @@
     "dynamics": {
         "prognostic_variables": {
             "th": {
-                "temporal_scheme": "AdamsBashforth2",
-                "tendency_terms": {
-                    "advection": {
-                        "spatial_scheme": "Takacs"
-                    }
-                }
-            },
-            "xi": {
-                "temporal_scheme": "AdamsBashforth2",
-                "tendency_terms": {
-                    "advection": {
-                        "spatial_scheme": "Takacs"
-                    }
-                }
-            },
-            "eta": {
                 "temporal_scheme": "AdamsBashforth2",
                 "tendency_terms": {
                     "advection": {
