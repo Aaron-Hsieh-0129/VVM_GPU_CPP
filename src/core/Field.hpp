@@ -77,6 +77,7 @@ public:
     void print_field_info() const;
     void print_slice_z_at_k(const Grid& grid, int N_idx, int k_local_idx) const;
     void print_profile(const Grid& grid, int N_idx, int j_local_idx, int i_local_idx) const;
+    void print_xz_cross_at_j(const Grid& grid, int N_idx, int j_local_idx) const;
 
 private:
     std::string name_; // Name of the field for identification
@@ -172,6 +173,53 @@ inline void Field<Dim>::print_profile(const Grid& grid, int N_idx, int j_local_i
             std::cout << host_data(k) << "\t";
         }
         std::cout << std::endl;
+    } 
+    else {
+        // For other dimensions, this function is not applicable
+        if (rank == 0) {
+            std::cout << "  Printing is not implemented for " << Dim << "D fields." << std::endl;
+        }
+    }
+    std::cout << "--------------------------------------" << std::endl;
+}
+
+template<size_t Dim>
+inline void Field<Dim>::print_xz_cross_at_j(const Grid& grid, int N_idx, int j_local_idx) const {
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    auto host_data = get_host_data();
+
+    std::cout << "Rank " << rank << ": Field '" << name_ << "' (" << Dim << "D)" << std::endl;
+
+    // Use if constexpr to handle different dimensions at compile time
+    if constexpr (Dim == 4) {
+        if (N_idx < 0 || N_idx >= host_data.extent(0) ||
+            j_local_idx < 0 || j_local_idx >= host_data.extent(1)) {
+            std::cerr << "Warning: Slice index (" << N_idx << ", " << j_local_idx 
+                      << ") out of bounds for field '" << name_ << "'." << std::endl;
+            return;
+        }
+        std::cout << "  Slice at N=" << N_idx << ", j=" << j_local_idx << std::endl;
+        for (int k = 0; k < host_data.extent(1); ++k) {
+            for (int i = 0; i < host_data.extent(3); ++i) {
+                std::cout << host_data(N_idx, k, j_local_idx, i) << "\t";
+            }
+            std::cout << std::endl;
+        }
+    } 
+    else if constexpr (Dim == 3) {
+        if (j_local_idx < 0 || j_local_idx >= host_data.extent(1)) {
+            std::cerr << "Warning: Y-slice index " << j_local_idx << " out of bounds for field '" << name_ << "'." << std::endl;
+            return;
+        }
+        std::cout << "  Y-slice at j=" << j_local_idx << std::endl;
+        for (int k = 0; k < host_data.extent(1); ++k) {
+            for (int i = 0; i < host_data.extent(2); ++i) {
+                std::cout << host_data(k, j_local_idx, i) << "\t";
+            }
+            std::cout << std::endl;
+        }
     } 
     else {
         // For other dimensions, this function is not applicable
