@@ -92,11 +92,7 @@ int main(int argc, char* argv[]) {
                 double base_th = thbar(k);
                 
                 th(k,j,i) = 0.;
-                // if (j == ny_total/2 && i == nx_total/2) th(k,j,i) += 5;
-                if (k == 3 && j == 3 && i == 3) xi(k,j,i) += 5;
-                if (k == 10 && j == 3 && i == 3) th(k,j,i) += 5;
-                if (j == ny_total/2 && i == nx_total/2) eta(k,j,i) += 5;
-                if (j == ny_total/2 && i == nx_total/2) zeta(k,j,i) += 5;
+                if (k == 3 && j == 3 && i == 3 && (rank == 0 || rank == 1)) th(k,j,i) += 5;
 
                 if (k == 0 || k == nz_total-1 || k == nz_total-2) w(k,j,i) = 0;
         });
