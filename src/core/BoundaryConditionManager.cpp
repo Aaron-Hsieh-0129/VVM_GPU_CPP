@@ -4,7 +4,7 @@
 namespace VVM {
 namespace Core {
 
-BoundaryConditionManager::BoundaryConditionManager(const Grid& grid, const Utils::ConfigurationManager& config)
+BoundaryConditionManager::BoundaryConditionManager(const Grid& grid)
     : grid_ref_(grid) {
     top_bc_ = ZBoundaryType::ZERO_GRADIENT;
     bottom_bc_ = ZBoundaryType::ZERO_GRADIENT;

@@ -32,7 +32,7 @@ std::unique_ptr<TemporalScheme> DynamicalCore::create_temporal_scheme(
         }
         // TODO: 在這裡根據設定建立其他 TendencyTerm (diffusion, stretching, tilting 等)
 
-        return std::make_unique<AdamsBashforth2>(std::move(terms));
+        return std::make_unique<AdamsBashforth2>(var_name, std::move(terms));
     }
     
     throw std::runtime_error("Unknown temporal scheme: " + scheme_name);

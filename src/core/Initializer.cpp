@@ -36,7 +36,7 @@ void Initializer::initialize_state(State& state) const {
 }
 
 void Initializer::initialize_grid() const {
-    VVM::Core::BoundaryConditionManager bc_manager(grid_, config_);
+    VVM::Core::BoundaryConditionManager bc_manager(grid_);
 
     double DOMAIN = 15000.;
     double dz = config_.get_value<double>("grid.dz");
