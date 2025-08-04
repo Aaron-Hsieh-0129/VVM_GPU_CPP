@@ -8,8 +8,8 @@
 namespace VVM {
 namespace IO {
 
-OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, MPI_Comm comm)
-    : grid_(grid), comm_(comm), adios_(comm) {
+OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params, MPI_Comm comm)
+    : grid_(grid), params_(params), comm_(comm), adios_(comm) {
     rank_ = 0;
     mpi_size_ = 1;
     MPI_Comm_rank(comm_, &rank_);
@@ -59,6 +59,10 @@ void OutputManager::define_variables(const VVM::Core::State& state) {
     const size_t gny = grid_.get_global_points_y();
     const size_t gnz = grid_.get_global_points_z();
 
+    io_.DefineVariable<double>("x", {gnx}, {0}, {rank_ == 0 ? gnx : 0});
+    io_.DefineVariable<double>("y", {gny}, {0}, {rank_ == 0 ? gny : 0});
+    io_.DefineVariable<double>("z_mid", {gnz}, {0}, {rank_ == 0 ? gnz : 0});
+
     // Local physical points and offsets for current rank
     const size_t rank_lnx = grid_.get_local_physical_points_x();
     const size_t rank_lny = grid_.get_local_physical_points_y();
@@ -93,19 +97,37 @@ void OutputManager::define_variables(const VVM::Core::State& state) {
                     size_t actual_output_z_end = std::min(rank_offset_z + rank_lnz - 1, output_z_end_);
                     size_t local_output_nz = (actual_output_z_end >= actual_output_z_start) ? (actual_output_z_end - actual_output_z_start + 1) : 0;
                     
-                    if constexpr (T::DimValue == 1) { // 1D fields are Z-dependent only
-                        // For 1D fields, the local_physical_size in Z (lnz) is equal to global_size (gnz)
-                        // So, the actual_output_z_start/end already covers the global range.
+                    // if constexpr (T::DimValue == 1) { // 1D fields are Z-dependent only
+                    //     // For 1D fields, the local_physical_size in Z (lnz) is equal to global_size (gnz)
+                    //     // So, the actual_output_z_start/end already covers the global range.
+                    //     field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gnz}, {actual_output_z_start}, {local_output_nz});
+                    // }
+                    // else if constexpr (T::DimValue == 2) {
+                    //     field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gny, gnx}, {actual_output_y_start, actual_output_x_start}, {local_output_ny, local_output_nx});
+                    // }
+                    // else if constexpr (T::DimValue == 3) {
+                    //     field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gnz, gny, gnx}, {actual_output_z_start, actual_output_y_start, actual_output_x_start}, {local_output_nz, local_output_ny, local_output_nx});
+                    // }
+                    // else if constexpr (T::DimValue == 4) {
+                    //     const size_t dim4 = field.get_device_data().extent(0); // 4th dimension is typically not decomposed
+                    //     field_variables_[field_name] = io_.DefineVariable<double>(field_name, {dim4, gnz, gny, gnx}, {0, actual_output_z_start, actual_output_y_start, actual_output_x_start}, {dim4, local_output_nz, local_output_ny, local_output_nx});
+                    // }
+
+                    if constexpr (T::DimValue == 1) {
+                        // 移除最後的 JoinedArray 參數
                         field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gnz}, {actual_output_z_start}, {local_output_nz});
                     }
                     else if constexpr (T::DimValue == 2) {
+                        // 移除最後的 JoinedArray 參數
                         field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gny, gnx}, {actual_output_y_start, actual_output_x_start}, {local_output_ny, local_output_nx});
                     }
                     else if constexpr (T::DimValue == 3) {
+                        // 移除最後的 JoinedArray 參數
                         field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gnz, gny, gnx}, {actual_output_z_start, actual_output_y_start, actual_output_x_start}, {local_output_nz, local_output_ny, local_output_nx});
                     }
                     else if constexpr (T::DimValue == 4) {
-                        const size_t dim4 = field.get_device_data().extent(0); // 4th dimension is typically not decomposed
+                        const size_t dim4 = field.get_device_data().extent(0);
+                        // 移除最後的 JoinedArray 參數
                         field_variables_[field_name] = io_.DefineVariable<double>(field_name, {dim4, gnz, gny, gnx}, {0, actual_output_z_start, actual_output_y_start, actual_output_x_start}, {dim4, local_output_nz, local_output_ny, local_output_nx});
                     }
                 }
@@ -127,7 +149,41 @@ void OutputManager::write(const VVM::Core::State& state, double time) {
     }
     writer_.Put<double>(var_time, &time, adios2::Mode::Sync);
 
-    const size_t h = grid_.get_halo_cells(); // Number of halo cells
+    const size_t h = grid_.get_halo_cells();
+
+    if (rank_ == 0) {
+        const size_t gnx = grid_.get_global_points_x();
+        const size_t gny = grid_.get_global_points_y();
+        const size_t gnz = grid_.get_global_points_z();
+
+        // 準備並寫入 x 座標
+        auto var_x = io_.InquireVariable<double>("x");
+        if (var_x) {
+            std::vector<double> x_coords(gnx);
+            // 產生 0, dx, 2*dx, ...
+            for(size_t i = 0; i < gnx; ++i) { x_coords[i] = i * grid_.get_dx(); }
+            writer_.Put<double>(var_x, x_coords.data(), adios2::Mode::Sync);
+        }
+
+        // 準備並寫入 y 座標
+        auto var_y = io_.InquireVariable<double>("y");
+        if (var_y) {
+            std::vector<double> y_coords(gny);
+            for(size_t i = 0; i < gny; ++i) { y_coords[i] = i * grid_.get_dy(); }
+            writer_.Put<double>(var_y, y_coords.data(), adios2::Mode::Sync);
+        }
+
+        // 準備並寫入 z_mid
+        auto var_z_mid = io_.InquireVariable<double>("z_mid");
+        if (var_z_mid) {
+            auto z_mid_host = params_.z_mid.get_host_data();
+            std::vector<double> z_mid_physical(gnz);
+            for (size_t i = 0; i < gnz; ++i) {
+                z_mid_physical[i] = z_mid_host(i + h);
+            }
+            writer_.Put<double>(var_z_mid, z_mid_physical.data(), adios2::Mode::Sync);
+        }
+    }
 
     // Local physical points and offsets for current rank
     const size_t rank_lnx = grid_.get_local_physical_points_x();

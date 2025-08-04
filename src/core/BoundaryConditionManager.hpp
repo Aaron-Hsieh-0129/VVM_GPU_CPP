@@ -9,12 +9,15 @@ namespace Core {
 
 enum class ZBoundaryType {
     ZERO,           // Set to 0
-    ZERO_GRADIENT   // Zero gradient (0 = 1, nz-1 = nz-2)
+    ZERO_GRADIENT,   // Zero gradient (0 = 1, nz-1 = nz-2)
+    PERIODIC
 };
 
 class BoundaryConditionManager {
 public:
-    explicit BoundaryConditionManager(const Grid& grid);
+    explicit BoundaryConditionManager(const Grid& grid, 
+                                      ZBoundaryType top_bc = ZBoundaryType::ZERO_GRADIENT, 
+                                      ZBoundaryType bottom_bc = ZBoundaryType::ZERO_GRADIENT);
 
     void apply_z_bcs(State& state) const;
 

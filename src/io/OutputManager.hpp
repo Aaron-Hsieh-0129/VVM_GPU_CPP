@@ -9,6 +9,7 @@
 
 #include "core/Grid.hpp"
 #include "core/State.hpp"
+#include "core/Parameters.hpp"
 #include "utils/ConfigurationManager.hpp"
 
 namespace VVM {
@@ -16,7 +17,7 @@ namespace IO {
 
 class OutputManager {
 public:
-    OutputManager(const Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, MPI_Comm comm);
+    OutputManager(const Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params, MPI_Comm comm);
     ~OutputManager();
 
     OutputManager(const OutputManager&) = delete;
@@ -28,6 +29,7 @@ public:
 
 private:
     const VVM::Core::Grid& grid_;
+    const VVM::Core::Parameters& params_;
     std::string output_dir_;
     std::string filename_prefix_;
     std::vector<std::string> fields_to_output_;

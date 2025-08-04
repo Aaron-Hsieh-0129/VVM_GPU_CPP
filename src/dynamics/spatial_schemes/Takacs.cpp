@@ -10,7 +10,8 @@ void Takacs::calculate_flux_convergence_x(
     const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency) const {
 
     VVM::Core::HaloExchanger haloexchanger(grid);
-    VVM::Core::BoundaryConditionManager bc_manager(grid);
+    // VVM::Core::BoundaryConditionManager bc_manager_flux(grid, VVM::Core::ZBoundaryType::ZERO, VVM::Core::ZBoundaryType::ZERO);
+    VVM::Core::BoundaryConditionManager bc_manager_flux(grid, VVM::Core::ZBoundaryType::PERIODIC, VVM::Core::ZBoundaryType::PERIODIC);
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
@@ -44,6 +45,7 @@ void Takacs::calculate_flux_convergence_x(
     );
 
     haloexchanger.exchange_halos(flux_field);
+    bc_manager_flux.apply_z_bcs_to_field(flux_field);
 
     auto rdx_view = params.rdx;
     Kokkos::parallel_for("flux_convergence_tendency", 
@@ -52,9 +54,6 @@ void Takacs::calculate_flux_convergence_x(
             tendency(k,j,i) += -0.5*(flux(k,j,i) - flux(k,j,i-1)) * rdx_view();
         }
     );
-
-    haloexchanger.exchange_halos(out_tendency);
-    bc_manager.apply_z_bcs_to_field(out_tendency);
     return;
 }
 
@@ -63,7 +62,8 @@ void Takacs::calculate_flux_convergence_y(
     const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency) const {
 
     VVM::Core::HaloExchanger haloexchanger(grid);
-    VVM::Core::BoundaryConditionManager bc_manager(grid);
+    // VVM::Core::BoundaryConditionManager bc_manager_flux(grid, VVM::Core::ZBoundaryType::ZERO, VVM::Core::ZBoundaryType::ZERO);
+    VVM::Core::BoundaryConditionManager bc_manager_flux(grid, VVM::Core::ZBoundaryType::PERIODIC, VVM::Core::ZBoundaryType::PERIODIC);
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
@@ -97,6 +97,7 @@ void Takacs::calculate_flux_convergence_y(
     );
 
     haloexchanger.exchange_halos(flux_field);
+    bc_manager_flux.apply_z_bcs_to_field(flux_field);
 
     auto rdy_view = params.rdy;
     Kokkos::parallel_for("flux_convergence_tendency", 
@@ -105,9 +106,6 @@ void Takacs::calculate_flux_convergence_y(
             tendency(k,j,i) += -0.5*(flux(k,j,i) - flux(k,j-1,i)) * rdy_view();
         }
     );
-
-    haloexchanger.exchange_halos(out_tendency);
-    bc_manager.apply_z_bcs_to_field(out_tendency);
     return;
 }
 
@@ -116,7 +114,8 @@ void Takacs::calculate_flux_convergence_z(
     const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency) const {
 
     VVM::Core::HaloExchanger haloexchanger(grid);
-    VVM::Core::BoundaryConditionManager bc_manager(grid);
+    // VVM::Core::BoundaryConditionManager bc_manager_flux(grid, VVM::Core::ZBoundaryType::ZERO, VVM::Core::ZBoundaryType::ZERO);
+    VVM::Core::BoundaryConditionManager bc_manager_flux(grid, VVM::Core::ZBoundaryType::PERIODIC, VVM::Core::ZBoundaryType::PERIODIC);
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
@@ -142,16 +141,19 @@ void Takacs::calculate_flux_convergence_z(
         KOKKOS_LAMBDA(int k, int j, int i) {
             // It's supposed to be rho*w*q, the w here is rho*w from the input
             flux(k,j,i) = w(k,j,i)*(q(k+1,j,i)+q(k,j,i));
-            // if (k >= 2 && k <= nz-3) {
-            //     flux(k,j,i) += -1./3.*( 
-            //                 wplus(k,j,i) *(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(wplus(k,j,i))*Kokkos::sqrt(wplus(k-1,j,i))*(q(k,j,i)-q(k-1,j,i)) - 
-            //                 wminus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(wminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(wminus(k+1,j,i)))*(q(k+2,j,i)-q(k+1,j,i)) 
-            //               );
-            // }
+            if (k >= 2 && k <= nz-3) {
+                flux(k,j,i) += -1./3.*( 
+                            wplus(k,j,i) *(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(wplus(k,j,i))*Kokkos::sqrt(wplus(k-1,j,i))*(q(k,j,i)-q(k-1,j,i)) - 
+                            wminus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(wminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(wminus(k+1,j,i)))*(q(k+2,j,i)-q(k+1,j,i)) 
+                          );
+            }
         }
     );
 
     haloexchanger.exchange_halos(flux_field);
+    bc_manager_flux.apply_z_bcs_to_field(flux_field);
+
+    // flux_field.print_xz_cross_at_j(grid, 0, 3);
 
     auto rdz_view = params.rdz;
     const auto& flex_height_coef_mid = params.flex_height_coef_mid.get_device_data();
@@ -161,9 +163,6 @@ void Takacs::calculate_flux_convergence_z(
             tendency(k,j,i) += -0.5*(flux(k,j,i) - flux(k-1,j,i)) * rdz_view() * flex_height_coef_mid(k) / rhobar_divide(k);
         }
     );
-
-    haloexchanger.exchange_halos(out_tendency);
-    bc_manager.apply_z_bcs_to_field(out_tendency);
     return;
 }
 
