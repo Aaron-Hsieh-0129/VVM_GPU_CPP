@@ -4,7 +4,7 @@
 #include "core/State.hpp"
 #include "core/Grid.hpp"
 #include "core/Parameters.hpp"
-#include "dynamics/tendency_processes/TendencyTerm.hpp" // 注意路徑
+#include "dynamics/tendency_processes/TendencyTerm.hpp"
 #include <vector>
 #include <memory>
 
@@ -15,7 +15,6 @@ class TemporalScheme {
 public:
     virtual ~TemporalScheme() = default;
 
-    // 負責將一個變數推進一個時間步
     virtual void step(
         Core::State& state,
         const Core::Grid& grid,

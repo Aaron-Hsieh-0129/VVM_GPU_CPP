@@ -3,7 +3,6 @@
 
 #include "core/Grid.hpp"
 #include "core/State.hpp"
-#include "utils/ConfigurationManager.hpp"
 
 namespace VVM {
 namespace Core {
@@ -15,7 +14,7 @@ enum class ZBoundaryType {
 
 class BoundaryConditionManager {
 public:
-    explicit BoundaryConditionManager(const Grid& grid, const Utils::ConfigurationManager& config);
+    explicit BoundaryConditionManager(const Grid& grid);
 
     void apply_z_bcs(State& state) const;
 

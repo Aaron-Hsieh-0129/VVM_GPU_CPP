@@ -33,11 +33,16 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<3>("eta", {nz_total, ny_total, nx_total});
     add_field<3>("zeta", {nz_total, ny_total, nx_total});
     add_field<3>("u", {nz_total, ny_total, nx_total});
+    add_field<3>("v", {nz_total, ny_total, nx_total});
     add_field<3>("w", {nz_total, ny_total, nx_total});
 
 
     auto& u_data = get_field<3>("u").get_mutable_device_data();
-    Kokkos::deep_copy(u_data, 10.0);
+    auto& v_data = get_field<3>("v").get_mutable_device_data();
+    auto& w_data = get_field<3>("w").get_mutable_device_data();
+    Kokkos::deep_copy(u_data, 0.0);
+    Kokkos::deep_copy(v_data, 0.0);
+    Kokkos::deep_copy(w_data, 10.0);
 
     // TODO: Add tracer auto loading from configuration file
 }

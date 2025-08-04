@@ -1,6 +1,9 @@
 #ifndef VVM_DYNAMICS_ADAMS_BASHFORTH_2_HPP
 #define VVM_DYNAMICS_ADAMS_BASHFORTH_2_HPP
 
+#include <string>
+#include <vector>
+#include <memory>
 #include "TemporalScheme.hpp"
 
 namespace VVM {
@@ -8,8 +11,7 @@ namespace Dynamics {
 
 class AdamsBashforth2 : public TemporalScheme {
 public:
-    // 建構時接收所有它需要負責的傾向項
-    explicit AdamsBashforth2(std::vector<std::unique_ptr<TendencyTerm>> terms);
+    explicit AdamsBashforth2(std::string var_name, std::vector<std::unique_ptr<TendencyTerm>> terms);
     ~AdamsBashforth2() override;
 
     void step(
@@ -19,12 +21,15 @@ public:
         double dt
     ) const override;
 
+    // Add snapshot (can be previous and furture) for AB2 integration
+    // Here, _m represents one previous step
     std::vector<std::string> get_required_state_suffixes() const override {
-        return {"_m"}; // 這裡可以擴充，例如 {"_m", "_p"} 代表需要 th_m 和 th_p
+        return {"_m"};
     }
 
 
 private:
+    std::string variable_name_;
     std::vector<std::unique_ptr<TendencyTerm>> tendency_terms_;
     mutable size_t time_step_count_ = 0;
 };

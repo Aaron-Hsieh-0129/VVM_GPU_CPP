@@ -53,7 +53,7 @@ int main(int argc, char* argv[]) {
         VVM::IO::OutputManager output_manager(config, grid, MPI_COMM_WORLD);
         VVM::Core::State state(config, parameters);
         VVM::Core::HaloExchanger halo_exchanger(grid);
-        VVM::Core::BoundaryConditionManager bc_manager(grid, config);
+        VVM::Core::BoundaryConditionManager bc_manager(grid);
 
         const int nz_total = grid.get_local_total_points_z();
         const int ny_total = grid.get_local_total_points_y();
@@ -81,23 +81,20 @@ int main(int argc, char* argv[]) {
 
         auto& th = state.get_field<3>("th").get_mutable_device_data();
         auto& thbar = state.get_field<1>("thbar").get_device_data();
+        auto& xi = state.get_field<3>("xi").get_mutable_device_data();
+        auto& eta = state.get_field<3>("eta").get_mutable_device_data();
+        auto& zeta = state.get_field<3>("zeta").get_mutable_device_data();
         
-        // --- 修改 th 的初始條件以測試平流 ---
-        const double dx = grid.get_dx();
-        const double nx_global = grid.get_global_points_x();
-        const double x_center = nx_global * dx / 2.0; // 總域中心
-        const double x_sigma = nx_global * dx / 8.0;   // 調整峰值寬度
-        const double perturbation_amplitude = 10.0; // 擾動幅度
-
-        int nx_start = grid.get_local_physical_start_x();
         Kokkos::parallel_for("th_init_with_perturbation", 
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz_total, ny_total, nx_total}),
             KOKKOS_LAMBDA(int k, int j, int i) {
-                // 從 thbar 讀取基本場
                 double base_th = thbar(k);
                 
                 th(k,j,i) = base_th;
                 if (j == ny_total/2 && i == nx_total/2) th(k,j,i) += 5;
+                if (k == 3 && j == 3 && i == 3) xi(k,j,i) += 5;
+                if (j == ny_total/2 && i == nx_total/2) eta(k,j,i) += 5;
+                if (j == ny_total/2 && i == nx_total/2) zeta(k,j,i) += 5;
         });
 
         halo_exchanger.exchange_halos(state.get_field<3>("th"));

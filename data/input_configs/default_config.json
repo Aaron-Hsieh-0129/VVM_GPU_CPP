@@ -30,7 +30,7 @@
         "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/test",
         "enable_netcdf": true,
         "output_filename_prefix": "vvm_output",
-        "fields_to_output": ["thbar", "htflx_sfc", "u", "th"],
+        "fields_to_output": ["thbar", "htflx_sfc", "u", "v", "w", "th", "xi", "eta", "zeta"],
         "output_grid": {
             "x_start": 0,
             "x_end": -1,
@@ -47,6 +47,30 @@
     "dynamics": {
         "prognostic_variables": {
             "th": {
+                "temporal_scheme": "AdamsBashforth2",
+                "tendency_terms": {
+                    "advection": {
+                        "spatial_scheme": "Takacs"
+                    }
+                }
+            },
+            "xi": {
+                "temporal_scheme": "AdamsBashforth2",
+                "tendency_terms": {
+                    "advection": {
+                        "spatial_scheme": "Takacs"
+                    }
+                }
+            },
+            "eta": {
+                "temporal_scheme": "AdamsBashforth2",
+                "tendency_terms": {
+                    "advection": {
+                        "spatial_scheme": "Takacs"
+                    }
+                }
+            },
+            "zeta": {
                 "temporal_scheme": "AdamsBashforth2",
                 "tendency_terms": {
                     "advection": {
