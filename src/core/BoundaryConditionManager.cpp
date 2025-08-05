@@ -56,6 +56,10 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
                 }
             }
         );
+        // This is for top (xi, eta, w) 
+        if (top_bc == ZBoundaryType::ZERO) {
+            data(nz_phys-1) = 0.0;
+        }
     }
     else if constexpr (Dim == 3) {
         const int ny = data.extent(1);
@@ -84,6 +88,14 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
                 }
                 else if (top_bc == ZBoundaryType::PERIODIC) {
                     data(nz - h + k_h, j, i) = data(h + k_h, j, i);
+                }
+            }
+        );
+        Kokkos::parallel_for("apply_bc_3d", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, nx}),
+            KOKKOS_LAMBDA(int j, int i) {
+                // This is for top (xi, eta, w) 
+                if (top_bc == ZBoundaryType::ZERO) {
+                    data(nz_phys-1, j, i) = 0.0;
                 }
             }
         );
@@ -116,6 +128,14 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
                 }
                 else if (top_bc == ZBoundaryType::PERIODIC) {
                     data(N_h, nz - h + k_h, j, i) = data(N_h, h + k_h, j, i);
+                }
+            }
+        );
+        Kokkos::parallel_for("apply_bottom_bc_4d", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {N, ny, nx}),
+            KOKKOS_LAMBDA(int N_h, int j, int i) {
+                // This is for top (xi, eta, w) 
+                if (top_bc == ZBoundaryType::ZERO) {
+                    data(N_h, nz_phys-1, j, i) = 0.0;
                 }
             }
         );

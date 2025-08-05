@@ -10,8 +10,7 @@ void Takacs::calculate_flux_convergence_x(
     const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency) const {
 
     VVM::Core::HaloExchanger haloexchanger(grid);
-    // VVM::Core::BoundaryConditionManager bc_manager_flux(grid, VVM::Core::ZBoundaryType::ZERO, VVM::Core::ZBoundaryType::ZERO);
-    VVM::Core::BoundaryConditionManager bc_manager_flux(grid, VVM::Core::ZBoundaryType::PERIODIC, VVM::Core::ZBoundaryType::PERIODIC);
+    VVM::Core::BoundaryConditionManager bc_manager_flux(grid, VVM::Core::ZBoundaryType::ZERO_GRADIENT, VVM::Core::ZBoundaryType::ZERO_GRADIENT);
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
@@ -62,8 +61,7 @@ void Takacs::calculate_flux_convergence_y(
     const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency) const {
 
     VVM::Core::HaloExchanger haloexchanger(grid);
-    // VVM::Core::BoundaryConditionManager bc_manager_flux(grid, VVM::Core::ZBoundaryType::ZERO, VVM::Core::ZBoundaryType::ZERO);
-    VVM::Core::BoundaryConditionManager bc_manager_flux(grid, VVM::Core::ZBoundaryType::PERIODIC, VVM::Core::ZBoundaryType::PERIODIC);
+    VVM::Core::BoundaryConditionManager bc_manager_flux(grid, VVM::Core::ZBoundaryType::ZERO_GRADIENT, VVM::Core::ZBoundaryType::ZERO_GRADIENT);
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
@@ -114,8 +112,7 @@ void Takacs::calculate_flux_convergence_z(
     const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency) const {
 
     VVM::Core::HaloExchanger haloexchanger(grid);
-    // VVM::Core::BoundaryConditionManager bc_manager_flux(grid, VVM::Core::ZBoundaryType::ZERO, VVM::Core::ZBoundaryType::ZERO);
-    VVM::Core::BoundaryConditionManager bc_manager_flux(grid, VVM::Core::ZBoundaryType::PERIODIC, VVM::Core::ZBoundaryType::PERIODIC);
+    VVM::Core::BoundaryConditionManager bc_manager_flux(grid, VVM::Core::ZBoundaryType::ZERO_GRADIENT, VVM::Core::ZBoundaryType::ZERO_GRADIENT);
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
@@ -164,6 +161,115 @@ void Takacs::calculate_flux_convergence_z(
         }
     );
     return;
+}
+
+void Takacs::calculate_stretching_tendency_x(
+    const Core::State& state, const Core::Grid& grid,
+    const Core::Parameters& params, Core::Field<3>& out_tendency) const {
+
+    const auto& u = state.get_field<3>("u").get_device_data();
+    const auto& xi = state.get_field<3>("xi").get_device_data();
+    const auto& rhobar = state.get_field<1>("rhobar").get_device_data();
+    auto tendency = out_tendency.get_mutable_device_data();
+    
+    const double rdx = params.get_value_host(params.rdx);
+
+    const int nz = grid.get_local_physical_points_z();
+    const int ny = grid.get_local_physical_points_y();
+    const int nx = grid.get_local_physical_points_x();
+    const int h = grid.get_halo_cells();
+    
+    // Implements Eq. (3.25) for [ρ₀ξ(∂u/∂x)] at (i, j+1/2, k+1/2)
+    Kokkos::parallel_for("stretching_term_xi",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {h + nz - 1, h + ny - 1, h + nx - 1}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            const double term_at_j_plus_1 = 
+                (xi(k,j,i)+xi(k,j+1,i)) * 
+                (rhobar(k+1) * (u(k+1, j+1, i) - u(k+1, j+1, i-1)) +
+                 rhobar(k)   * (u(k,   j+1, i) - u(k,   j+1, i-1)) );
+
+            const double term_at_j = 
+                (xi(k,j,i)+xi(k,j-1,i)) * 
+                (rhobar(k+1) * (u(k+1, j, i)   - u(k+1, j, i-1)) +
+                 rhobar(k)   * (u(k,   j, i-1) - u(k,   j, i-1)) );
+
+            tendency(k, j, i) += 0.125 * rdx * (term_at_j + term_at_j_plus_1);
+        }
+    );
+}
+
+void Takacs::calculate_stretching_tendency_y(
+    const Core::State& state, const Core::Grid& grid,
+    const Core::Parameters& params, Core::Field<3>& out_tendency) const {
+
+    const auto& v = state.get_field<3>("v").get_device_data();
+    const auto& eta = state.get_field<3>("eta").get_device_data();
+    const auto& rhobar = state.get_field<1>("rhobar").get_device_data();
+    auto tendency = out_tendency.get_mutable_device_data();
+    
+    const double rdy = params.get_value_host(params.rdy);
+
+    const int nz = grid.get_local_physical_points_z();
+    const int ny = grid.get_local_physical_points_y();
+    const int nx = grid.get_local_physical_points_x();
+    const int h = grid.get_halo_cells();
+
+    // Implements Eq. (3.26) for [ρ₀η(∂v/∂y)] at (i+1/2, j, k+1/2)
+    Kokkos::parallel_for("stretching_term_eta",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {h + nz - 1, h + ny - 1, h + nx - 1}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            const double term_at_i_plus_1 = 
+                (eta(k,j,i-1)+eta(k,j,i)) * 
+                (rhobar(k+1) * (v(k+1, j, i) - v(k+1, j-1, i)) +
+                 rhobar(k)   * (v(k,   j, i) - v(k,   j-1, i)) );
+
+            const double term_at_i = 
+                (eta(k,j,i+1)+eta(k,j,i)) * 
+                (rhobar(k+1) * (v(k+1, j, i+1) - v(k+1, j-1, i+1)) +
+                 rhobar(k)   * (v(k,   j, i+1) - v(k,   j-1, i+1)) );
+
+            const double eta_avg = eta(k, j, i) + eta(k, j, i+1);
+
+            tendency(k, j, i) += 0.125 * rdy * (term_at_i + term_at_i_plus_1);
+        }
+    );
+}
+
+void Takacs::calculate_stretching_tendency_z(
+    const Core::State& state, const Core::Grid& grid,
+    const Core::Parameters& params, Core::Field<3>& out_tendency) const {
+    
+    const auto& w = state.get_field<3>("w").get_device_data();
+    const auto& zeta = state.get_field<3>("zeta").get_device_data();
+    const auto& rhobar = state.get_field<1>("rhobar").get_device_data();
+    auto tendency = out_tendency.get_mutable_device_data();
+
+    const double rdz = params.get_value_host(params.rdz);
+
+    const int nz = grid.get_local_physical_points_z();
+    const int ny = grid.get_local_physical_points_y();
+    const int nx = grid.get_local_physical_points_x();
+    const int h = grid.get_halo_cells();
+
+    const auto& flex_height_coef_mid = params.flex_height_coef_mid.get_device_data();
+
+    // Implements Eq. (3.27) for [ρ₀ζ(∂w/∂z)] at (i+1/2, j+1/2, k)
+    Kokkos::parallel_for("stretching_term_zeta",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {h + nz - 1, h + ny - 1, h + nx - 1}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            const double term_at_j_plus_1 =
+                (zeta(k,j,i-1)+zeta(k,j,i)) * 
+                (w(k, j,   i) - w(k-1, j,   i) +
+                 w(k, j+1, i) - w(k-1, j+1, i));
+
+            const double term_at_j = 
+                (zeta(k,j,i)+zeta(k,j,i+1)) * 
+                (w(k, j,   i)   - w(k-1, j,   i) +
+                 w(k, j+1, i+1) - w(k-1, j+1, i+1));
+
+            tendency(k, j, i) += 0.125 * flex_height_coef_mid(k) * rdz * rhobar(k) * (term_at_j + term_at_j_plus_1);
+        }
+    );
 }
 
 } // namespace Dynamics

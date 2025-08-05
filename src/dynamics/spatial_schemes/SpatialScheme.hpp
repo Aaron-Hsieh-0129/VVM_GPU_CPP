@@ -24,9 +24,17 @@ public:
     virtual void calculate_flux_convergence_z(
         const Core::Field<3>& scalar, const Core::Field<1>& rhobar_up_field, const Core::Field<3>& w,
         const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency) const = 0;
-    // virtual Core::Field<3> calculate_gradient_x(const Core::Field<3>& scalar, ...) const = 0;
-    // virtual Core::Field<3> calculate_gradient_y(const Core::Field<3>& scalar, ...) const = 0;
-    // virtual Core::Field<3> calculate_gradient_z(const Core::Field<3>& scalar, ...) const = 0;
+
+    // ρω∇⋅(u)
+    virtual void calculate_stretching_tendency_x(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_tendency) const = 0;
+    virtual void calculate_stretching_tendency_y(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_tendency) const = 0;
+    virtual void calculate_stretching_tendency_z(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_tendency) const = 0;
 
 };
 

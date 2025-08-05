@@ -10,7 +10,7 @@
         "dz1": 200.0
     },
     "simulation": {
-        "total_time_s": 100.0,
+        "total_time_s": 300.0,
         "dt_s": 1.0,
         "output_interval_s": 1.0
     },
@@ -59,6 +59,9 @@
                 "tendency_terms": {
                     "advection": {
                         "spatial_scheme": "Takacs"
+                    },
+                    "stretching": {
+                        "spatial_scheme": "Takacs"
                     }
                 }
             },
@@ -67,6 +70,9 @@
                 "tendency_terms": {
                     "advection": {
                         "spatial_scheme": "Takacs"
+                    },
+                    "stretching": {
+                        "spatial_scheme": "Takacs"
                     }
                 }
             },
@@ -74,6 +80,9 @@
                 "temporal_scheme": "AdamsBashforth2",
                 "tendency_terms": {
                     "advection": {
+                        "spatial_scheme": "Takacs"
+                    },
+                    "stretching": {
                         "spatial_scheme": "Takacs"
                     }
                 }
