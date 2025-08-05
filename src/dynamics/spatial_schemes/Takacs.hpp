@@ -17,6 +17,17 @@ public:
     void calculate_flux_convergence_z(
         const Core::Field<3>& scalar, const Core::Field<1>& rhobar_up_field, const Core::Field<3>& w,
         const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency) const override;
+
+    void calculate_stretching_tendency_x(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_tendency) const override;
+    void calculate_stretching_tendency_y(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_tendency) const override;
+    void calculate_stretching_tendency_z(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_tendency) const override;
+
 };
 
 } // namespace Dynamics
