@@ -38,6 +38,8 @@ public:
     Field<1> flex_height_coef_up;
     Field<1> dz_mid;
     Field<1> dz_up;
+    Field<1> fact1_xi_eta;
+    Field<1> fact2_xi_eta;
 
     Parameters(const Utils::ConfigurationManager& config, const Grid& grid);
 

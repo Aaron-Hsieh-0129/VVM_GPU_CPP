@@ -27,9 +27,35 @@ void AdamsBashforth2::step(
     auto& tendency_history = state.get_field<4>("d_" + variable_name_);
 
     // Copy now step to previous step to prepare for next step
-    auto field_current_view = field_to_update.get_device_data();
-    auto field_prev_view_mutable = field_prev_step.get_mutable_device_data();
+    auto& field_current_view = field_to_update.get_mutable_device_data();
+    auto& field_prev_view_mutable = field_prev_step.get_mutable_device_data();
     Kokkos::deep_copy(field_prev_view_mutable, field_current_view);
+
+    // Get grid info
+    const int nztot = grid.get_local_total_points_z();
+    const int nytot = grid.get_local_total_points_y();
+    const int nxtot = grid.get_local_total_points_x();
+    const auto& rhobar_up = state.get_field<1>("rhobar_up").get_device_data();
+    const auto& rhobar = state.get_field<1>("rhobar").get_device_data();
+    
+    // Divide rho for xi, eta, zeta
+    if (variable_name_ == "xi" || variable_name_ == "eta") {
+        Kokkos::parallel_for("divide_by_density",
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nztot, nytot, nxtot}),
+            KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                field_current_view(k, j, i) /= rhobar_up(k);
+            }
+        );
+    }
+    else if (variable_name_ == "zeta") {
+        Kokkos::parallel_for("divide_by_density",
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nztot, nytot, nxtot}),
+            KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                field_current_view(k, j, i) /= rhobar(k);
+            }
+        );
+    }
+
 
     // Get the total tendency for now
     auto total_current_tendency_view = Kokkos::subview(tendency_history.get_mutable_device_data(), now_idx, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
@@ -47,18 +73,37 @@ void AdamsBashforth2::step(
         term->compute_tendency(state, grid, params, current_tendency_field);
     }
     Kokkos::deep_copy(total_current_tendency_view, current_tendency_field.get_device_data());
+
+
+    // Divide rho for xi, eta, zeta
+    if (variable_name_ == "xi" || variable_name_ == "eta") {
+        Kokkos::parallel_for("divide_by_density",
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nztot, nytot, nxtot}),
+            KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                field_current_view(k, j, i) *= rhobar_up(k);
+            }
+        );
+    }
+    else if (variable_name_ == "zeta") {
+        Kokkos::parallel_for("divide_by_density",
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nztot, nytot, nxtot}),
+            KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                field_current_view(k, j, i) *= rhobar(k);
+            }
+        );
+    }
     
-    // Prepare the flux and field to integrate
-    auto field_new_view = field_to_update.get_mutable_device_data();
-    auto field_old_view = field_prev_step.get_device_data();
-    auto flux_now_view = Kokkos::subview(tendency_history.get_device_data(), now_idx, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-    auto flux_prev_view = Kokkos::subview(tendency_history.get_device_data(), prev_idx, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    // Prepare the tendency and field to integrate
+    auto& field_new_view = field_to_update.get_mutable_device_data();
+    auto& field_old_view = field_prev_step.get_device_data();
+    auto tendency_now_view = Kokkos::subview(tendency_history.get_device_data(), now_idx, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    auto tendency_prev_view = Kokkos::subview(tendency_history.get_device_data(), prev_idx, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
 
     // Use Forward Euler for the first step integration
     if (time_step_count_ == 0) {
-        std::cout << "First time step: Forcing Forward Euler by setting flux_prev = flux_now." << std::endl;
-        auto flux_prev_view_mutable = Kokkos::subview(tendency_history.get_mutable_device_data(), prev_idx, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-        Kokkos::deep_copy(flux_prev_view_mutable, flux_now_view);
+        std::cout << "First time step: Forcing Forward Euler by setting tendency_prev = tendency_now." << std::endl;
+        auto tendency_prev_view_mutable = Kokkos::subview(tendency_history.get_mutable_device_data(), prev_idx, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+        Kokkos::deep_copy(tendency_prev_view_mutable, tendency_now_view);
     }
 
     const int nz = grid.get_local_physical_points_z();
@@ -72,7 +117,7 @@ void AdamsBashforth2::step(
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {h + nz, h + ny, h + nx}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             field_new_view(k, j, i) = field_old_view(k, j, i) 
-                                    + dt * (1.5 * flux_now_view(k, j, i) - 0.5 * flux_prev_view(k, j, i));
+                                    + dt * (1.5 * tendency_now_view(k, j, i) - 0.5 * tendency_prev_view(k, j, i));
         }
     );
 
