@@ -36,6 +36,11 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<3>("v", {nz_total, ny_total, nx_total});
     add_field<3>("w", {nz_total, ny_total, nx_total});
 
+    // Rotation term
+    add_field<3>("R_xi", {nz_total, ny_total, nx_total});
+    add_field<3>("R_eta", {nz_total, ny_total, nx_total});
+    add_field<3>("R_zeta", {nz_total, ny_total, nx_total});
+
 
     auto& u_data = get_field<3>("u").get_mutable_device_data();
     auto& v_data = get_field<3>("v").get_mutable_device_data();

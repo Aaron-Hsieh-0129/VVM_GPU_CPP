@@ -62,6 +62,9 @@
                     },
                     "stretching": {
                         "spatial_scheme": "Takacs"
+                    },
+                    "twisting": {
+                        "spatial_scheme": "Takacs"
                     }
                 }
             },
@@ -73,6 +76,9 @@
                     },
                     "stretching": {
                         "spatial_scheme": "Takacs"
+                    },
+                    "twisting": {
+                        "spatial_scheme": "Takacs"
                     }
                 }
             },
@@ -83,6 +89,9 @@
                         "spatial_scheme": "Takacs"
                     },
                     "stretching": {
+                        "spatial_scheme": "Takacs"
+                    },
+                    "twisting": {
                         "spatial_scheme": "Takacs"
                     }
                 }

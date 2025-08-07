@@ -48,8 +48,6 @@ void Initializer::initialize_grid() const {
     auto z_up_mutable = parameters_.z_up.get_mutable_device_data();
     auto flex_height_coef_mid_mutable = parameters_.flex_height_coef_mid.get_mutable_device_data();
     auto flex_height_coef_up_mutable = parameters_.flex_height_coef_up.get_mutable_device_data();
-    auto dz_mid_mutable = parameters_.dz_mid.get_mutable_device_data();
-    auto dz_up_mutable = parameters_.dz_up.get_mutable_device_data();
 
     Kokkos::parallel_for("Init_Z_flexZCoef", Kokkos::RangePolicy<>(0, grid_.get_local_total_points_z()),
         KOKKOS_LAMBDA(const int k) {
@@ -62,10 +60,21 @@ void Initializer::initialize_grid() const {
         }
     );
     
+    auto dz_mid_mutable = parameters_.dz_mid.get_mutable_device_data();
+    auto dz_up_mutable = parameters_.dz_up.get_mutable_device_data();
     Kokkos::parallel_for("Init_dz", Kokkos::RangePolicy<>(1, grid_.get_local_total_points_z()-1),
         KOKKOS_LAMBDA(const int k) {
             dz_mid_mutable(k) = z_up_mutable(k) - z_up_mutable(k-1);
             dz_up_mutable(k) = z_mid_mutable(k+1) - z_mid_mutable(k);
+        }
+    );
+
+    auto fact1_xi_eta_mutable = parameters_.fact1_xi_eta.get_mutable_device_data();
+    auto fact2_xi_eta_mutable = parameters_.fact2_xi_eta.get_mutable_device_data();
+    Kokkos::parallel_for("Init_zflex_fact", Kokkos::RangePolicy<>(1, grid_.get_local_total_points_z()-1),
+        KOKKOS_LAMBDA(const int k) {
+            fact1_xi_eta_mutable(k) = flex_height_coef_up_mutable(k) / flex_height_coef_mid_mutable(k+1);
+            fact2_xi_eta_mutable(k) = flex_height_coef_up_mutable(k) / flex_height_coef_mid_mutable(k);
         }
     );
 

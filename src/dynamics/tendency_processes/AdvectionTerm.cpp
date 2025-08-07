@@ -38,19 +38,21 @@ void AdvectionTerm::compute_tendency(
     VVM::Core::Field<3> w_mean_field("w_mean", {nz, ny, nx});
     auto w_mean_data = w_mean_field.get_mutable_device_data();
     if (variable_name_ == "xi") {
+        auto fact1_xi_eta = params.fact1_xi_eta.get_device_data();
+        auto fact2_xi_eta = params.fact1_xi_eta.get_device_data();
         Kokkos::parallel_for("calculate_rhou_for_xi",
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz-1, ny-1, nx-1}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                u_mean_data(k,j,i) = 0.25*(rhobar(k+1) * ( u(k+1,j,i) + u(k+1,j+1,i))
-                                         + rhobar(k)   * ( u(k,j,i)   + u(k,j+1,i)  )  );
+                u_mean_data(k,j,i) = 0.25*(fact1_xi_eta(k) * rhobar(k+1) * ( u(k+1,j,i) + u(k+1,j+1,i))
+                                         + fact2_xi_eta(k) * rhobar(k)   * ( u(k,j,i)   + u(k,j+1,i)  )  );
             }
         );
 
         Kokkos::parallel_for("calculate_rhov_for_xi",
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz-1, ny-1, nx-1}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                v_mean_data(k,j,i) = 0.25*(rhobar(k+1) * ( v(k+1,j,i) + v(k+1,j+1,i))
-                                         + rhobar(k)   * ( v(k,j,i)   + v(k,j+1,i)  )  );
+                v_mean_data(k,j,i) = 0.25*(fact1_xi_eta(k) * rhobar(k+1) * ( v(k+1,j,i) + v(k+1,j+1,i))
+                                         + fact2_xi_eta(k) * rhobar(k)   * ( v(k,j,i)   + v(k,j+1,i)  )  );
             }
         );
 
@@ -63,19 +65,21 @@ void AdvectionTerm::compute_tendency(
         );
     }
     else if (variable_name_ == "eta") {
+        auto fact1_xi_eta = params.fact1_xi_eta.get_device_data();
+        auto fact2_xi_eta = params.fact1_xi_eta.get_device_data();
         Kokkos::parallel_for("calculate_rhou_for_eta",
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz-1, ny-1, nx-1}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                u_mean_data(k,j,i) = 0.25*(rhobar(k+1) * ( u(k+1,j,i) + u(k+1,j,i+1))
-                                         + rhobar(k)   * ( u(k,j,i)   + u(k,j,i+1)  )  );
+                u_mean_data(k,j,i) = 0.25*(fact1(k) * rhobar(k+1) * ( u(k+1,j,i) + u(k+1,j,i+1))
+                                         + fact2(k) * rhobar(k)   * ( u(k,j,i)   + u(k,j,i+1)  )  );
             }
         );
 
         Kokkos::parallel_for("calculate_rhov_for_eta",
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz-1, ny-1, nx-1}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                v_mean_data(k,j,i) = 0.25*(rhobar(k+1) * ( v(k+1,j,i) + v(k+1,j,i+1))
-                                         + rhobar(k)   * ( v(k,j,i)   + v(k,j,i+1)  )  );
+                v_mean_data(k,j,i) = 0.25*(fact1(k) * rhobar(k+1) * ( v(k+1,j,i) + v(k+1,j,i+1))
+                                         + fact2(k) * rhobar(k)   * ( v(k,j,i)   + v(k,j,i+1)  )  );
             }
         );
 

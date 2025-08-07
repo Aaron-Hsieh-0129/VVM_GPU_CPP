@@ -22,6 +22,7 @@ public:
                   Core::State& state);
     ~DynamicalCore();
 
+    void compute_diagnostic_fields() const;
     void step(Core::State& state, double dt);
 
 private:
@@ -31,6 +32,7 @@ private:
     
     std::map<std::string, std::unique_ptr<TemporalScheme>> variable_schemes_;
     std::vector<std::string> prognostic_variables_;
+
 
     std::unique_ptr<TemporalScheme> create_temporal_scheme(
         const std::string& var_name, 

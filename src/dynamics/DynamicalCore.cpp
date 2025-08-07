@@ -2,6 +2,7 @@
 #include "temporal_schemes/AdamsBashforth2.hpp"
 #include "tendency_processes/AdvectionTerm.hpp"
 #include "tendency_processes/StretchingTerm.hpp"
+#include "tendency_processes/TwistingTerm.hpp"
 #include "spatial_schemes/Takacs.hpp"
 #include <stdexcept>
 #include <iostream> // for debugging output
@@ -41,6 +42,20 @@ std::unique_ptr<TemporalScheme> DynamicalCore::create_temporal_scheme(
             }
             terms.push_back(std::make_unique<StretchingTerm>(std::move(spatial_scheme), var_name));
         }
+
+        // Twisting for xi, eta, zeta
+        if (var_config.contains("tendency_terms") && var_config.at("tendency_terms").contains("twisting")) {
+            std::string twisting_scheme_name = var_config.at("tendency_terms").at("twisting").at("spatial_scheme");
+            std::unique_ptr<SpatialScheme> spatial_scheme;
+            if (twisting_scheme_name == "Takacs") {
+                spatial_scheme = std::make_unique<Takacs>();
+            }
+            else {
+                throw std::runtime_error("Unknown spatial scheme for twisting: " + twisting_scheme_name);
+            }
+            terms.push_back(std::make_unique<TwistingTerm>(std::move(spatial_scheme), var_name));
+        }
+
 
         return std::make_unique<AdamsBashforth2>(var_name, std::move(terms));
     }
@@ -87,9 +102,24 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
 DynamicalCore::~DynamicalCore() = default;
 
 void DynamicalCore::step(Core::State& state, double dt) {
+    // Before tendency calculation, get the diagnostic fields such as rotation
+    compute_diagnostic_fields();
+
     for (const auto& var_name : prognostic_variables_) {
         variable_schemes_.at(var_name)->step(state, grid_, params_, dt);
     }
+}
+
+void DynamicalCore::compute_diagnostic_fields() const {
+    auto scheme = std::make_unique<Takacs>();
+
+    auto& R_xi_field = state_.get_field<3>("R_xi");
+    auto& R_eta_field = state_.get_field<3>("R_eta");
+    auto& R_zeta_field = state_.get_field<3>("R_zeta");
+
+    scheme->calculate_R_xi(state_, grid_, params_, R_xi_field);
+    scheme->calculate_R_eta(state_, grid_, params_, R_eta_field);
+    scheme->calculate_R_zeta(state_, grid_, params_, R_zeta_field);
 }
 
 } // namespace Dynamics

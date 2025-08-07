@@ -22,7 +22,9 @@ Parameters::Parameters(const Utils::ConfigurationManager& config, const Grid& gr
     flex_height_coef_mid("flex_height_coef_mid", {grid.get_local_total_points_z()}),
     flex_height_coef_up("flex_height_coef_up", {grid.get_local_total_points_z()}),
     dz_mid("dz_mid", {grid.get_local_total_points_z()}),
-    dz_up("dz_up", {grid.get_local_total_points_z()})
+    dz_up("dz_up", {grid.get_local_total_points_z()}),
+    fact1_xi_eta("fact1_xi_eta", {grid.get_local_total_points_z()}),
+    fact2_xi_eta("fact2_xi_eta", {grid.get_local_total_points_z()})
 {
     Kokkos::deep_copy(gravity, config.get_value<double>("constants.gravity"));
     Kokkos::deep_copy(Rd, config.get_value<double>("constants.Rd"));

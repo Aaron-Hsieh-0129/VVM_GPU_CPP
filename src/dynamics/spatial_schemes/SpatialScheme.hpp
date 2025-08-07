@@ -36,6 +36,30 @@ public:
         const Core::State& state, const Core::Grid& grid,
         const Core::Parameters& params, Core::Field<3>& out_tendency) const = 0;
 
+    // Twisting Term
+    // 0.5ρ(eta*Rzeta + zeta*Reta)
+    virtual void calculate_twisting_tendency_x(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_tendency) const = 0;
+    // 0.5ρ(xi*Rzeta + zeta*Rxi)
+    virtual void calculate_twisting_tendency_y(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_tendency) const = 0;
+    // 0.5ρ(xi*Reta + eta*Rxi)
+    virtual void calculate_twisting_tendency_z(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_tendency) const = 0;
+
+    // Rotation (Diagnostic)
+    virtual void calculate_R_xi(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_R_xi) const = 0;
+    virtual void calculate_R_eta(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_R_eta) const = 0;
+    virtual void calculate_R_zeta(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_R_zeta) const = 0;
 };
 
 } // namespace Dynamics
