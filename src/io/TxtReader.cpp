@@ -12,10 +12,10 @@
 namespace VVM {
 namespace IO {
 
-TxtReader::TxtReader(const std::string& filepath, const VVM::Core::Grid& grid) : grid_(grid), source_file_(filepath) {
+TxtReader::TxtReader(const std::string& filepath, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params) 
+    : grid_(grid), params_(params), source_file_(filepath) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
 
     std::ifstream infile(source_file_);
     if (!infile.is_open()) {
@@ -102,13 +102,14 @@ double TxtReader::linear_interpolate(const std::string& field_name, double targe
 
     const auto& profile_data = all_profiles_.at(field_name);
     
-    static std::map<std::string, bool> warned_below;
-    static std::map<std::string, bool> warned_above;
-
     if (profile_data.empty()) {
         throw std::runtime_error("Profile data for field '" + field_name + "' is empty for interpolation.");
     }
 
+    static std::map<std::string, bool> warned_below;
+    static std::map<std::string, bool> warned_above;
+
+    // Handle extrapolation
     if (target_z < profile_data.front().first) {
         if (!warned_below[field_name]) {
             std::cerr << "Warning for field '" << field_name << "': Target Z (" << target_z << "m) is below profile range (" << profile_data.front().first << "m). Extrapolating..." << std::endl;
@@ -124,15 +125,26 @@ double TxtReader::linear_interpolate(const std::string& field_name, double targe
         return profile_data.back().second;
     }
 
-    for (size_t i = 0; i < profile_data.size() - 1; ++i) {
-        const auto& p1 = profile_data[i];
-        const auto& p2 = profile_data[i + 1];
-        if (target_z >= p1.first && target_z <= p2.first) {
-            const double factor = (p2.first == p1.first) ? 0.0 : (target_z - p1.first) / (p2.first - p1.first);
-            return p1.second + factor * (p2.second - p1.second);
-        }
+    auto it = std::lower_bound(profile_data.begin(), profile_data.end(), target_z,
+        [](const std::pair<double, double>& elem, double val) {
+            return elem.first < val;
+        });
+    const auto& p2 = *it;
+    const auto& p1 = *(it - 1);
+
+    if (target_z == p2.first) {
+        return p2.second;
     }
-    return profile_data.back().second; // Should not be reached if range checks pass
+
+    if (target_z == p1.first) {
+        return p1.second;
+    }
+
+    if (p2.first == p1.first) {
+        return p1.second;
+    }
+    const double factor = (target_z - p1.first) / (p2.first - p1.first);
+    return p1.second + factor * (p2.second - p1.second);
 }
 
 void TxtReader::read_and_initialize(VVM::Core::State& state) {
@@ -143,6 +155,8 @@ void TxtReader::read_and_initialize(VVM::Core::State& state) {
         std::cout << "No profile data loaded. Skipping file-based initialization." << std::endl;
         return;
     }
+
+    auto z_mid_host = params_.z_mid.get_host_data();
     
     // Iterate through all loaded profiles (e.g., "ZT", "RHO", "THBAR", etc.)
     for (const auto& profile_pair : all_profiles_) {
@@ -162,7 +176,7 @@ void TxtReader::read_and_initialize(VVM::Core::State& state) {
 
             // Initialize only physical points of the 1D field
             for (int k_phys = 0; k_phys < nz_phys; ++k_phys) {
-                double target_z = (grid_.get_local_physical_start_z() + k_phys + 0.5) * grid_.get_dz();
+                double target_z = z_mid_host(k_phys + h);
                 host_mirror(k_phys + h) = linear_interpolate(profile_name, target_z);
             }
 

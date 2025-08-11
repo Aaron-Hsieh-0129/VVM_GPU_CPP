@@ -15,13 +15,13 @@ void StretchingTerm::compute_tendency(
     Core::Field<3>& out_tendency) const {
     
     if (variable_name_ == "xi") {
-        scheme_->calculate_stretching_tendency_x(state, grid, params, out_tendency);
+        scheme_->calculate_stretching_tendency_x(state, grid, params, out_tendency, variable_name_);
     } 
     else if (variable_name_ == "eta") {
-        scheme_->calculate_stretching_tendency_y(state, grid, params, out_tendency);
+        scheme_->calculate_stretching_tendency_y(state, grid, params, out_tendency, variable_name_);
     } 
     else if (variable_name_ == "zeta") {
-        scheme_->calculate_stretching_tendency_z(state, grid, params, out_tendency);
+        scheme_->calculate_stretching_tendency_z(state, grid, params, out_tendency, variable_name_);
     }
 }
 

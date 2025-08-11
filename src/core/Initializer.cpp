@@ -18,7 +18,7 @@ Initializer::Initializer(const Utils::ConfigurationManager& config, const Grid& 
     std::string source_file = config.get_value<std::string>("initial_conditions.source_file");
 
     if (format == "txt") {
-        reader_ = std::make_unique<VVM::IO::TxtReader>(source_file, grid);
+        reader_ = std::make_unique<VVM::IO::TxtReader>(source_file, grid, parameters_);
     } 
     // else if (format == "netcdf") {
     //     // TODO: Netcdf input

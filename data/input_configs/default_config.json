@@ -1,16 +1,16 @@
 {
     "grid": {
-        "nx": 16,
-        "ny": 16,
-        "nz": 16,
+        "nx": 32,
+        "ny": 32,
+        "nz": 34,
         "n_halo_cells": 1,
-        "dx": 200.0,
-        "dy": 200.0,
-        "dz": 200.0,
-        "dz1": 200.0
+        "dx": 100.0,
+        "dy": 100.0,
+        "dz": 500.0,
+        "dz1": 100.0
     },
     "simulation": {
-        "total_time_s": 300.0,
+        "total_time_s": 1200.0,
         "dt_s": 1.0,
         "output_interval_s": 1.0
     },
@@ -27,10 +27,10 @@
         ]
     },
     "output": {
-        "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/test",
+        "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/test_uv5_sq",
         "enable_netcdf": true,
         "output_filename_prefix": "vvm_output",
-        "fields_to_output": ["thbar", "htflx_sfc", "u", "v", "w", "th", "xi", "eta", "zeta"],
+        "fields_to_output": ["thbar", "rhobar", "rhobar_up", "htflx_sfc", "u", "v", "w", "th", "xi", "eta", "zeta"],
         "output_grid": {
             "x_start": 0,
             "x_end": -1,

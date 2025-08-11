@@ -114,20 +114,16 @@ void OutputManager::define_variables(const VVM::Core::State& state) {
                     // }
 
                     if constexpr (T::DimValue == 1) {
-                        // 移除最後的 JoinedArray 參數
                         field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gnz}, {actual_output_z_start}, {local_output_nz});
                     }
                     else if constexpr (T::DimValue == 2) {
-                        // 移除最後的 JoinedArray 參數
                         field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gny, gnx}, {actual_output_y_start, actual_output_x_start}, {local_output_ny, local_output_nx});
                     }
                     else if constexpr (T::DimValue == 3) {
-                        // 移除最後的 JoinedArray 參數
                         field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gnz, gny, gnx}, {actual_output_z_start, actual_output_y_start, actual_output_x_start}, {local_output_nz, local_output_ny, local_output_nx});
                     }
                     else if constexpr (T::DimValue == 4) {
                         const size_t dim4 = field.get_device_data().extent(0);
-                        // 移除最後的 JoinedArray 參數
                         field_variables_[field_name] = io_.DefineVariable<double>(field_name, {dim4, gnz, gny, gnx}, {0, actual_output_z_start, actual_output_y_start, actual_output_x_start}, {dim4, local_output_nz, local_output_ny, local_output_nx});
                     }
                 }
@@ -156,16 +152,13 @@ void OutputManager::write(const VVM::Core::State& state, double time) {
         const size_t gny = grid_.get_global_points_y();
         const size_t gnz = grid_.get_global_points_z();
 
-        // 準備並寫入 x 座標
         auto var_x = io_.InquireVariable<double>("x");
         if (var_x) {
             std::vector<double> x_coords(gnx);
-            // 產生 0, dx, 2*dx, ...
             for(size_t i = 0; i < gnx; ++i) { x_coords[i] = i * grid_.get_dx(); }
             writer_.Put<double>(var_x, x_coords.data(), adios2::Mode::Sync);
         }
 
-        // 準備並寫入 y 座標
         auto var_y = io_.InquireVariable<double>("y");
         if (var_y) {
             std::vector<double> y_coords(gny);
@@ -173,7 +166,6 @@ void OutputManager::write(const VVM::Core::State& state, double time) {
             writer_.Put<double>(var_y, y_coords.data(), adios2::Mode::Sync);
         }
 
-        // 準備並寫入 z_mid
         auto var_z_mid = io_.InquireVariable<double>("z_mid");
         if (var_z_mid) {
             auto z_mid_host = params_.z_mid.get_host_data();

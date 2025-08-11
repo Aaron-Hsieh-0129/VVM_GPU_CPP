@@ -91,8 +91,11 @@ int main(int argc, char* argv[]) {
             KOKKOS_LAMBDA(int k, int j, int i) {
                 double base_th = thbar(k);
                 
-                th(k,j,i) = 0.;
-                if (k == 3 && j == 3 && i == 3 && (rank == 0 || rank == 1)) th(k,j,i) += 5;
+                th(k,j,i) = base_th;
+                // if (k == 3 && j == ny_total/2 && i == nx_total/2 && (rank == 0 || rank == 1)) th(k,j,i) += 50;
+                if (k == 16 && ((ny_total/4) <= j && (ny_total/4*3) >= j) && ((nx_total/4) <= i && (nx_total/4*3) >= i)) {
+                    th(k,j,i) += 50;
+                }
 
                 if (k == 0 || k == nz_total-1 || k == nz_total-2) w(k,j,i) = 0;
         });
@@ -103,7 +106,6 @@ int main(int argc, char* argv[]) {
             std::cout << "\n--- Field State AFTER Halo Exchange ---" << std::endl;
         }
 
-        // state.get_field<3>("th").print_slice_z_at_k(grid, 0, 1);
         
 
         // 1D field
@@ -111,7 +113,6 @@ int main(int argc, char* argv[]) {
         // if (rank == 0) parameters.dz_mid.print_profile(grid, 0, 0, 0);
         // if (rank == 0) parameters.flex_height_coef_mid.print_profile(grid, 0, 0, 0);
         output_manager.write(state, 0.0);
-
 
         VVM::Dynamics::DynamicalCore dynamical_core(config, grid, parameters, state);
 
