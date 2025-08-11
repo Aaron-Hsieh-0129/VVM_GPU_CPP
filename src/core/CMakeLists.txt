@@ -55,7 +55,6 @@ target_link_libraries(vvm_core
         ${PNETCDF_LIBRARY}
     PRIVATE
         Kokkos::kokkos
-        ${MPI_LIBRARIES}
         ${OpenMP_LIBRARIES}
 	    ${NVTOOLSEXT_LIBRARY}
 )
