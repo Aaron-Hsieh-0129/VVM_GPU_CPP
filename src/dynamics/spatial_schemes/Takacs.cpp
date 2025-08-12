@@ -45,13 +45,11 @@ void Takacs::calculate_flux_convergence_x(
 
     Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end,ny-h,nx-h}),
         KOKKOS_LAMBDA(int k, int j, int i) {
-            flux(k,j,i) = u(k,j,i)*(q(k,j,i+1)+q(k,j,i));
-            if (i >= h+1 && i <= nx-h-2) {
-                flux(k,j,i) += -1./3.*( 
-                             uplus(k,j,i)*(q(k,j,i+1)-q(k,j,i)) - Kokkos::sqrt(uplus(k,j,i))*Kokkos::sqrt(uplus(k,j,i-1))*(q(k,j,i)-q(k,j,i-1)) - 
-                            uminus(k,j,i)*(q(k,j,i+1)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(uminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(uminus(k,j,i+1)))*(q(k,j,i+2)-q(k,j,i+1)) 
-                          );
-            }
+            flux(k,j,i) = u(k,j,i)*(q(k,j,i+1)+q(k,j,i)) + 
+                      -1./3.*( 
+                         uplus(k,j,i)*(q(k,j,i+1)-q(k,j,i)) - Kokkos::sqrt(uplus(k,j,i))*Kokkos::sqrt(uplus(k,j,i-1))*(q(k,j,i)-q(k,j,i-1)) - 
+                        uminus(k,j,i)*(q(k,j,i+1)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(uminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(uminus(k,j,i+1)))*(q(k,j,i+2)-q(k,j,i+1)) 
+                      );
         }
     );
 
@@ -108,13 +106,11 @@ void Takacs::calculate_flux_convergence_y(
 
     Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end,ny-h,nx-h}),
         KOKKOS_LAMBDA(int k, int j, int i) {
-            flux(k,j,i) = v(k,j,i)*(q(k,j+1,i)+q(k,j,i));
-            if (j >= h+1 && j <= ny-h-2) {
-                flux(k,j,i) += -1./3.*( 
+            flux(k,j,i) = v(k,j,i)*(q(k,j+1,i)+q(k,j,i)) + 
+                          -1./3.*( 
                              vplus(k,j,i)*(q(k,j+1,i)-q(k,j,i)) - Kokkos::sqrt(vplus(k,j,i))*Kokkos::sqrt(vplus(k,j-1,i))*(q(k,j,i)-q(k,j-1,i)) - 
                             vminus(k,j,i)*(q(k,j+1,i)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(vminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(vminus(k,j+1,i)))*(q(k,j+2,i)-q(k,j+1,i)) 
                           );
-            }
         }
     );
 
@@ -193,13 +189,11 @@ void Takacs::calculate_flux_convergence_z(
     else {
         Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,1,1}, {k_end,ny-1,nx-1}),
             KOKKOS_LAMBDA(int k, int j, int i) {
-                flux(k,j,i) = w(k,j,i)*(q(k+1,j,i)+q(k,j,i));
-                if (k >= 2 && k <= nz-3) {
-                    flux(k,j,i) += -1./3.*( 
+                flux(k,j,i) = w(k,j,i)*(q(k+1,j,i)+q(k,j,i)) + 
+                          -1./3.*( 
                              wplus(k,j,i) *(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(wplus(k,j,i))*Kokkos::sqrt(wplus(k-1,j,i))*(q(k,j,i)-q(k-1,j,i)) - 
                             wminus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(wminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(wminus(k+1,j,i)))*(q(k+2,j,i)-q(k+1,j,i)) 
                           );
-                }
             }
         );
     }

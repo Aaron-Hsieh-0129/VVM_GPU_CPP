@@ -44,6 +44,10 @@ void Initializer::initialize_grid() const {
     double CZ2 = (dz-dz1) / (dz * (DOMAIN-dz));
     double CZ1 = 1. - CZ2 * DOMAIN;
 
+    const int nz_phys = grid_.get_local_physical_points_z();
+    const int h = grid_.get_halo_cells();
+    const int nz_total = grid_.get_local_total_points_z();
+
     auto z_mid_mutable = parameters_.z_mid.get_mutable_device_data();
     auto z_up_mutable = parameters_.z_up.get_mutable_device_data();
     auto flex_height_coef_mid_mutable = parameters_.flex_height_coef_mid.get_mutable_device_data();
@@ -51,8 +55,8 @@ void Initializer::initialize_grid() const {
 
     Kokkos::parallel_for("Init_Z_flexZCoef", Kokkos::RangePolicy<>(0, grid_.get_local_total_points_z()),
         KOKKOS_LAMBDA(const int k) {
-            z_mid_mutable(k) = (k-0.5) * dz;
-            z_up_mutable(k) = k * dz;
+            z_mid_mutable(k) = (k-h-0.5) * dz;
+            z_up_mutable(k) = (k-h) * dz;
             flex_height_coef_mid_mutable(k) = 1. / (CZ1 + 2 * CZ2 * z_mid_mutable(k));
             flex_height_coef_up_mutable(k) = 1. / (CZ1 + 2 * CZ2 * z_up_mutable(k));
             z_mid_mutable(k) = z_mid_mutable(k) * (CZ1 + CZ2 * z_mid_mutable(k));
