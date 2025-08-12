@@ -3,7 +3,7 @@
         "nx": 32,
         "ny": 32,
         "nz": 34,
-        "n_halo_cells": 1,
+        "n_halo_cells": 2,
         "dx": 100.0,
         "dy": 100.0,
         "dz": 500.0,

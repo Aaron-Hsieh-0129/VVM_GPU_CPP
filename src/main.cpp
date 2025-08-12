@@ -58,6 +58,7 @@ int main(int argc, char* argv[]) {
         const int nz_total = grid.get_local_total_points_z();
         const int ny_total = grid.get_local_total_points_y();
         const int nx_total = grid.get_local_total_points_x();
+        const int h = grid.get_halo_cells();
         auto& htflx_sfc = state.get_field<2>("htflx_sfc");
         auto htflx_sfc_mutable = htflx_sfc.get_mutable_device_data();
         Kokkos::parallel_for("InitHeatFluxField",
@@ -79,6 +80,9 @@ int main(int argc, char* argv[]) {
         bc_manager.apply_z_bcs_to_field(state.get_field<1>("pibar"));
         bc_manager.apply_z_bcs_to_field(state.get_field<1>("U"));
 
+
+        if (rank == 0) state.get_field<1>("rhobar").print_profile(grid, 0, 0, 0);
+
         auto& th = state.get_field<3>("th").get_mutable_device_data();
         auto& thbar = state.get_field<1>("thbar").get_device_data();
         auto& xi = state.get_field<3>("xi").get_mutable_device_data();
@@ -93,7 +97,7 @@ int main(int argc, char* argv[]) {
                 
                 th(k,j,i) = base_th;
                 // if (k == 3 && j == ny_total/2 && i == nx_total/2 && (rank == 0 || rank == 1)) th(k,j,i) += 50;
-                if (k == 16 && ((ny_total/4) <= j && (ny_total/4*3) >= j) && ((nx_total/4) <= i && (nx_total/4*3) >= i)) {
+                if (k == h+16 && (h+3 <= j && h+11 >= j) && (h+3 <= i && h+11 >= i)) {
                     th(k,j,i) += 50;
                 }
 
