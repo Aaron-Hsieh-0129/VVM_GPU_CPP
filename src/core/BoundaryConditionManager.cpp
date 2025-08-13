@@ -25,7 +25,6 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
 
     auto data = field.get_mutable_device_data();
     const int nz = grid_ref_.get_local_total_points_z();
-    const int nz_phys = grid_ref_.get_local_physical_points_z();
 
     const ZBoundaryType top_bc = top_bc_;
     const ZBoundaryType bottom_bc = bottom_bc_;
@@ -41,7 +40,7 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
                     data(k_h) = 0.0;
                 }
                 else if (bottom_bc == ZBoundaryType::PERIODIC) {
-                    data(k_h) = data(nz_phys - h + k_h);
+                    data(k_h) = data(nz-2*h+k_h);
                 }
 
                 // Top Boundary Condition
@@ -52,13 +51,13 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
                     data(nz-1-k_h) = 0.0;
                 }
                 else if (top_bc == ZBoundaryType::PERIODIC) {
-                    data(nz - h + k_h) = data(h + k_h);
+                    data(nz-h+k_h) = data(h+k_h);
                 }
             }
         );
         // This is for top (xi, eta, w) 
         if (top_bc == ZBoundaryType::ZERO) {
-            data(nz_phys-1) = 0.0;
+            data(nz-h-1) = 0.0;
         }
     }
     else if constexpr (Dim == 3) {
@@ -76,7 +75,7 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
                     data(k_h, j, i) = 0.0;
                 }
                 else if (bottom_bc == ZBoundaryType::PERIODIC) {
-                    data(k_h, j, i) = data(nz_phys - h + k_h, j, i);
+                    data(k_h, j, i) = data(nz-2*h+k_h, j, i);
                 }
             
                 // Top Boundary Condition
@@ -87,7 +86,7 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
                     data(nz-1-k_h, j, i) = 0.0;
                 }
                 else if (top_bc == ZBoundaryType::PERIODIC) {
-                    data(nz - h + k_h, j, i) = data(h + k_h, j, i);
+                    data(nz-h+k_h, j, i) = data(h+k_h, j, i);
                 }
             }
         );
@@ -95,7 +94,7 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
             KOKKOS_LAMBDA(int j, int i) {
                 // This is for top (xi, eta, w) 
                 if (top_bc == ZBoundaryType::ZERO) {
-                    data(nz_phys-1, j, i) = 0.0;
+                    data(nz-h-1, j, i) = 0.0;
                 }
             }
         );
@@ -116,7 +115,7 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
                     data(N_h, k_h, j, i) = 0.0;
                 }
                 else if (bottom_bc == ZBoundaryType::PERIODIC) {
-                    data(N_h, k_h, j, i) = data(N_h, nz_phys - h + k_h, j, i);
+                    data(N_h, k_h, j, i) = data(N_h, nz-2*h+k_h, j, i);
                 }
             
                 // Top Boundary Condition
@@ -127,7 +126,7 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
                     data(N_h, nz-1-k_h, j, i) = 0.0;
                 }
                 else if (top_bc == ZBoundaryType::PERIODIC) {
-                    data(N_h, nz - h + k_h, j, i) = data(N_h, h + k_h, j, i);
+                    data(N_h, nz-h+k_h, j, i) = data(N_h, h+k_h, j, i);
                 }
             }
         );
@@ -135,7 +134,7 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
             KOKKOS_LAMBDA(int N_h, int j, int i) {
                 // This is for top (xi, eta, w) 
                 if (top_bc == ZBoundaryType::ZERO) {
-                    data(N_h, nz_phys-1, j, i) = 0.0;
+                    data(N_h, nz-h-1, j, i) = 0.0;
                 }
             }
         );

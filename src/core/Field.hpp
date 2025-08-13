@@ -214,7 +214,7 @@ inline void Field<Dim>::print_xz_cross_at_j(const Grid& grid, int N_idx, int j_l
             return;
         }
         std::cout << "  Y-slice at j=" << j_local_idx << std::endl;
-        for (int k = 0; k < host_data.extent(1); ++k) {
+        for (int k = 0; k < host_data.extent(0); ++k) {
             for (int i = 0; i < host_data.extent(2); ++i) {
                 std::cout << host_data(k, j_local_idx, i) << "\t";
             }

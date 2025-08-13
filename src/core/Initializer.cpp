@@ -44,7 +44,6 @@ void Initializer::initialize_grid() const {
     double CZ2 = (dz-dz1) / (dz * (DOMAIN-dz));
     double CZ1 = 1. - CZ2 * DOMAIN;
 
-    const int nz_phys = grid_.get_local_physical_points_z();
     const int h = grid_.get_halo_cells();
     const int nz_total = grid_.get_local_total_points_z();
 
