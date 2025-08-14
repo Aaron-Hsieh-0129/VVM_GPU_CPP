@@ -18,6 +18,39 @@ void BoundaryConditionManager::apply_z_bcs(State& state) const {
     }
 }
 
+BoundaryConditionManager::BoundaryConditionManager(const Grid& grid, const Utils::ConfigurationManager& config, const std::string& var_name)
+    : grid_ref_(grid), var_name_(var_name) {
+    ZBoundaryType default_top_bc = ZBoundaryType::ZERO_GRADIENT;
+    ZBoundaryType default_bottom_bc = ZBoundaryType::ZERO_GRADIENT;
+
+    if (config.has_key("boundary_conditions.default.top")) {
+        default_top_bc = string_to_bc_type(config.get_value<std::string>("boundary_conditions.default.top"));
+    }
+    if (config.has_key("boundary_conditions.default.bottom")) {
+        default_bottom_bc = string_to_bc_type(config.get_value<std::string>("boundary_conditions.default.bottom"));
+    }
+
+    top_bc_ = default_top_bc;
+    bottom_bc_ = default_bottom_bc;
+
+    std::string var_top_key = "boundary_conditions." + var_name + ".top";
+    if (config.has_key(var_top_key)) {
+        top_bc_ = string_to_bc_type(config.get_value<std::string>(var_top_key));
+    }
+
+    std::string var_bottom_key = "boundary_conditions." + var_name + ".bottom";
+    if (config.has_key(var_bottom_key)) {
+        bottom_bc_ = string_to_bc_type(config.get_value<std::string>(var_bottom_key));
+    }
+}
+
+ZBoundaryType BoundaryConditionManager::string_to_bc_type(const std::string& bc_string) const {
+    if (bc_string == "ZERO") return ZBoundaryType::ZERO;
+    if (bc_string == "ZERO_GRADIENT") return ZBoundaryType::ZERO_GRADIENT;
+    if (bc_string == "PERIODIC") return ZBoundaryType::PERIODIC;
+    throw std::runtime_error("Unknown boundary condition type: " + bc_string);
+}
+
 template<size_t Dim>
 void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
     const int h = grid_ref_.get_halo_cells();
@@ -29,6 +62,7 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
     const ZBoundaryType top_bc = top_bc_;
     const ZBoundaryType bottom_bc = bottom_bc_;
     
+    const bool is_special_zero_bc = (top_bc == ZBoundaryType::ZERO && (var_name_ == "xi" || var_name_ == "eta" || var_name_ == "w"));
     if constexpr (Dim == 1) {
         Kokkos::parallel_for("apply_bc_1d", Kokkos::RangePolicy<>(0, h),
             KOKKOS_LAMBDA(const int k_h) {
@@ -55,10 +89,6 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
                 }
             }
         );
-        // This is for top (xi, eta, w) 
-        if (top_bc == ZBoundaryType::ZERO) {
-            data(nz-h-1) = 0.0;
-        }
     }
     else if constexpr (Dim == 3) {
         const int ny = data.extent(1);
@@ -93,7 +123,7 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
         Kokkos::parallel_for("apply_bc_3d", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, nx}),
             KOKKOS_LAMBDA(int j, int i) {
                 // This is for top (xi, eta, w) 
-                if (top_bc == ZBoundaryType::ZERO) {
+                if (is_special_zero_bc) {
                     data(nz-h-1, j, i) = 0.0;
                 }
             }
@@ -127,14 +157,6 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
                 }
                 else if (top_bc == ZBoundaryType::PERIODIC) {
                     data(N_h, nz-h+k_h, j, i) = data(N_h, h+k_h, j, i);
-                }
-            }
-        );
-        Kokkos::parallel_for("apply_bottom_bc_4d", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {N, ny, nx}),
-            KOKKOS_LAMBDA(int N_h, int j, int i) {
-                // This is for top (xi, eta, w) 
-                if (top_bc == ZBoundaryType::ZERO) {
-                    data(N_h, nz-h-1, j, i) = 0.0;
                 }
             }
         );

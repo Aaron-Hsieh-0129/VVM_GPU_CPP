@@ -19,15 +19,19 @@ public:
                                       ZBoundaryType top_bc = ZBoundaryType::ZERO_GRADIENT, 
                                       ZBoundaryType bottom_bc = ZBoundaryType::ZERO_GRADIENT);
 
+    BoundaryConditionManager(const Grid& grid, const Utils::ConfigurationManager& config, const std::string& var_name);
+
     void apply_z_bcs(State& state) const;
 
     template<size_t Dim>
     void apply_z_bcs_to_field(Field<Dim>& field) const;
 private:
+    ZBoundaryType string_to_bc_type(const std::string& bc_string) const;
 
     const Grid& grid_ref_;
     ZBoundaryType top_bc_;
     ZBoundaryType bottom_bc_;
+    std::string var_name_;
 };
 
 } // namespace Core
