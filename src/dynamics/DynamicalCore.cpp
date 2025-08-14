@@ -23,7 +23,7 @@ std::unique_ptr<TemporalScheme> DynamicalCore::create_temporal_scheme(
             std::string advection_scheme_name = var_config.at("tendency_terms").at("advection").at("spatial_scheme");
             std::unique_ptr<SpatialScheme> spatial_scheme;
             if (advection_scheme_name == "Takacs") {
-                spatial_scheme = std::make_unique<Takacs>();
+                spatial_scheme = std::make_unique<Takacs>(grid_, config_);
             } 
             else {
                 throw std::runtime_error("Unknown spatial scheme: " + advection_scheme_name);
@@ -35,7 +35,7 @@ std::unique_ptr<TemporalScheme> DynamicalCore::create_temporal_scheme(
             std::string stretching_scheme_name = var_config.at("tendency_terms").at("stretching").at("spatial_scheme");
             std::unique_ptr<SpatialScheme> spatial_scheme;
             if (stretching_scheme_name == "Takacs") {
-                spatial_scheme = std::make_unique<Takacs>();
+                spatial_scheme = std::make_unique<Takacs>(grid_, config_);
             }
             else {
                 throw std::runtime_error("Unknown spatial scheme for stretching: " + stretching_scheme_name);
@@ -48,7 +48,7 @@ std::unique_ptr<TemporalScheme> DynamicalCore::create_temporal_scheme(
             std::string twisting_scheme_name = var_config.at("tendency_terms").at("twisting").at("spatial_scheme");
             std::unique_ptr<SpatialScheme> spatial_scheme;
             if (twisting_scheme_name == "Takacs") {
-                spatial_scheme = std::make_unique<Takacs>();
+                spatial_scheme = std::make_unique<Takacs>(grid_, config_);
             }
             else {
                 throw std::runtime_error("Unknown spatial scheme for twisting: " + twisting_scheme_name);
@@ -68,7 +68,7 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
                              const Core::Grid& grid, 
                              const Core::Parameters& params,
                              Core::State& state)
-    : state_(state), grid_(grid), params_(params) {
+    : config_(config), state_(state), grid_(grid), params_(params) {
     
     auto prognostic_config = config.get_value<nlohmann::json>("dynamics.prognostic_variables");
     
@@ -111,7 +111,7 @@ void DynamicalCore::step(Core::State& state, double dt) {
 }
 
 void DynamicalCore::compute_diagnostic_fields() const {
-    auto scheme = std::make_unique<Takacs>();
+    auto scheme = std::make_unique<Takacs>(grid_, config_);
 
     auto& R_xi_field = state_.get_field<3>("R_xi");
     auto& R_eta_field = state_.get_field<3>("R_eta");
@@ -124,3 +124,4 @@ void DynamicalCore::compute_diagnostic_fields() const {
 
 } // namespace Dynamics
 } // namespace VVM
+

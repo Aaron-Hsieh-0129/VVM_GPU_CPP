@@ -10,9 +10,31 @@
         "dz1": 100.0
     },
     "simulation": {
-        "total_time_s": 1200.0,
+        "total_time_s": 300.0,
         "dt_s": 1.0,
         "output_interval_s": 1.0
+    },
+    "boundary_conditions": {
+        "default": {
+            "top": "ZERO_GRADIENT",
+            "bottom": "ZERO_GRADIENT"
+        },
+        "flux": {
+            "top": "ZERO_GRADIENT",
+            "bottom": "ZERO_GRADIENT"
+        },
+        "w": {
+            "top": "ZERO",
+            "bottom": "ZERO"
+        },
+        "xi": {
+            "top": "ZERO",
+            "bottom": "ZERO"
+        },
+        "eta": {
+            "top": "ZERO",
+            "bottom": "ZERO"
+        }
     },
     "add_model_fields": {
         "3d": [

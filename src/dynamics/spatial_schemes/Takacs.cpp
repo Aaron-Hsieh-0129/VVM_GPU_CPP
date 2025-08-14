@@ -5,12 +5,14 @@
 namespace VVM {
 namespace Dynamics {
 
+Takacs::Takacs(const Core::Grid& grid, const Utils::ConfigurationManager& config)
+    : halo_exchanger_(grid),
+      flux_bc_manager_(grid, config, "flux") {}
+
 void Takacs::calculate_flux_convergence_x(
     const Core::Field<3>& scalar, const Core::Field<3>& u_field,
     const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency, const std::string& var_name) const {
 
-    VVM::Core::HaloExchanger haloexchanger(grid);
-    VVM::Core::BoundaryConditionManager bc_manager_flux(grid, VVM::Core::ZBoundaryType::ZERO_GRADIENT, VVM::Core::ZBoundaryType::ZERO_GRADIENT);
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
@@ -52,8 +54,7 @@ void Takacs::calculate_flux_convergence_x(
         }
     );
 
-    haloexchanger.exchange_halos(flux_field);
-    bc_manager_flux.apply_z_bcs_to_field(flux_field);
+    halo_exchanger_.exchange_halos(flux_field);
 
     auto rdx_view = params.rdx;
     Kokkos::parallel_for("flux_convergence_tendency", 
@@ -69,8 +70,6 @@ void Takacs::calculate_flux_convergence_y(
     const Core::Field<3>& scalar, const Core::Field<3>& v_field,
     const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency, const std::string& var_name) const {
 
-    VVM::Core::HaloExchanger haloexchanger(grid);
-    VVM::Core::BoundaryConditionManager bc_manager_flux(grid, VVM::Core::ZBoundaryType::ZERO_GRADIENT, VVM::Core::ZBoundaryType::ZERO_GRADIENT);
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
@@ -112,8 +111,7 @@ void Takacs::calculate_flux_convergence_y(
         }
     );
 
-    haloexchanger.exchange_halos(flux_field);
-    bc_manager_flux.apply_z_bcs_to_field(flux_field);
+    halo_exchanger_.exchange_halos(flux_field);
 
     auto rdy_view = params.rdy;
     Kokkos::parallel_for("flux_convergence_tendency", 
@@ -129,8 +127,6 @@ void Takacs::calculate_flux_convergence_z(
     const Core::Field<3>& scalar, const Core::Field<1>& rhobar_divide_field, const Core::Field<3>& w_field,
     const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency, const std::string& var_name) const {
 
-    VVM::Core::HaloExchanger haloexchanger(grid);
-    VVM::Core::BoundaryConditionManager bc_manager_flux(grid, VVM::Core::ZBoundaryType::PERIODIC, VVM::Core::ZBoundaryType::PERIODIC);
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
@@ -185,7 +181,7 @@ void Takacs::calculate_flux_convergence_z(
         );
     }
     else {
-        Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,h,h}, {nz-2,ny-h,nx-h}),
+        Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end,ny-h,nx-h}),
             KOKKOS_LAMBDA(int k, int j, int i) {
                 flux(k,j,i) = w(k,j,i)*(q(k+1,j,i)+q(k,j,i));
                 if (k == h && w(k,j,i) < 0.) {
@@ -208,9 +204,9 @@ void Takacs::calculate_flux_convergence_z(
         );
     }
 
-    haloexchanger.exchange_halos(flux_field);
-    bc_manager_flux.apply_z_bcs_to_field(flux_field);
+    flux_bc_manager_.apply_z_bcs_to_field(flux_field);
 
+    // DEBUG print
     // Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {ny,nx}),
     //     KOKKOS_LAMBDA(int j, int i) {
     //         // flux(0,j,i) = flux(nz-2,j,i);
@@ -221,7 +217,6 @@ void Takacs::calculate_flux_convergence_z(
     //         flux(nz-3,j,i) = 400.;
     //     }
     // );
-
     // int rank;
     // MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     // if (rank == 0 && var_name == "th") w_field.print_xz_cross_at_j(grid, 0, 3);

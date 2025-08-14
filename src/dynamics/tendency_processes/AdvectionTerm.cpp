@@ -132,8 +132,7 @@ void AdvectionTerm::compute_tendency(
             // Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, ny, nx}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                // w_mean_data(k,j,i) = rhobar_up(k) * w(k,j,i);
-                w_mean_data(k,j,i) = 5.;
+                w_mean_data(k,j,i) = rhobar_up(k) * w(k,j,i);
             }
         );
 

@@ -26,6 +26,7 @@ public:
     void step(Core::State& state, double dt);
 
 private:
+    const Utils::ConfigurationManager& config_;
     Core::State& state_;
     const Core::Grid& grid_;
     const Core::Parameters& params_;
