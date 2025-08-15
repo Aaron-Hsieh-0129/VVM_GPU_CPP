@@ -35,7 +35,7 @@ void AdvectionTerm::compute_tendency(
     const int h = grid.get_halo_cells();
 
     VVM::Core::HaloExchanger haloexchanger(grid);
-    VVM::Core::BoundaryConditionManager bc_manager_zerograd(grid, VVM::Core::ZBoundaryType::PERIODIC, VVM::Core::ZBoundaryType::PERIODIC);
+    VVM::Core::BoundaryConditionManager bc_manager_zerograd(grid, VVM::Core::ZBoundaryType::ZERO_GRADIENT, VVM::Core::ZBoundaryType::ZERO_GRADIENT);
     VVM::Core::BoundaryConditionManager bc_manager_zero(grid, VVM::Core::ZBoundaryType::ZERO, VVM::Core::ZBoundaryType::ZERO);
     VVM::Core::BoundaryConditionManager bc_manager_periodic(grid, VVM::Core::ZBoundaryType::PERIODIC, VVM::Core::ZBoundaryType::PERIODIC);
 

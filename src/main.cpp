@@ -88,12 +88,24 @@ int main(int argc, char* argv[]) {
         auto& xi = state.get_field<3>("xi").get_mutable_device_data();
         auto& eta = state.get_field<3>("eta").get_mutable_device_data();
         auto& zeta = state.get_field<3>("zeta").get_mutable_device_data();
+        auto& u = state.get_field<3>("u").get_mutable_device_data();
+        auto& v = state.get_field<3>("v").get_mutable_device_data();
         auto& w = state.get_field<3>("w").get_mutable_device_data();
         auto& w_field = state.get_field<3>("w");
+
+        const int global_start_j = grid.get_local_physical_start_y();
+        const int global_start_i = grid.get_local_physical_start_x();
+
         
         Kokkos::parallel_for("th_init_with_perturbation", 
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz_total, ny_total, nx_total}),
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz_total-h, ny_total-h, nx_total-h}),
             KOKKOS_LAMBDA(int k, int j, int i) {
+                const int local_j = j - h;
+                const int local_i = i - h;
+
+                const int global_j = global_start_j + local_j;
+                const int global_i = global_start_i + local_i;
+
                 double base_th = thbar(k);
                 
                 th(k,j,i) = 300;
@@ -102,14 +114,30 @@ int main(int argc, char* argv[]) {
                     th(k,j,i) += 50;
                 }
 
+                if (k == h+16 && (32/2-3-1 <= global_j && 32/2+3-1 >= global_j) && (32/2-3-1 <= global_i && 32/2+3-1 >= global_i)) {
+                    xi(k,j,i) = 50;
+                    eta(k,j,i) = 50;
+                }
+                u(k,j,i) = 32./2. - global_i - 1;
+                v(k,j,i) = 32./2. - global_j - 1;
+                
+
                 // if (k == 0 || k == nz_total-1 || k == nz_total-2) w(k,j,i) = 0;
         });
-
+        // if (rank == 0) {
+        //     std::cout << "\n--- Field State BEFORE Halo Exchange ---" << std::endl;
+        //     state.get_field<3>("v").print_slice_z_at_k(grid, 0, 18);
+        // }
         halo_exchanger.exchange_halos(state.get_field<3>("th"));
+        halo_exchanger.exchange_halos(state.get_field<3>("xi"));
+        halo_exchanger.exchange_halos(state.get_field<3>("eta"));
+        halo_exchanger.exchange_halos(state.get_field<3>("u"));
+        halo_exchanger.exchange_halos(state.get_field<3>("v"));
 
-        if (rank == 0) {
-            std::cout << "\n--- Field State AFTER Halo Exchange ---" << std::endl;
-        }
+        // if (rank == 0) {
+        //     std::cout << "\n--- Field State AFTER Halo Exchange ---" << std::endl;
+        //     state.get_field<3>("v").print_slice_z_at_k(grid, 0, 18);
+        // }
 
         
         // if (rank == 0) w_field.print_xz_cross_at_j(grid, 0, 3);
@@ -132,8 +160,8 @@ int main(int argc, char* argv[]) {
         // Simulation loop
         while (current_time < total_time) {
             dynamical_core.step(state, dt);
-            current_time += dt;
             halo_exchanger.exchange_halos(state);
+            current_time += dt;
 
             std::cout << current_time << std::endl;
 

@@ -107,6 +107,8 @@ void DynamicalCore::step(Core::State& state, double dt) {
 
     for (const auto& var_name : prognostic_variables_) {
         variable_schemes_.at(var_name)->step(state, grid_, params_, dt);
+        VVM::Core::BoundaryConditionManager bc_manager(grid_, config_, var_name);
+        bc_manager.apply_z_bcs_to_field(state.get_field<3>(var_name));
     }
 }
 
