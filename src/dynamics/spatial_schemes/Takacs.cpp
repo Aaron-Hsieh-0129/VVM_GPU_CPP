@@ -130,12 +130,9 @@ void Takacs::calculate_flux_convergence_z(
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
+    const int h = grid.get_halo_cells();
     auto rhobar_divide = rhobar_divide_field.get_device_data();
 
-    const int nz_phys = grid.get_local_physical_points_z();
-    const int ny_phys = grid.get_local_physical_points_y();
-    const int nx_phys = grid.get_local_physical_points_x();
-    const int h = grid.get_halo_cells();
 
     int k_start = h;
     int k_end = nz-h;
@@ -384,15 +381,19 @@ void Takacs::calculate_R_xi(
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
+    const int h = grid.get_halo_cells();
 
     Kokkos::parallel_for("compute_R_xi",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({1,1,1}, {nz-1, ny-1, nx-1}),
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             // R_xi at i, j+1/2, k+1/2
-            R_xi(k, j, i) = (w(k, j + 1, i) - w(k, j, i)) * rdy() +
-                            (v(k + 1, j, i) - v(k, j, i)) * rdz() * flex_height_coef_up(k);
+            R_xi(k, j, i) = (w(k, j+1, i) - w(k, j, i)) * rdy() +
+                            (v(k+1, j, i) - v(k, j, i)) * rdz() * flex_height_coef_up(k);
         }
     );
+
+    halo_exchanger_.exchange_halos(out_R_xi);
+    return;
 }
 
 void Takacs::calculate_R_eta(
@@ -410,15 +411,19 @@ void Takacs::calculate_R_eta(
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
+    const int h = grid.get_halo_cells();
 
     Kokkos::parallel_for("compute_R_eta",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({1,1,1}, {nz-1, ny-1, nx-1}),
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             // R_eta at i+1/2, j, k+1/2
-            R_eta(k, j, i) = (w(k, j, i + 1) - w(k, j, i)) * rdx() +
-                             (u(k + 1, j, i) - u(k, j, i)) * rdz() * flex_height_coef_up(k);
+            R_eta(k, j, i) = (w(k, j, i+1) - w(k, j, i)) * rdx() +
+                             (u(k+1, j, i) - u(k, j, i)) * rdz() * flex_height_coef_up(k);
         }
     );
+
+    halo_exchanger_.exchange_halos(out_R_eta);
+    return;
 }
 
 void Takacs::calculate_R_zeta(
@@ -435,15 +440,19 @@ void Takacs::calculate_R_zeta(
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
+    const int h = grid.get_halo_cells();
 
     Kokkos::parallel_for("compute_R_zeta",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({1,1,1}, {nz-1, ny-1, nx-1}),
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             // R_zeta at i+1/2, j+1/2, k
-            R_zeta(k, j, i) = (v(k, j, i + 1) - v(k, j, i)) * rdx() +
-                              (u(k, j + 1, i) - u(k, j, i)) * rdy();
+            R_zeta(k, j, i) = (v(k, j, i+1) - v(k, j, i)) * rdx() +
+                              (u(k, j+1, i) - u(k, j, i)) * rdy();
         }
     );
+
+    halo_exchanger_.exchange_halos(out_R_zeta);
+    return;
 }
 
 
@@ -461,73 +470,130 @@ void Takacs::calculate_twisting_tendency_x(
     const auto& zeta = state.get_field<3>("zeta").get_device_data();
     auto tendency = out_tendency.get_mutable_device_data();
 
-    const int nz = grid.get_local_physical_points_z();
-    const int ny = grid.get_local_physical_points_y();
-    const int nx = grid.get_local_physical_points_x();
+    const int nz = grid.get_local_total_points_z();
+    const int ny = grid.get_local_total_points_y();
+    const int nx = grid.get_local_total_points_x();
     const int h = grid.get_halo_cells();
 
-    // Implements Eq. (3.33) for [0.5ρ₀(eta*Rzeta+zeta*Reta)] at (i+1/2, j+1/2, k)
+    auto fact1_xi_eta = params.fact1_xi_eta.get_device_data();
+    auto fact2_xi_eta = params.fact2_xi_eta.get_device_data();
+
+    // Implements Eq. (3.28) for [0.5ρ₀(eta*Rzeta+zeta*Reta)] at (i+1/2, j+1/2, k)
     Kokkos::parallel_for("twisting_term_xi",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {h + nz - 1, h + ny - 1, h + nx - 1}),
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            const double term_etaRzeta = 0.0625 * rhobar_up(k) * (
-                        (eta(k,j+1,i)  +eta(k,j,i)  ) * (rhobar(k)/rhobar_up(k)*R_zeta(k,j,i)   + rhobar(k+1)/rhobar_up(k)*R_zeta(k+1,j,i  ))
-                      + (eta(k,j+1,i-1)+eta(k,j,i-1)) * (rhobar(k)/rhobar_up(k)*R_zeta(k,j,i-1) + rhobar(k+1)/rhobar_up(k)*R_zeta(k+1,j,i-1))
-                    );
+            // WARNING: The documentation has rho weighted but the VVM code doesn't have. This code follows the VVM code.
+            const double term_etaRzeta = (
+                (eta(k,j+1,i  )+eta(k,j,i  )) * (fact2_xi_eta(k)*rhobar(k)*R_zeta(k,j,i  ) + fact1_xi_eta(k)*rhobar(k+1)*R_zeta(k+1,j,i  ))
+              + (eta(k,j+1,i-1)+eta(k,j,i-1)) * (fact2_xi_eta(k)*rhobar(k)*R_zeta(k,j,i-1) + fact1_xi_eta(k)*rhobar(k+1)*R_zeta(k+1,j,i-1))
+            );
 
-            const double term_zetaReta = 0.0625 * (
-                        (rhobar(k)*zeta(k,j,i  ) + rhobar(k+1)*zeta(k+1,j,i)  ) * (R_eta(k,j+1,i  ) + R_eta(k,j,i)  )
-                      + (rhobar(k)*zeta(k,j,i-1) + rhobar(k+1)*zeta(k+1,j,i-1)) * (R_eta(k,j+1,i-1) + R_eta(k,j,i-1))
-                    );
+            const double term_zetaReta = (
+                rhobar_up(k)*(zeta(k,j,i  )+zeta(k+1,j,i  ))*(R_eta(k,j+1,i  )+R_eta(k,j,i  ))
+              + rhobar_up(k)*(zeta(k,j,i-1)+zeta(k+1,j,i-1))*(R_eta(k,j+1,i-1)+R_eta(k,j,i-1))
+            );
 
-            tendency(k, j, i) += (term_etaRzeta + term_zetaReta);
+            // WARNING: term_etaRzeta has a negative sign in original VVM because the definition of eta in that VVM is negative from this one.
+            tendency(k, j, i) += 0.0625 * (term_etaRzeta + term_zetaReta);
         }
     );
+    return;
 }
 
 void Takacs::calculate_twisting_tendency_y(
     const Core::State& state, const Core::Grid& grid,
     const Core::Parameters& params, Core::Field<3>& out_tendency, const std::string& var_name) const {
 
-    // const auto& R_xi_field = state.get_field<3>("R_xi");
-    // const auto& R_zeta_field = state.get_field<3>("R_zeta");
-    // auto R_xi = R_xi_field.get_device_data();
-    // auto R_zeta = R_zeta_field.get_device_data();
-    // const auto& rhobar = state.get_field<1>("rhobar").get_device_data();
-    // const auto& rhobar_up = state.get_field<1>("rhobar_up").get_device_data();
-    // const auto& xi = state.get_field<3>("xi").get_device_data();
-    // const auto& zeta = state.get_field<3>("zeta").get_device_data();
-    //
-    // const int nz = grid.get_local_physical_points_z();
-    // const int ny = grid.get_local_physical_points_y();
-    // const int nx = grid.get_local_physical_points_x();
-    // const int h = grid.get_halo_cells();
-    //
-    // // TODO: Starts from here
-    // // Implements for [0.5ρ₀(xi*Rzeta+zeta*Rxi)]
-    // Kokkos::parallel_for("twisting_term_zeta",
-    //     Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {h + nz - 1, h + ny - 1, h + nx - 1}),
-    //     KOKKOS_LAMBDA(const int k, const int j, const int i) {
-    //         const double term_xiRzeta = 0.0625 * rhobar_up(k) * (
-    //                     (eta(k,j+1,i)  +eta(k,j,i)  ) * (rhobar(k)/rhobar_up(k)*R_zeta(k,j,i)   + rhobar(k+1)/rhobar_up(k)*R_zeta(k+1,j,i  ))
-    //                   + (eta(k,j+1,i-1)+eta(k,j,i-1)) * (rhobar(k)/rhobar_up(k)*R_zeta(k,j,i-1) + rhobar(k+1)/rhobar_up(k)*R_zeta(k+1,j,i-1))
-    //                 );
-    //
-    //         const double term_zetaReta = 0.0625 * (
-    //                     (rhobar(k)*zeta(k,j,i  ) + rhobar(k+1)*zeta(k+1,j,i)  ) * (R_eta(k,j+1,i  ) + R_eta(k,j,i)  )
-    //                   + (rhobar(k)*zeta(k,j,i-1) + rhobar(k+1)*zeta(k+1,j,i-1)) * (R_eta(k,j+1,i-1) + R_eta(k,j,i-1))
-    //                 );
-    //
-    //         tendency(k, j, i) += (term_etaRzeta + term_zetaReta);
-    //     }
-    // );
+    const auto& R_xi_field = state.get_field<3>("R_xi");
+    const auto& R_zeta_field = state.get_field<3>("R_zeta");
+    auto R_xi = R_xi_field.get_device_data();
+    auto R_zeta = R_zeta_field.get_device_data();
+    const auto& rhobar = state.get_field<1>("rhobar").get_device_data();
+    const auto& rhobar_up = state.get_field<1>("rhobar_up").get_device_data();
+    const auto& xi = state.get_field<3>("xi").get_device_data();
+    const auto& zeta = state.get_field<3>("zeta").get_device_data();
+    auto tendency = out_tendency.get_mutable_device_data();
+
+    const int nz = grid.get_local_total_points_z();
+    const int ny = grid.get_local_total_points_y();
+    const int nx = grid.get_local_total_points_x();
+    const int h = grid.get_halo_cells();
+
+    auto fact1_xi_eta = params.fact1_xi_eta.get_device_data();
+    auto fact2_xi_eta = params.fact2_xi_eta.get_device_data();
+
+    // Implements Eq. (3.29) for [0.5ρ₀(xi*Rzeta+zeta*Rxi)]
+    Kokkos::parallel_for("twisting_term_eta",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h, ny-h, nx-h}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            // WARNING: The documentation has rho weighted but the VVM code doesn't have. This code follows the VVM code.
+            const double term_xiRzeta = (
+                (xi(k,j  ,i+1)+xi(k,j  ,i)) * (fact2_xi_eta(k)*rhobar(k)*R_zeta(k,j  ,i) + fact1_xi_eta(k)*rhobar(k+1)*R_zeta(k+1,j  ,i))
+              + (xi(k,j-1,i+1)+xi(k,j-1,i)) * (fact2_xi_eta(k)*rhobar(k)*R_zeta(k,j-1,i) + fact1_xi_eta(k)*rhobar(k+1)*R_zeta(k+1,j-1,i))
+            );
+
+            const double term_zetaRxi = (
+                rhobar_up(k)*(zeta(k,j  ,i)+zeta(k+1,j  ,i))*(R_xi(k,j  ,i)+R_xi(k,j  ,i+1))
+              + rhobar_up(k)*(zeta(k,j-1,i)+zeta(k+1,j-1,i))*(R_xi(k,j-1,i)+R_xi(k,j-1,i+1))
+            );
+
+            // WARNING: term_etaRzeta has a negative sign in original VVM because the definition of eta in that VVM is negative from this one.
+            tendency(k, j, i) += 0.0625 * (term_xiRzeta + term_zetaRxi);
+        }
+    );
+    return;
 }
 
 void Takacs::calculate_twisting_tendency_z(
     const Core::State& state, const Core::Grid& grid,
     const Core::Parameters& params, Core::Field<3>& out_tendency, const std::string& var_name) const {
-    // TODO: 在這裡實作 twisting term z-方向的計算
+
+    const auto& R_xi_field = state.get_field<3>("R_xi");
+    const auto& R_eta_field = state.get_field<3>("R_eta");
+    auto R_xi = R_xi_field.get_device_data();
+    auto R_eta = R_eta_field.get_device_data();
+    const auto& rhobar = state.get_field<1>("rhobar").get_device_data();
+    const auto& rhobar_up = state.get_field<1>("rhobar_up").get_device_data();
+    const auto& xi = state.get_field<3>("xi").get_device_data();
+    const auto& eta = state.get_field<3>("eta").get_device_data();
+    auto tendency = out_tendency.get_mutable_device_data();
+
+    const int nz = grid.get_local_total_points_z();
+    const int ny = grid.get_local_total_points_y();
+    const int nx = grid.get_local_total_points_x();
+    const int h = grid.get_halo_cells();
+
+    const auto& flex_height_coef_mid = params.flex_height_coef_mid.get_device_data();
+    const auto& flex_height_coef_up = params.flex_height_coef_up.get_device_data();
+
+    Kokkos::View<double> fact1("fact1");
+    Kokkos::View<double> fact2("fact2");
+
+    fact1() = flex_height_coef_mid(nz-h-1) * rhobar_up(nz-h-1) / flex_height_coef_up(nz-h-1);
+    fact2() = flex_height_coef_mid(nz-h-1) * rhobar_up(nz-h-2) / flex_height_coef_up(nz-h-2);
+
+    // Implements Eq. (3.30) for [0.5ρ₀(xi*Reta+eta*Rxi)]
+    Kokkos::parallel_for("twisting_term_eta",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({nz-h-1, h, h}, {nz-h, ny-h, nx-h}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            // WARNING: The documentation has rho weighted but the VVM code doesn't have. This code follows the VVM code.
+            const double term_xiReta = (
+                fact1()*(xi(k,j,i+1)+xi(k  ,j,i  )) * (R_eta(k  ,j+1,i)+R_eta(k  ,j,i))
+              + fact2()*(xi(k-1,j,i)+xi(k-1,j,i+1)) * (R_eta(k-1,j+1,i)+R_eta(k-1,j,i))
+            );
+
+            const double term_etaRxi = (
+                fact1()*(eta(k  ,j+1,i)+eta(k  ,j,i)) * (R_xi(k  ,j,i)+R_xi(k  ,j,i+1))
+              + fact2()*(eta(k-1,j+1,i)+eta(k-1,j,i)) * (R_xi(k-1,j,i)+R_xi(k-1,j,i+1))
+            );
+
+            // WARNING: term_etaRxi has a negative sign in original VVM because the definition of eta in that VVM is negative from this one.
+            tendency(k, j, i) += 0.0625 * (term_xiReta + term_etaRxi);
+        }
+    );
+    return;
 }
+
 
 } // namespace Dynamics
 } // namespace VVM

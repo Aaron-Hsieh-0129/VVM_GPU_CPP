@@ -64,7 +64,7 @@ void AdvectionTerm::compute_tendency(
             }
         );
 
-        // FIXME: I think the w needs to have fact but it turns out the source code doesn't have this. The code follows it for now.
+        // WARNING: I think the w needs to have fact but it turns out the source code doesn't have this. The code follows it for now.
         Kokkos::parallel_for("calculate_rhow_for_xi",
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
@@ -92,7 +92,7 @@ void AdvectionTerm::compute_tendency(
             }
         );
 
-        // FIXME: I think the w needs to have fact but it turns out the source code doesn't have this. The code follows it for now.
+        // WARNING: I think the w needs to have fact but it turns out the source code doesn't have this. The code follows it for now.
         Kokkos::parallel_for("calculate_rhow_for_eta",
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {

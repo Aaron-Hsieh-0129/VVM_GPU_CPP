@@ -118,8 +118,10 @@ int main(int argc, char* argv[]) {
                     xi(k,j,i) = 50;
                     eta(k,j,i) = 50;
                 }
-                u(k,j,i) = 32./2. - global_i - 1;
-                v(k,j,i) = 32./2. - global_j - 1;
+                // u(k,j,i) = 32./2. - global_i - 1;
+                // v(k,j,i) = 32./2. - global_j - 1;
+                // u(k,j,i) = 32./2. - global_j - 1;
+                v(k,j,i) = 32./2. - global_i - 1;
                 
 
                 // if (k == 0 || k == nz_total-1 || k == nz_total-2) w(k,j,i) = 0;
