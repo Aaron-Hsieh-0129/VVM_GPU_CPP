@@ -71,6 +71,12 @@ void Initializer::initialize_grid() const {
             dz_up_mutable(k) = z_mid_mutable(k+1) - z_mid_mutable(k);
         }
     );
+    bc_manager.apply_z_bcs_to_field(parameters_.z_mid);
+    bc_manager.apply_z_bcs_to_field(parameters_.z_up);
+    bc_manager.apply_z_bcs_to_field(parameters_.flex_height_coef_mid);
+    bc_manager.apply_z_bcs_to_field(parameters_.flex_height_coef_up);
+    bc_manager.apply_z_bcs_to_field(parameters_.dz_mid);
+    bc_manager.apply_z_bcs_to_field(parameters_.dz_up);
 
     auto fact1_xi_eta_mutable = parameters_.fact1_xi_eta.get_mutable_device_data();
     auto fact2_xi_eta_mutable = parameters_.fact2_xi_eta.get_mutable_device_data();
@@ -81,12 +87,6 @@ void Initializer::initialize_grid() const {
         }
     );
 
-    bc_manager.apply_z_bcs_to_field(parameters_.z_mid);
-    bc_manager.apply_z_bcs_to_field(parameters_.z_up);
-    bc_manager.apply_z_bcs_to_field(parameters_.flex_height_coef_mid);
-    bc_manager.apply_z_bcs_to_field(parameters_.flex_height_coef_up);
-    bc_manager.apply_z_bcs_to_field(parameters_.dz_mid);
-    bc_manager.apply_z_bcs_to_field(parameters_.dz_up);
 
     return;
 }
