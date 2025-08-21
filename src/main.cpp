@@ -55,14 +55,14 @@ int main(int argc, char* argv[]) {
         VVM::Core::HaloExchanger halo_exchanger(grid);
         VVM::Core::BoundaryConditionManager bc_manager(grid);
 
-        const int nz_total = grid.get_local_total_points_z();
-        const int ny_total = grid.get_local_total_points_y();
-        const int nx_total = grid.get_local_total_points_x();
+        const int nz = grid.get_local_total_points_z();
+        const int ny = grid.get_local_total_points_y();
+        const int nx = grid.get_local_total_points_x();
         const int h = grid.get_halo_cells();
         auto& htflx_sfc = state.get_field<2>("htflx_sfc");
         auto htflx_sfc_mutable = htflx_sfc.get_mutable_device_data();
         Kokkos::parallel_for("InitHeatFluxField",
-            Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny_total, nx_total}),
+            Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, nx}),
             KOKKOS_LAMBDA(const int j, const int i) {
                 htflx_sfc_mutable(j, i) = static_cast<double>(100*rank + 10*j + i);
             }
@@ -81,7 +81,7 @@ int main(int argc, char* argv[]) {
         bc_manager.apply_z_bcs_to_field(state.get_field<1>("U"));
 
 
-        if (rank == 0) state.get_field<1>("rhobar").print_profile(grid, 0, 0, 0);
+        if (rank == 0) state.get_field<1>("rhobar_up").print_profile(grid, 0, 0, 0);
 
         auto& th = state.get_field<3>("th").get_mutable_device_data();
         auto& thbar = state.get_field<1>("thbar").get_device_data();
@@ -98,7 +98,7 @@ int main(int argc, char* argv[]) {
 
         
         Kokkos::parallel_for("th_init_with_perturbation", 
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz_total-h, ny_total-h, nx_total-h}),
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
             KOKKOS_LAMBDA(int k, int j, int i) {
                 const int local_j = j - h;
                 const int local_i = i - h;
@@ -109,14 +109,12 @@ int main(int argc, char* argv[]) {
                 double base_th = thbar(k);
                 
                 th(k,j,i) = 300;
-                // if (k == 3 && j == ny_total/2 && i == nx_total/2 && (rank == 0 || rank == 1)) th(k,j,i) += 50;
-                if (k == h+16 && (h+3 <= j && h+11 >= j) && (h+3 <= i && h+11 >= i)) {
-                    th(k,j,i) += 50;
-                }
+                // if (k == 3 && j == ny/2 && i == nx/2 && (rank == 0 || rank == 1)) th(k,j,i) += 50;
 
-                if (k == h+16 && (32/2-3-1 <= global_j && 32/2+3-1 >= global_j) && (32/2-3-1 <= global_i && 32/2+3-1 >= global_i)) {
+                if ((k == h+16 || k == nz-h-1) && (32/2-3-1 <= global_j && 32/2+3-1 >= global_j) && (32/2-3-1 <= global_i && 32/2+3-1 >= global_i)) {
                     xi(k,j,i) = 50;
                     eta(k,j,i) = 50;
+                    th(k,j,i) += 50;
                 }
                 // u(k,j,i) = 32./2. - global_i - 1;
                 // v(k,j,i) = 32./2. - global_j - 1;
@@ -124,7 +122,7 @@ int main(int argc, char* argv[]) {
                 v(k,j,i) = 32./2. - global_i - 1;
                 
 
-                // if (k == 0 || k == nz_total-1 || k == nz_total-2) w(k,j,i) = 0;
+                // if (k == 0 || k == nz-1 || k == nz-2) w(k,j,i) = 0;
         });
         // if (rank == 0) {
         //     std::cout << "\n--- Field State BEFORE Halo Exchange ---" << std::endl;

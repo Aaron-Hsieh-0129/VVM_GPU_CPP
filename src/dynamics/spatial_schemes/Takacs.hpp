@@ -52,6 +52,10 @@ public:
     void calculate_R_zeta(
         const Core::State& state, const Core::Grid& grid,
         const Core::Parameters& params, Core::Field<3>& out_R_zeta) const override;
+
+    void calculate_vorticity_divergence(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_field) const override;
 private:
     Core::HaloExchanger halo_exchanger_;
     Core::BoundaryConditionManager flux_bc_manager_;

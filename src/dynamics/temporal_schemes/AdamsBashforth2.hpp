@@ -14,6 +14,12 @@ public:
     explicit AdamsBashforth2(std::string var_name, std::vector<std::unique_ptr<TendencyTerm>> terms);
     ~AdamsBashforth2() override;
 
+    void calculate_tendency(
+        Core::State& state,
+        const Core::Grid& grid,
+        const Core::Parameters& params
+    ) const override;
+
     void step(
         Core::State& state,
         const Core::Grid& grid,

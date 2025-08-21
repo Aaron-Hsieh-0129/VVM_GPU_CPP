@@ -60,6 +60,11 @@ public:
     virtual void calculate_R_zeta(
         const Core::State& state, const Core::Grid& grid,
         const Core::Parameters& params, Core::Field<3>& out_R_zeta) const = 0;
+
+    // Vorticity divergence
+    virtual void calculate_vorticity_divergence(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_field) const = 0;
 };
 
 } // namespace Dynamics

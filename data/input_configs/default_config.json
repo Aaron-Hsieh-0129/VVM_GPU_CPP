@@ -76,10 +76,38 @@
                     }
                 }
             },
+            "xi": {
+                "temporal_scheme": "AdamsBashforth2",
+                "tendency_terms": {
+                    "advection": {
+                        "spatial_scheme": "Takacs"
+                    },
+                    "stretching": {
+                        "spatial_scheme": "Takacs"
+                    },
+                    "twisting": {
+                        "spatial_scheme": "Takacs"
+                    }
+                }
+            },
             "eta": {
                 "temporal_scheme": "AdamsBashforth2",
                 "tendency_terms": {
+                    "advection": {
+                        "spatial_scheme": "Takacs"
+                    },
+                    "stretching": {
+                        "spatial_scheme": "Takacs"
+                    },
                     "twisting": {
+                        "spatial_scheme": "Takacs"
+                    }
+                }
+            },
+            "zeta": {
+                "temporal_scheme": "AdamsBashforth2",
+                "tendency_terms": {
+                    "advection": {
                         "spatial_scheme": "Takacs"
                     }
                 }

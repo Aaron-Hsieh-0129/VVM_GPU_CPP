@@ -11,6 +11,80 @@ AdamsBashforth2::AdamsBashforth2(std::string var_name, std::vector<std::unique_p
 
 AdamsBashforth2::~AdamsBashforth2() = default;
 
+void AdamsBashforth2::calculate_tendency(
+    Core::State& state,
+    const Core::Grid& grid,
+    const Core::Parameters& params) const {
+    
+    size_t now_idx = time_step_count_ % 2;
+    auto& tendency_history = state.get_field<4>("d_" + variable_name_);
+    auto total_current_tendency_view = Kokkos::subview(tendency_history.get_mutable_device_data(), now_idx, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+
+    auto& field_to_update = state.get_field<3>(variable_name_);
+    auto& field_current_view = field_to_update.get_mutable_device_data();
+
+    const int nztot = grid.get_local_total_points_z();
+    const int nytot = grid.get_local_total_points_y();
+    const int nxtot = grid.get_local_total_points_x();
+    const int h = grid.get_halo_cells();
+    const auto& rhobar_up = state.get_field<1>("rhobar_up").get_device_data();
+    const auto& rhobar = state.get_field<1>("rhobar").get_device_data();
+
+    // Divide rho for xi, eta, zeta
+    if (variable_name_ == "xi" || variable_name_ == "eta") {
+        Kokkos::parallel_for("divide_by_density",
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nztot, nytot, nxtot}),
+            KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                field_current_view(k, j, i) /= rhobar_up(k);
+            }
+        );
+    }
+    else if (variable_name_ == "zeta") {
+        Kokkos::parallel_for("divide_by_density",
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({nztot-h-2, 0, 0}, {nztot-h, nytot, nxtot}),
+            KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                field_current_view(k, j, i) /= rhobar(k);
+            }
+        );
+    }
+    
+    // Temp field
+    Core::Field<3> current_tendency_field("temp_tendency_wrapper", 
+        { (int)total_current_tendency_view.extent(0), 
+          (int)total_current_tendency_view.extent(1), 
+          (int)total_current_tendency_view.extent(2) 
+        });
+    current_tendency_field.initialize_to_zero();
+    // Calculate all tendency terms
+    for (const auto& term : tendency_terms_) {
+        term->compute_tendency(state, grid, params, current_tendency_field);
+    }
+
+
+    // Divide rho for xi, eta, zeta
+    if (variable_name_ == "xi" || variable_name_ == "eta") {
+        Kokkos::parallel_for("divide_by_density",
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nztot, nytot, nxtot}),
+            KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                field_current_view(k, j, i) *= rhobar_up(k);
+            }
+        );
+    }
+    else if (variable_name_ == "zeta") {
+        Kokkos::parallel_for("divide_by_density",
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({nztot-h-2, 0, 0}, {nztot-h, nytot, nxtot}),
+            KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                field_current_view(k, j, i) *= rhobar(k);
+            }
+        );
+    }
+
+    // Save tendency to history
+    Kokkos::deep_copy(total_current_tendency_view, current_tendency_field.get_device_data());
+    return;
+}
+
+
 void AdamsBashforth2::step(
     Core::State& state,
     const Core::Grid& grid,
@@ -27,89 +101,31 @@ void AdamsBashforth2::step(
     auto& tendency_history = state.get_field<4>("d_" + variable_name_);
 
     // Copy now step to previous step to prepare for next step
-    auto& field_current_view = field_to_update.get_mutable_device_data();
-    auto& field_prev_view_mutable = field_prev_step.get_mutable_device_data();
-    Kokkos::deep_copy(field_prev_view_mutable, field_current_view);
+    Kokkos::deep_copy(field_prev_step.get_mutable_device_data(), field_to_update.get_device_data());
 
-    // Get grid info
-    const int nztot = grid.get_local_total_points_z();
-    const int nytot = grid.get_local_total_points_y();
-    const int nxtot = grid.get_local_total_points_x();
-    const auto& rhobar_up = state.get_field<1>("rhobar_up").get_device_data();
-    const auto& rhobar = state.get_field<1>("rhobar").get_device_data();
-    
-    // Divide rho for xi, eta, zeta
-    if (variable_name_ == "xi" || variable_name_ == "eta") {
-        Kokkos::parallel_for("divide_by_density",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nztot, nytot, nxtot}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                field_current_view(k, j, i) /= rhobar_up(k);
-            }
-        );
-    }
-    else if (variable_name_ == "zeta") {
-        Kokkos::parallel_for("divide_by_density",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nztot, nytot, nxtot}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                field_current_view(k, j, i) /= rhobar(k);
-            }
-        );
-    }
-
-
-    // Get the total tendency for now
-    auto total_current_tendency_view = Kokkos::subview(tendency_history.get_mutable_device_data(), now_idx, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-
-    // Temporary tendency
-    Core::Field<3> current_tendency_field("temp_tendency_wrapper", 
-        { (int)total_current_tendency_view.extent(0), 
-          (int)total_current_tendency_view.extent(1), 
-          (int)total_current_tendency_view.extent(2) 
-        });
-    current_tendency_field.initialize_to_zero();
-    
-    // Iterate and calculate all tendency terms and add them to `current_tendency_field`
-    for (const auto& term : tendency_terms_) {
-        term->compute_tendency(state, grid, params, current_tendency_field);
-    }
-    Kokkos::deep_copy(total_current_tendency_view, current_tendency_field.get_device_data());
-
-
-    // Divide rho for xi, eta, zeta
-    if (variable_name_ == "xi" || variable_name_ == "eta") {
-        Kokkos::parallel_for("divide_by_density",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nztot, nytot, nxtot}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                field_current_view(k, j, i) *= rhobar_up(k);
-            }
-        );
-    }
-    else if (variable_name_ == "zeta") {
-        Kokkos::parallel_for("divide_by_density",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nztot, nytot, nxtot}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                field_current_view(k, j, i) *= rhobar(k);
-            }
-        );
-    }
-    
     // Prepare the tendency and field to integrate
     auto& field_new_view = field_to_update.get_mutable_device_data();
     auto& field_old_view = field_prev_step.get_device_data();
     auto tendency_now_view = Kokkos::subview(tendency_history.get_device_data(), now_idx, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
     auto tendency_prev_view = Kokkos::subview(tendency_history.get_device_data(), prev_idx, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
 
-
-    const int nz = grid.get_local_physical_points_z();
-    const int ny = grid.get_local_physical_points_y();
-    const int nx = grid.get_local_physical_points_x();
+    const int nz = grid.get_local_total_points_z();
+    const int ny = grid.get_local_total_points_y();
+    const int nx = grid.get_local_total_points_x();
     const int h = grid.get_halo_cells();
+
+    int k_start = h;
+    int k_end = nz-h;
+    if (variable_name_ == "zeta") {
+        k_start = nz-h-1;
+        k_end = nz-h;
+    }
 
     // Use Forward Euler for the first step integration
     if (time_step_count_ == 0) {
         // new_x = old_x + dt * d_x_current
         Kokkos::parallel_for("Forward_step", 
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {h + nz, h + ny, h + nx}),
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start, h, h}, {k_end, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
                 field_new_view(k, j, i) = field_old_view(k, j, i) + dt * tendency_now_view(k, j, i);
             }
@@ -118,7 +134,7 @@ void AdamsBashforth2::step(
     else {
         // new_x = old_x + dt * (1.5 * d_x_current - 0.5 * d_x_prev)
         Kokkos::parallel_for("AdamsBashforth2_step", 
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {h + nz, h + ny, h + nx}),
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start, h, h}, {k_end, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
                 field_new_view(k, j, i) = field_old_view(k, j, i) 
                                         + dt * (1.5 * tendency_now_view(k, j, i) - 0.5 * tendency_prev_view(k, j, i));

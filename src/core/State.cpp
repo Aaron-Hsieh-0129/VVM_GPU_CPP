@@ -47,7 +47,7 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     auto& w_data = get_field<3>("w").get_mutable_device_data();
     Kokkos::deep_copy(u_data, 0.0);
     Kokkos::deep_copy(v_data, 0.0);
-    Kokkos::deep_copy(w_data, 5.0);
+    Kokkos::deep_copy(w_data, 0.0);
 
     // TODO: Add tracer auto loading from configuration file
 }
