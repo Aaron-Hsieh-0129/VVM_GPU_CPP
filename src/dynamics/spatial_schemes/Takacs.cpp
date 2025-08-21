@@ -85,6 +85,7 @@ void Takacs::calculate_flux_convergence_y(
     Core::Field<3> vminus_field("vminus", {nz, ny, nx});
     auto& vplus  = vplus_field.get_mutable_device_data();
     auto& vminus = vminus_field.get_mutable_device_data();
+    // DEBUG print
 
     int k_start = h;
     int k_end = nz-h;
@@ -201,6 +202,7 @@ void Takacs::calculate_flux_convergence_z(
         );
     }
 
+    // No need of x-y halo exchanges because this is z direction tendency
     flux_bc_manager_.apply_z_bcs_to_field(flux_field);
 
     // DEBUG print
@@ -494,7 +496,8 @@ void Takacs::calculate_twisting_tendency_x(
             );
 
             // WARNING: term_etaRzeta has a negative sign in original VVM because the definition of eta in that VVM is negative from this one.
-            tendency(k, j, i) += 0.0625 * (term_etaRzeta + term_zetaReta);
+            // FIXME: Fix the comparison negative sign
+            tendency(k, j, i) += 0.0625 * (-term_etaRzeta + term_zetaReta);
         }
     );
     return;
@@ -537,8 +540,9 @@ void Takacs::calculate_twisting_tendency_y(
               + rhobar_up(k)*(zeta(k,j-1,i)+zeta(k+1,j-1,i))*(R_xi(k,j-1,i)+R_xi(k,j-1,i+1))
             );
 
-            // WARNING: term_etaRzeta has a negative sign in original VVM because the definition of eta in that VVM is negative from this one.
-            tendency(k, j, i) += 0.0625 * (term_xiRzeta + term_zetaRxi);
+            // WARNING: term_xiRzeta and eter_zetaRxi have negative signs in original VVM because the definition of eta in that VVM is negative from this one.
+            // FIXME: Fix the comparison negative sign
+            tendency(k, j, i) += 0.0625 * -(term_xiRzeta + term_zetaRxi);
         }
     );
     return;
@@ -568,9 +572,11 @@ void Takacs::calculate_twisting_tendency_z(
 
     Kokkos::View<double> fact1("fact1");
     Kokkos::View<double> fact2("fact2");
+    Kokkos::parallel_for("AssignFactor", 1, KOKKOS_LAMBDA(const int) {
+        fact1() = flex_height_coef_mid(nz-h-1) * rhobar_up(nz-h-1) / flex_height_coef_up(nz-h-1);
+        fact2() = flex_height_coef_mid(nz-h-1) * rhobar_up(nz-h-2) / flex_height_coef_up(nz-h-2);
+    });
 
-    fact1() = flex_height_coef_mid(nz-h-1) * rhobar_up(nz-h-1) / flex_height_coef_up(nz-h-1);
-    fact2() = flex_height_coef_mid(nz-h-1) * rhobar_up(nz-h-2) / flex_height_coef_up(nz-h-2);
 
     // Implements Eq. (3.30) for [0.5ρ₀(xi*Reta+eta*Rxi)]
     Kokkos::parallel_for("twisting_term_eta",
@@ -588,12 +594,42 @@ void Takacs::calculate_twisting_tendency_z(
             );
 
             // WARNING: term_etaRxi has a negative sign in original VVM because the definition of eta in that VVM is negative from this one.
-            tendency(k, j, i) += 0.0625 * (term_xiReta + term_etaRxi);
+            // FIXME: Fix the comparison negative sign
+            tendency(k, j, i) += 0.0625 * (term_xiReta - term_etaRxi);
         }
     );
     return;
 }
 
+
+void Takacs::calculate_vorticity_divergence(
+    const Core::State& state, const Core::Grid& grid,
+    const Core::Parameters& params, Core::Field<3>& out_field) const {
+
+    const auto& xi = state.get_field<3>("xi").get_device_data();
+    const auto& eta = state.get_field<3>("eta").get_device_data();
+    auto out_data = out_field.get_mutable_device_data();
+
+    const double rdx = params.get_value_host(params.rdx);
+    const double rdy = params.get_value_host(params.rdy);
+
+    const int nz = grid.get_local_total_points_z();
+    const int ny = grid.get_local_total_points_y();
+    const int nx = grid.get_local_total_points_x();
+    const int h = grid.get_halo_cells();
+    VVM::Core::HaloExchanger haloexchanger(grid);
+
+    Kokkos::parallel_for("vorticity_divergence",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz - h, ny - h, nx - h}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            const double d_xi_dx = (xi(k, j, i+1) - xi(k, j, i)) * rdx;
+            const double d_eta_dy = (eta(k, j+1, i) - eta(k, j, i)) * rdy;
+            // WARNING: Original VVM has a negative sign for eta due to different definition
+            // FIXME: Fix the comparison negative sign
+            out_data(k, j, i) = -(d_xi_dx - d_eta_dy);
+        }
+    );
+}
 
 } // namespace Dynamics
 } // namespace VVM

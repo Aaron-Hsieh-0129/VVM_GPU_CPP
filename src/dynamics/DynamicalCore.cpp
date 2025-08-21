@@ -4,6 +4,7 @@
 #include "tendency_processes/StretchingTerm.hpp"
 #include "tendency_processes/TwistingTerm.hpp"
 #include "spatial_schemes/Takacs.hpp"
+#include "core/HaloExchanger.hpp"
 #include <stdexcept>
 #include <iostream> // for debugging output
 
@@ -105,11 +106,25 @@ void DynamicalCore::step(Core::State& state, double dt) {
     // Before tendency calculation, get the diagnostic fields such as rotation
     compute_diagnostic_fields();
 
+    // Calculate all tendencies
+    bool zeta_flag = false;
+    for (const auto& var_name : prognostic_variables_) {
+        variable_schemes_.at(var_name)->calculate_tendency(state, grid_, params_);
+        if (var_name == "zeta") zeta_flag = true;
+    }
+
+    // Step to the next step
+    // FIXME: The boundary should correspond to the variables
+    Core::HaloExchanger halo_exchanger(grid_);
     for (const auto& var_name : prognostic_variables_) {
         variable_schemes_.at(var_name)->step(state, grid_, params_, dt);
+
         VVM::Core::BoundaryConditionManager bc_manager(grid_, config_, var_name);
+        halo_exchanger.exchange_halos(state.get_field<3>(var_name));
         bc_manager.apply_z_bcs_to_field(state.get_field<3>(var_name));
     }
+
+    if (zeta_flag) compute_zeta_vertical_structure(state);
 }
 
 void DynamicalCore::compute_diagnostic_fields() const {
@@ -122,6 +137,38 @@ void DynamicalCore::compute_diagnostic_fields() const {
     scheme->calculate_R_xi(state_, grid_, params_, R_xi_field);
     scheme->calculate_R_eta(state_, grid_, params_, R_eta_field);
     scheme->calculate_R_zeta(state_, grid_, params_, R_zeta_field);
+}
+
+void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
+    auto scheme = std::make_unique<Takacs>(grid_, config_);
+    auto& zeta_field = state.get_field<3>("zeta");
+    auto zeta_data = zeta_field.get_mutable_device_data();
+
+    const int nz = grid_.get_local_total_points_z();
+    const int ny = grid_.get_local_total_points_y();
+    const int nx = grid_.get_local_total_points_x();
+    const int h = grid_.get_halo_cells();
+    
+    const double dz = grid_.get_dz();
+
+    Core::Field<3> rhs_field("rhs_zeta_diag", {nz, ny, nx});
+    scheme->calculate_vorticity_divergence(state, grid_, params_, rhs_field);
+    auto rhs_data = rhs_field.get_device_data();
+    const auto& flex_height_coef_up = params_.flex_height_coef_up.get_device_data();
+
+    Kokkos::parallel_for("zeta_downward_integration",
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h, h}, {ny-h, nx-h}),
+        KOKKOS_LAMBDA(const int j, const int i) {
+            // The for-loop inside is to prevent racing condition because lower layers depend on upper layers.
+            for (int k = nz-h-2; k >= h; --k) {
+                zeta_data(k,j,i) = zeta_data(k+1,j,i) + rhs_data(k,j,i) * -dz / flex_height_coef_up(k);
+            }
+            // WARNING: NK3 has a upward integration in original VVM code.
+            zeta_data(nz-h,j,i) = zeta_data(nz-h-1,j,i) + rhs_data(nz-h-1,j,i) * dz / flex_height_coef_up(nz-h-1);
+        }
+    );
+
+    // FIXME: vertical boundary process
 }
 
 } // namespace Dynamics

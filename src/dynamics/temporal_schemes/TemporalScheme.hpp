@@ -15,6 +15,12 @@ class TemporalScheme {
 public:
     virtual ~TemporalScheme() = default;
 
+    virtual void calculate_tendency(
+        Core::State& state,
+        const Core::Grid& grid,
+        const Core::Parameters& params
+    ) const = 0;
+
     virtual void step(
         Core::State& state,
         const Core::Grid& grid,
