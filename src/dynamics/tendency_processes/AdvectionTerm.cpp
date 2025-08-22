@@ -145,11 +145,19 @@ void AdvectionTerm::compute_tendency(
         haloexchanger.exchange_halos(u_mean_field);
         haloexchanger.exchange_halos(v_mean_field);
         haloexchanger.exchange_halos(w_mean_field);
-        bc_manager_zerograd.apply_z_bcs_to_field(u_mean_field);
-        bc_manager_zerograd.apply_z_bcs_to_field(v_mean_field);
-        bc_manager_zero.apply_z_bcs_to_field(w_mean_field);
         // bc_manager_periodic.apply_z_bcs_to_field(w_mean_field);
     }
+    else {
+        haloexchanger.exchange_halos_top_slice(u_mean_field);
+        haloexchanger.exchange_halos_slice(u_mean_field, nz-h-2);
+        haloexchanger.exchange_halos_top_slice(v_mean_field);
+        haloexchanger.exchange_halos_slice(v_mean_field, nz-h-2);
+        haloexchanger.exchange_halos_top_slice(w_mean_field);
+        haloexchanger.exchange_halos_slice(w_mean_field, nz-h-2);
+    }
+    bc_manager_zerograd.apply_z_bcs_to_field(u_mean_field);
+    bc_manager_zerograd.apply_z_bcs_to_field(v_mean_field);
+    bc_manager_zero.apply_z_bcs_to_field(w_mean_field);
 
     if (variable_name_ == "xi" || variable_name_ == "eta" || variable_name_ == "zeta") {
         scheme_->calculate_flux_convergence_x(advected_field, u_mean_field, grid, params, out_tendency, variable_name_);

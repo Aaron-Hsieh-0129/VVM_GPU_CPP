@@ -61,12 +61,22 @@ int main(int argc, char* argv[]) {
         const int h = grid.get_halo_cells();
         auto& htflx_sfc = state.get_field<2>("htflx_sfc");
         auto htflx_sfc_mutable = htflx_sfc.get_mutable_device_data();
+        auto& zeta_field = state.get_field<3>("zeta");
+        auto& zeta = state.get_field<3>("zeta").get_mutable_device_data();
+
         Kokkos::parallel_for("InitHeatFluxField",
             Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, nx}),
             KOKKOS_LAMBDA(const int j, const int i) {
                 htflx_sfc_mutable(j, i) = static_cast<double>(100*rank + 10*j + i);
+                // zeta(nz-h-1,j,i) = static_cast<double>(100*rank + 10*j + i);
             }
         );
+        // if (rank == 0) zeta_field.print_slice_z_at_k(grid, 0, nz-h-1);
+        // Kokkos::fence();
+        // halo_exchanger.exchange_halos_top_slice(state.get_field<3>("zeta"));
+        // if (rank == 0) zeta_field.print_slice_z_at_k(grid, 0, nz-h-1);
+        // Kokkos::fence();
+        // exit(1);
 
         VVM::Core::Initializer init(config, grid, parameters, state);
         init.initialize_state(state);
@@ -82,12 +92,13 @@ int main(int argc, char* argv[]) {
 
 
         if (rank == 0) state.get_field<1>("rhobar_up").print_profile(grid, 0, 0, 0);
+        if (rank == 0) parameters.z_mid.print_profile(grid, 0, 0, 0);
+        if (rank == 0) parameters.z_up.print_profile(grid, 0, 0, 0);
 
         auto& th = state.get_field<3>("th").get_mutable_device_data();
         auto& thbar = state.get_field<1>("thbar").get_device_data();
         auto& xi = state.get_field<3>("xi").get_mutable_device_data();
         auto& eta = state.get_field<3>("eta").get_mutable_device_data();
-        auto& zeta = state.get_field<3>("zeta").get_mutable_device_data();
         auto& u = state.get_field<3>("u").get_mutable_device_data();
         auto& v = state.get_field<3>("v").get_mutable_device_data();
         auto& w = state.get_field<3>("w").get_mutable_device_data();
@@ -111,15 +122,24 @@ int main(int argc, char* argv[]) {
                 th(k,j,i) = 300;
                 // if (k == 3 && j == ny/2 && i == nx/2 && (rank == 0 || rank == 1)) th(k,j,i) += 50;
 
-                if ((k == h+16 || k == nz-h-1) && (32/2-3-1 <= global_j && 32/2+3-1 >= global_j) && (32/2-3-1 <= global_i && 32/2+3-1 >= global_i)) {
-                    xi(k,j,i) = 50;
-                    eta(k,j,i) = 50;
-                    th(k,j,i) += 50;
+                if ((32/2-3-1 <= global_j && 32/2+3-1 >= global_j) && (32/2-3-1 <= global_i && 32/2+3-1 >= global_i)) {
+                    if (k == h+15) {
+                        xi(k,j,i) = 50;
+                        eta(k,j,i) = 50;
+                        th(k,j,i) += 50;
+                    }
+                    else if (k == nz-h-1) {
+                        zeta(k,j,i) = 50;
+                    }
+                    else if (k == nz-h-2) {
+                        eta(k,j,i) = 50;
+                    }
                 }
                 // u(k,j,i) = 32./2. - global_i - 1;
                 // v(k,j,i) = 32./2. - global_j - 1;
                 // u(k,j,i) = 32./2. - global_j - 1;
-                v(k,j,i) = 32./2. - global_i - 1;
+                u(k,j,i) = 32./2. - (global_i+global_j)/2. - 1;
+                v(k,j,i) = 32./2. - (global_i+global_j)/2. - 1;
                 
 
                 // if (k == 0 || k == nz-1 || k == nz-2) w(k,j,i) = 0;
@@ -131,6 +151,7 @@ int main(int argc, char* argv[]) {
         halo_exchanger.exchange_halos(state.get_field<3>("th"));
         halo_exchanger.exchange_halos(state.get_field<3>("xi"));
         halo_exchanger.exchange_halos(state.get_field<3>("eta"));
+        halo_exchanger.exchange_halos(state.get_field<3>("zeta"));
         halo_exchanger.exchange_halos(state.get_field<3>("u"));
         halo_exchanger.exchange_halos(state.get_field<3>("v"));
 
