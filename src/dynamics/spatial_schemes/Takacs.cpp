@@ -54,7 +54,8 @@ void Takacs::calculate_flux_convergence_x(
         }
     );
 
-    halo_exchanger_.exchange_halos(flux_field);
+    if (var_name == "zeta") halo_exchanger_.exchange_halos_top_slice(flux_field);
+    else halo_exchanger_.exchange_halos(flux_field);
 
     auto rdx_view = params.rdx;
     Kokkos::parallel_for("flux_convergence_tendency", 
@@ -112,7 +113,8 @@ void Takacs::calculate_flux_convergence_y(
         }
     );
 
-    halo_exchanger_.exchange_halos(flux_field);
+    if (var_name == "zeta") halo_exchanger_.exchange_halos_top_slice(flux_field);
+    else halo_exchanger_.exchange_halos(flux_field);
 
     auto rdy_view = params.rdy;
     Kokkos::parallel_for("flux_convergence_tendency", 
@@ -203,7 +205,7 @@ void Takacs::calculate_flux_convergence_z(
     }
 
     // No need of x-y halo exchanges because this is z direction tendency
-    flux_bc_manager_.apply_z_bcs_to_field(flux_field);
+    if (var_name != "zeta") flux_bc_manager_.apply_z_bcs_to_field(flux_field);
 
     // DEBUG print
     // Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {ny,nx}),

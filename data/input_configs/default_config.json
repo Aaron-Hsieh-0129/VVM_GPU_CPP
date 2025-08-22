@@ -2,7 +2,7 @@
     "grid": {
         "nx": 32,
         "ny": 32,
-        "nz": 34,
+        "nz": 33,
         "n_halo_cells": 2,
         "dx": 100.0,
         "dy": 100.0,
@@ -108,6 +108,12 @@
                 "temporal_scheme": "AdamsBashforth2",
                 "tendency_terms": {
                     "advection": {
+                        "spatial_scheme": "Takacs"
+                    },
+                    "stretching": {
+                        "spatial_scheme": "Takacs"
+                    },
+                    "twisting": {
                         "spatial_scheme": "Takacs"
                     }
                 }

@@ -35,6 +35,13 @@ public:
     template<size_t Dim>
     void exchange_halo_y(Field<Dim>& field) const;
 
+    void exchange_halos_slice(Field<3>& field, int k_layer) const;
+    void exchange_halos_top_slice(Field<3>& field) const {
+        const int nz = grid_ref_.get_local_total_points_z();
+        const int h = grid_ref_.get_halo_cells();
+        exchange_halos_slice(field, nz - h - 1);
+    }
+
 private:
     const Grid& grid_ref_;
     MPI_Comm cart_comm_;
@@ -254,6 +261,88 @@ void HaloExchanger::exchange_halo_y(Field<Dim>& field) const {
     }
     Kokkos::fence();
 }
+
+inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) const {
+    const int h = grid_ref_.get_halo_cells();
+    if (h == 0) return;
+
+    auto data = field.get_mutable_device_data();
+    const int ny_phys = grid_ref_.get_local_physical_points_y();
+    const int nx_phys = grid_ref_.get_local_physical_points_x();
+    const int nz = data.extent(0);
+    const int ny = data.extent(1);
+    const int nx = data.extent(2);
+
+    // --- Y-direction exchange for the top slice ---
+    {
+        size_t count = static_cast<size_t>(h) * nx;
+        if (count > 0) {
+            Kokkos::View<double*> send_b("send_bottom_buf_top", count), recv_b("recv_bottom_buf_top", count);
+            Kokkos::View<double*> send_t("send_top_buf_top", count), recv_t("recv_top_buf_top", count);
+
+            Kokkos::parallel_for("pack_y_top_slice", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {h, nx}),
+                KOKKOS_LAMBDA(int j_h, int i) {
+                    const size_t idx = static_cast<size_t>(j_h) * nx + i;
+                    send_b(idx) = data(k_layer, h + j_h, i);
+                    send_t(idx) = data(k_layer, h + ny_phys - h + j_h, i);
+            });
+            Kokkos::fence();
+
+            MPI_Sendrecv(send_t.data(), count, MPI_DOUBLE, neighbor_top_, static_cast<int>(HaloExchangeTags::SEND_TO_TOP),
+                         recv_b.data(), count, MPI_DOUBLE, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SEND_TO_TOP),
+                         cart_comm_, MPI_STATUS_IGNORE);
+
+            MPI_Sendrecv(send_b.data(), count, MPI_DOUBLE, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM),
+                         recv_t.data(), count, MPI_DOUBLE, neighbor_top_, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM),
+                         cart_comm_, MPI_STATUS_IGNORE);
+
+            const int neighbor_bottom = neighbor_bottom_;
+            const int neighbor_top = neighbor_top_;
+            Kokkos::parallel_for("unpack_y_top_slice", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {h, nx}),
+                KOKKOS_LAMBDA(int j_h, int i) {
+                    const size_t idx = static_cast<size_t>(j_h) * nx + i;
+                    if (neighbor_bottom != MPI_PROC_NULL) data(k_layer, j_h, i) = recv_b(idx);
+                    if (neighbor_top != MPI_PROC_NULL) data(k_layer, h + ny_phys + j_h, i) = recv_t(idx);
+            });
+            Kokkos::fence();
+        }
+    }
+
+    // --- X-direction exchange for the top slice ---
+    {
+        size_t count = static_cast<size_t>(h) * ny;
+        if (count > 0) {
+            Kokkos::View<double*> send_l("send_left_buf_top", count), recv_l("recv_left_buf_top", count);
+            Kokkos::View<double*> send_r("send_right_buf_top", count), recv_r("recv_right_buf_top", count);
+
+            Kokkos::parallel_for("pack_x_top_slice", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, h}),
+                KOKKOS_LAMBDA(int j, int i_h) {
+                    const size_t idx = static_cast<size_t>(j) * h + i_h;
+                    send_l(idx) = data(k_layer, j, h + i_h);
+                    send_r(idx) = data(k_layer, j, h + nx_phys - h + i_h);
+            });
+            Kokkos::fence();
+
+            MPI_Sendrecv(send_l.data(), count, MPI_DOUBLE, neighbor_left_, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT),
+                         recv_r.data(), count, MPI_DOUBLE, neighbor_right_, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT),
+                         cart_comm_, MPI_STATUS_IGNORE);
+            MPI_Sendrecv(send_r.data(), count, MPI_DOUBLE, neighbor_right_, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT),
+                         recv_l.data(), count, MPI_DOUBLE, neighbor_left_, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT),
+                         cart_comm_, MPI_STATUS_IGNORE);
+
+            const int neighbor_left = neighbor_left_;
+            const int neighbor_right = neighbor_right_;
+            Kokkos::parallel_for("unpack_x_top_slice", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, h}),
+                KOKKOS_LAMBDA(int j, int i_h) {
+                    const size_t idx = static_cast<size_t>(j) * h + i_h;
+                    if (neighbor_left != MPI_PROC_NULL) data(k_layer, j, i_h) = recv_l(idx);
+                    if (neighbor_right != MPI_PROC_NULL) data(k_layer, j, h + nx_phys + i_h) = recv_r(idx);
+            });
+            Kokkos::fence();
+        }
+    }
+}
+
 
 } // namespace Core
 } // namespace VVM

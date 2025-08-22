@@ -120,11 +120,15 @@ void DynamicalCore::step(Core::State& state, double dt) {
         variable_schemes_.at(var_name)->step(state, grid_, params_, dt);
 
         VVM::Core::BoundaryConditionManager bc_manager(grid_, config_, var_name);
-        halo_exchanger.exchange_halos(state.get_field<3>(var_name));
+        if (var_name == "zeta") halo_exchanger.exchange_halos_top_slice(state.get_field<3>(var_name));
+        else halo_exchanger.exchange_halos(state.get_field<3>(var_name));
         bc_manager.apply_z_bcs_to_field(state.get_field<3>(var_name));
     }
 
-    if (zeta_flag) compute_zeta_vertical_structure(state);
+    if (zeta_flag) {
+        compute_zeta_vertical_structure(state);
+        halo_exchanger.exchange_halos_top_slice(state.get_field<3>("zeta"));
+    }
 }
 
 void DynamicalCore::compute_diagnostic_fields() const {
@@ -167,6 +171,8 @@ void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
             zeta_data(nz-h,j,i) = zeta_data(nz-h-1,j,i) + rhs_data(nz-h-1,j,i) * dz / flex_height_coef_up(nz-h-1);
         }
     );
+    Core::HaloExchanger halo_exchanger(grid_);
+    halo_exchanger.exchange_halos(zeta_field);
 
     // FIXME: vertical boundary process
 }

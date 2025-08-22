@@ -36,8 +36,6 @@ void Initializer::initialize_state(State& state) const {
 }
 
 void Initializer::initialize_grid() const {
-    VVM::Core::BoundaryConditionManager bc_manager(grid_);
-
     double DOMAIN = 15000.;
     double dz = config_.get_value<double>("grid.dz");
     double dz1 = config_.get_value<double>("grid.dz1");
@@ -54,18 +52,14 @@ void Initializer::initialize_grid() const {
 
     Kokkos::parallel_for("Init_Z_flexZCoef", Kokkos::RangePolicy<>(h-1, nz),
         KOKKOS_LAMBDA(const int k) {
-            z_mid_mutable(k) = (k-h-0.5) * dz;
-            z_up_mutable(k) = (k-h) * dz;
+            z_mid_mutable(k) = (k-h+0.5) * dz;
+            z_up_mutable(k) = (k-h+1) * dz;
             flex_height_coef_mid_mutable(k) = 1. / (CZ1 + 2 * CZ2 * z_mid_mutable(k));
             flex_height_coef_up_mutable(k) = 1. / (CZ1 + 2 * CZ2 * z_up_mutable(k));
             z_mid_mutable(k) = z_mid_mutable(k) * (CZ1 + CZ2 * z_mid_mutable(k));
             z_up_mutable(k) = z_up_mutable(k) * (CZ1 + CZ2 * z_up_mutable(k));
         }
     );
-    Kokkos::parallel_for("SetCustomFlexHeightBC", 1, KOKKOS_LAMBDA(const int) {
-            // z_mid_mutable(h) = 0.;
-    });
-
     
     auto dz_mid_mutable = parameters_.dz_mid.get_mutable_device_data();
     auto dz_up_mutable = parameters_.dz_up.get_mutable_device_data();
@@ -75,12 +69,6 @@ void Initializer::initialize_grid() const {
             dz_up_mutable(k) = z_mid_mutable(k+1) - z_mid_mutable(k);
         }
     );
-    // bc_manager.apply_z_bcs_to_field(parameters_.z_mid);
-    // bc_manager.apply_z_bcs_to_field(parameters_.z_up);
-    // bc_manager.apply_z_bcs_to_field(parameters_.flex_height_coef_mid);
-    // bc_manager.apply_z_bcs_to_field(parameters_.flex_height_coef_up);
-    // bc_manager.apply_z_bcs_to_field(parameters_.dz_mid);
-    // bc_manager.apply_z_bcs_to_field(parameters_.dz_up);
 
     auto fact1_xi_eta_mutable = parameters_.fact1_xi_eta.get_mutable_device_data();
     auto fact2_xi_eta_mutable = parameters_.fact2_xi_eta.get_mutable_device_data();
@@ -91,27 +79,25 @@ void Initializer::initialize_grid() const {
         }
     );
 
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    if (rank == 0) parameters_.z_mid.print_profile(grid_, 0, 3, 3);
-    if (rank == 0) parameters_.z_up.print_profile(grid_, 0, 3, 3);
-    if (rank == 0) parameters_.flex_height_coef_mid.print_profile(grid_, 0, 3, 3);
-    if (rank == 0) parameters_.flex_height_coef_up.print_profile(grid_, 0, 3, 3);
-    if (rank == 0) parameters_.fact1_xi_eta.print_profile(grid_, 0, 3, 3);
-    if (rank == 0) parameters_.fact2_xi_eta.print_profile(grid_, 0, 3, 3);
+    // DEBUG output
+    // int rank;
+    // MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    // if (rank == 0) parameters_.z_mid.print_profile(grid_, 0, 3, 3);
+    // if (rank == 0) parameters_.z_up.print_profile(grid_, 0, 3, 3);
+    // if (rank == 0) parameters_.flex_height_coef_mid.print_profile(grid_, 0, 3, 3);
+    // if (rank == 0) parameters_.flex_height_coef_up.print_profile(grid_, 0, 3, 3);
+    // if (rank == 0) parameters_.fact1_xi_eta.print_profile(grid_, 0, 3, 3);
+    // if (rank == 0) parameters_.fact2_xi_eta.print_profile(grid_, 0, 3, 3);
 
-    auto fact1_data = parameters_.fact1_xi_eta.get_host_data();
-    auto fact2_data = parameters_.fact2_xi_eta.get_host_data();
-
-    if (rank == 0) {
-        for (int k = 0; k < grid_.get_local_total_points_z(); k++) {
-            std::cout << fact1_data(k) + fact2_data(k) << " ";
-        }
-    }
-    std::cout << std::endl;
-
-    // FIXME: Should debug for factor top and bottom
-
+    // auto fact1_data = parameters_.fact1_xi_eta.get_host_data();
+    // auto fact2_data = parameters_.fact2_xi_eta.get_host_data();
+    //
+    // if (rank == 0) {
+    //     for (int k = 0; k < grid_.get_local_total_points_z(); k++) {
+    //         std::cout << fact1_data(k) + fact2_data(k) << " ";
+    //     }
+    // }
+    // std::cout << std::endl;
     return;
 }
 
