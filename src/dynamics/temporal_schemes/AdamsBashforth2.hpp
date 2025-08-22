@@ -11,7 +11,10 @@ namespace Dynamics {
 
 class AdamsBashforth2 : public TemporalScheme {
 public:
-    explicit AdamsBashforth2(std::string var_name, std::vector<std::unique_ptr<TendencyTerm>> terms);
+    explicit AdamsBashforth2(std::string var_name, 
+            std::vector<std::unique_ptr<TendencyTerm>> ab2_terms,
+            std::vector<std::unique_ptr<TendencyTerm>> fe_terms
+    );
     ~AdamsBashforth2() override;
 
     void calculate_tendency(
@@ -36,7 +39,8 @@ public:
 
 private:
     std::string variable_name_;
-    std::vector<std::unique_ptr<TendencyTerm>> tendency_terms_;
+    std::vector<std::unique_ptr<TendencyTerm>> ab2_tendency_terms_;
+    std::vector<std::unique_ptr<TendencyTerm>> fe_tendency_terms_;  // Forward Euler
     mutable size_t time_step_count_ = 0;
 };
 

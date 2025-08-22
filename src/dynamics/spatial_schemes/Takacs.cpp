@@ -633,5 +633,59 @@ void Takacs::calculate_vorticity_divergence(
     );
 }
 
+void Takacs::calculate_buoyancy_tendency_x(
+    const Core::State& state, const Core::Grid& grid,
+    const Core::Parameters& params, Core::Field<3>& out_tendency) const {
+    
+    const auto& thbar = state.get_field<1>("thbar").get_device_data();
+    const auto& th = state.get_field<3>("th").get_device_data();
+    auto tendency = out_tendency.get_mutable_device_data();
+    auto rdy = params.rdy;
+    auto gravity = params.gravity;
+
+    const int nz = grid.get_local_total_points_z();
+    const int ny = grid.get_local_total_points_y();
+    const int nx = grid.get_local_total_points_x();
+    const int h = grid.get_halo_cells();
+
+    Kokkos::parallel_for("buoyancy_tendency_x",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h, ny-h, nx-h}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            const double dB_dy = (th(k  ,j+1,i)-th(k  ,j,i)) / thbar(k) +
+                                 (th(k+1,j+1,i)-th(k+1,j,i)) / thbar(k+1);
+
+            tendency(k, j, i) += gravity() * 0.5 * dB_dy * rdy();
+        }
+    );
+}
+
+void Takacs::calculate_buoyancy_tendency_y(
+    const Core::State& state, const Core::Grid& grid,
+    const Core::Parameters& params, Core::Field<3>& out_tendency) const {
+    
+    const auto& thbar = state.get_field<1>("thbar").get_device_data();
+    const auto& th = state.get_field<3>("th").get_device_data();
+    auto tendency = out_tendency.get_mutable_device_data();
+    auto rdx = params.rdx;
+    auto gravity = params.gravity;
+
+    const int nz = grid.get_local_total_points_z();
+    const int ny = grid.get_local_total_points_y();
+    const int nx = grid.get_local_total_points_x();
+    const int h = grid.get_halo_cells();
+
+    Kokkos::parallel_for("buoyancy_tendency_x",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h, ny-h, nx-h}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            const double dB_dx = (th(k  ,j,i+1)-th(k  ,j,i)) / thbar(k) +
+                                 (th(k+1,j,i+1)-th(k+1,j,i)) / thbar(k+1);
+
+            // WARNING: dB_dy has a negative sign in original VVM because the definition of eta in that VVM is negative from this one.
+            // FIXME: Fix the comparison negative sign
+            tendency(k, j, i) += gravity() * 0.5 * dB_dx * rdx();
+        }
+    );
+}
+
 } // namespace Dynamics
 } // namespace VVM

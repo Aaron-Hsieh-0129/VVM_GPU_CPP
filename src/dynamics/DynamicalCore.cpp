@@ -3,6 +3,7 @@
 #include "tendency_processes/AdvectionTerm.hpp"
 #include "tendency_processes/StretchingTerm.hpp"
 #include "tendency_processes/TwistingTerm.hpp"
+#include "tendency_processes/BuoyancyTerm.hpp"
 #include "spatial_schemes/Takacs.hpp"
 #include "core/HaloExchanger.hpp"
 #include <stdexcept>
@@ -16,49 +17,37 @@ std::unique_ptr<TemporalScheme> DynamicalCore::create_temporal_scheme(
     const nlohmann::json& var_config) const {
     
     std::string scheme_name = var_config.at("temporal_scheme");
-    std::vector<std::unique_ptr<TendencyTerm>> terms;
+    std::vector<std::unique_ptr<TendencyTerm>> ab2_terms;
+    std::vector<std::unique_ptr<TendencyTerm>> fe_terms;
 
     if (scheme_name == "AdamsBashforth2") {
-        // Advection for scalar, xi, eta, zeta
-        if (var_config.contains("tendency_terms") && var_config.at("tendency_terms").contains("advection")) {
-            std::string advection_scheme_name = var_config.at("tendency_terms").at("advection").at("spatial_scheme");
+        for (auto& [term_name, term_conf] : var_config.at("tendency_terms").items()) {
+            std::string spatial_scheme_name = term_conf.at("spatial_scheme");
+            std::string time_scheme_name = term_conf.value("time_scheme", "AdamsBashforth2");
+
             std::unique_ptr<SpatialScheme> spatial_scheme;
-            if (advection_scheme_name == "Takacs") {
-                spatial_scheme = std::make_unique<Takacs>(grid_, config_);
+            if (spatial_scheme_name == "Takacs") spatial_scheme = std::make_unique<Takacs>(grid_, config_);
+            else throw std::runtime_error("Unknown spatial scheme: " + spatial_scheme_name);
+
+            if (term_name == "advection") {
+                if (time_scheme_name == "AdamsBashforth2") ab2_terms.push_back(std::make_unique<AdvectionTerm>(std::move(spatial_scheme), var_name));
+                else if (time_scheme_name == "ForwardEuler") fe_terms.push_back(std::make_unique<AdvectionTerm>(std::move(spatial_scheme), var_name));
             } 
-            else {
-                throw std::runtime_error("Unknown spatial scheme: " + advection_scheme_name);
+            else if (term_name == "stretching") {
+                if (time_scheme_name == "AdamsBashforth2") ab2_terms.push_back(std::make_unique<StretchingTerm>(std::move(spatial_scheme), var_name));
+                else if (time_scheme_name == "ForwardEuler") fe_terms.push_back(std::make_unique<StretchingTerm>(std::move(spatial_scheme), var_name));    
+            } 
+            else if (term_name == "twisting") {
+                if (time_scheme_name == "AdamsBashforth2") ab2_terms.push_back(std::make_unique<TwistingTerm>(std::move(spatial_scheme), var_name));
+                else if (time_scheme_name == "ForwardEuler") fe_terms.push_back(std::make_unique<TwistingTerm>(std::move(spatial_scheme), var_name));
+            } 
+            else if (term_name == "buoyancy") {
+                if (time_scheme_name == "AdamsBashforth2") ab2_terms.push_back(std::make_unique<BuoyancyTerm>(std::move(spatial_scheme), var_name));
+                else if (time_scheme_name == "ForwardEuler") fe_terms.push_back(std::make_unique<BuoyancyTerm>(std::move(spatial_scheme), var_name));
             }
-            terms.push_back(std::make_unique<AdvectionTerm>(std::move(spatial_scheme), var_name));
+            std::cout << var_name << ": " << term_name << " " << time_scheme_name << std::endl;
         }
-        // Stretching for xi, eta, zeta
-        if (var_config.contains("tendency_terms") && var_config.at("tendency_terms").contains("stretching")) {
-            std::string stretching_scheme_name = var_config.at("tendency_terms").at("stretching").at("spatial_scheme");
-            std::unique_ptr<SpatialScheme> spatial_scheme;
-            if (stretching_scheme_name == "Takacs") {
-                spatial_scheme = std::make_unique<Takacs>(grid_, config_);
-            }
-            else {
-                throw std::runtime_error("Unknown spatial scheme for stretching: " + stretching_scheme_name);
-            }
-            terms.push_back(std::make_unique<StretchingTerm>(std::move(spatial_scheme), var_name));
-        }
-
-        // Twisting for xi, eta, zeta
-        if (var_config.contains("tendency_terms") && var_config.at("tendency_terms").contains("twisting")) {
-            std::string twisting_scheme_name = var_config.at("tendency_terms").at("twisting").at("spatial_scheme");
-            std::unique_ptr<SpatialScheme> spatial_scheme;
-            if (twisting_scheme_name == "Takacs") {
-                spatial_scheme = std::make_unique<Takacs>(grid_, config_);
-            }
-            else {
-                throw std::runtime_error("Unknown spatial scheme for twisting: " + twisting_scheme_name);
-            }
-            terms.push_back(std::make_unique<TwistingTerm>(std::move(spatial_scheme), var_name));
-        }
-
-
-        return std::make_unique<AdamsBashforth2>(var_name, std::move(terms));
+        return std::make_unique<AdamsBashforth2>(var_name, std::move(ab2_terms), std::move(fe_terms));
     }
     
     throw std::runtime_error("Unknown temporal scheme: " + scheme_name);
@@ -127,7 +116,6 @@ void DynamicalCore::step(Core::State& state, double dt) {
 
     if (zeta_flag) {
         compute_zeta_vertical_structure(state);
-        halo_exchanger.exchange_halos_top_slice(state.get_field<3>("zeta"));
     }
 }
 
@@ -173,8 +161,8 @@ void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
     );
     Core::HaloExchanger halo_exchanger(grid_);
     halo_exchanger.exchange_halos(zeta_field);
-
-    // FIXME: vertical boundary process
+    VVM::Core::BoundaryConditionManager bc_manager(grid_, config_, "zeta");
+    bc_manager.apply_z_bcs_to_field(zeta_field);
 }
 
 } // namespace Dynamics

@@ -56,6 +56,13 @@ public:
     void calculate_vorticity_divergence(
         const Core::State& state, const Core::Grid& grid,
         const Core::Parameters& params, Core::Field<3>& out_field) const override;
+
+    void calculate_buoyancy_tendency_x(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_tendency) const override;
+    void calculate_buoyancy_tendency_y(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_tendency) const override;
 private:
     Core::HaloExchanger halo_exchanger_;
     Core::BoundaryConditionManager flux_bc_manager_;
