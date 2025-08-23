@@ -39,11 +39,11 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
         if (var_conf.contains("tendency_terms")) {
             for (auto& [term_name, term_conf] : var_conf.at("tendency_terms").items()) {
                 std::string spatial_scheme_name = term_conf.at("spatial_scheme");
-                std::string time_scheme_name = term_conf.value("scheme", "AdamsBashforth2");
+                std::string time_scheme_name = term_conf.value("temporal_scheme", "AdamsBashforth2");
 
                 if (rank == 0) {
                     std::cout << "    - Tendency term: " << term_name 
-                              << " | Time Scheme: " << time_scheme_name 
+                              << " | Temporal Scheme: " << time_scheme_name 
                               << " | Spatial Scheme: " << spatial_scheme_name << std::endl;
                 }
 

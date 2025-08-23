@@ -70,30 +70,30 @@
         "prognostic_variables": {
             "th": {
                 "tendency_terms": {
-                    "advection": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
                 }
             },
             "xi": {
                 "tendency_terms": {
-                    "advection": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "stretching": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "twisting": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "buoyancy": { "scheme": "ForwardEuler", "spatial_scheme": "Takacs" } 
+                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
+                    "stretching": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
+                    "twisting": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
+                    "buoyancy": { "temporal_scheme": "ForwardEuler", "spatial_scheme": "Takacs" } 
                 }
             },
             "eta": {
                 "tendency_terms": {
-                    "advection": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "stretching": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "twisting": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "buoyancy": { "scheme": "ForwardEuler", "spatial_scheme": "Takacs" } 
+                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
+                    "stretching": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
+                    "twisting": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
+                    "buoyancy": { "temporal_scheme": "ForwardEuler", "spatial_scheme": "Takacs" } 
                 }
             },
             "zeta": {
                 "tendency_terms": {
-                    "advection": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "stretching": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "twisting": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
+                    "stretching": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
+                    "twisting": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
                 }
             }
         },
