@@ -69,22 +69,53 @@
     "dynamics": {
         "prognostic_variables": {
             "th": {
-                "temporal_scheme": "AdamsBashforth2",
                 "tendency_terms": {
-                    "advection": {
-                        "spatial_scheme": "Takacs"
-                    }
+                    "advection": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                }
+            },
+            "xi": {
+                "tendency_terms": {
+                    "advection": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
+                    "stretching": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
+                    "twisting": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
+                    "buoyancy": { "scheme": "ForwardEuler", "spatial_scheme": "Takacs" } 
                 }
             },
             "eta": {
-                "temporal_scheme": "AdamsBashforth2",
                 "tendency_terms": {
-                    "buoyancy": { 
-                        "spatial_scheme": "Takacs",
-                        "time_scheme": "ForwardEuler" 
-                    } 
+                    "advection": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
+                    "stretching": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
+                    "twisting": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
+                    "buoyancy": { "scheme": "ForwardEuler", "spatial_scheme": "Takacs" } 
+                }
+            },
+            "zeta": {
+                "tendency_terms": {
+                    "advection": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
+                    "stretching": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
+                    "twisting": { "scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
                 }
             }
+        },
+        "time_integration": {
+            "procedure": [
+                {
+                    "step": 1,
+                    "description": "Calculate theta tendency and update theta to t+1",
+                    "calculate_tendencies": ["th"],
+                    "update_states": ["th"]
+                },
+                {
+                    "step": 2,
+                    "description": "Calculate all other tendencies (including buoyancy using new theta)",
+                    "calculate_tendencies": ["xi", "eta", "zeta"]
+                },
+                {
+                    "step": 3,
+                    "description": "Update all other variables to t+1",
+                    "update_states": ["xi", "eta", "zeta"]
+                }
+            ]
         }
     }
 }

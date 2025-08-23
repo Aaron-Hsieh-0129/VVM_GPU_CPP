@@ -10,9 +10,17 @@
 #include "core/Parameters.hpp"
 #include "utils/ConfigurationManager.hpp"
 #include "temporal_schemes/TemporalScheme.hpp"
+#include "tendency_processes/TendencyCalculator.hpp"
 
 namespace VVM {
 namespace Dynamics {
+
+struct IntegrationStep {
+    int step;
+    std::string description;
+    std::vector<std::string> vars_to_calculate_tendency;
+    std::vector<std::string> vars_to_update;
+};
 
 class DynamicalCore {
 public:
@@ -32,12 +40,10 @@ private:
     const Core::Grid& grid_;
     const Core::Parameters& params_;
     
-    std::map<std::string, std::unique_ptr<TemporalScheme>> variable_schemes_;
-    std::vector<std::string> prognostic_variables_;
-
-    std::unique_ptr<TemporalScheme> create_temporal_scheme(
-        const std::string& var_name, 
-        const nlohmann::json& var_config) const;
+    std::map<std::string, std::unique_ptr<TendencyCalculator>> tendency_calculators_;
+    std::map<std::string, std::unique_ptr<TemporalScheme>> time_integrators_;
+    std::vector<IntegrationStep> integration_procedure_;
+    mutable size_t time_step_count_ = 0;
 };
 
 } // namespace Dynamics
