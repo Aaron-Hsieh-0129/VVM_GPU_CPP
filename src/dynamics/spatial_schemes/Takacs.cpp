@@ -674,7 +674,7 @@ void Takacs::calculate_buoyancy_tendency_y(
     const int nx = grid.get_local_total_points_x();
     const int h = grid.get_halo_cells();
 
-    Kokkos::parallel_for("buoyancy_tendency_x",
+    Kokkos::parallel_for("buoyancy_tendency_y",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             const double dB_dx = (th(k  ,j,i+1)-th(k  ,j,i)) / thbar(k) +
@@ -685,6 +685,9 @@ void Takacs::calculate_buoyancy_tendency_y(
             tendency(k, j, i) += gravity() * 0.5 * dB_dx * rdx();
         }
     );
+    // int rank;
+    // MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    // if (rank == 0) out_tendency.print_slice_z_at_k(grid, 0, h+15);
 }
 
 } // namespace Dynamics

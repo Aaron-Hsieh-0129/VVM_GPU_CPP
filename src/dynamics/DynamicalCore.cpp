@@ -1,5 +1,6 @@
 #include "DynamicalCore.hpp"
-#include "temporal_schemes/AdamsBashforth2.hpp"
+// #include "temporal_schemes/AdamsBashforth2.hpp"
+#include "temporal_schemes/TimeIntegrator.hpp"
 #include "tendency_processes/AdvectionTerm.hpp"
 #include "tendency_processes/StretchingTerm.hpp"
 #include "tendency_processes/TwistingTerm.hpp"
@@ -7,116 +8,150 @@
 #include "spatial_schemes/Takacs.hpp"
 #include "core/HaloExchanger.hpp"
 #include <stdexcept>
-#include <iostream> // for debugging output
+#include <iostream>
 
 namespace VVM {
 namespace Dynamics {
-
-std::unique_ptr<TemporalScheme> DynamicalCore::create_temporal_scheme(
-    const std::string& var_name, 
-    const nlohmann::json& var_config) const {
-    
-    std::string scheme_name = var_config.at("temporal_scheme");
-    std::vector<std::unique_ptr<TendencyTerm>> ab2_terms;
-    std::vector<std::unique_ptr<TendencyTerm>> fe_terms;
-
-    if (scheme_name == "AdamsBashforth2") {
-        for (auto& [term_name, term_conf] : var_config.at("tendency_terms").items()) {
-            std::string spatial_scheme_name = term_conf.at("spatial_scheme");
-            std::string time_scheme_name = term_conf.value("time_scheme", "AdamsBashforth2");
-
-            std::unique_ptr<SpatialScheme> spatial_scheme;
-            if (spatial_scheme_name == "Takacs") spatial_scheme = std::make_unique<Takacs>(grid_, config_);
-            else throw std::runtime_error("Unknown spatial scheme: " + spatial_scheme_name);
-
-            if (term_name == "advection") {
-                if (time_scheme_name == "AdamsBashforth2") ab2_terms.push_back(std::make_unique<AdvectionTerm>(std::move(spatial_scheme), var_name));
-                else if (time_scheme_name == "ForwardEuler") fe_terms.push_back(std::make_unique<AdvectionTerm>(std::move(spatial_scheme), var_name));
-            } 
-            else if (term_name == "stretching") {
-                if (time_scheme_name == "AdamsBashforth2") ab2_terms.push_back(std::make_unique<StretchingTerm>(std::move(spatial_scheme), var_name));
-                else if (time_scheme_name == "ForwardEuler") fe_terms.push_back(std::make_unique<StretchingTerm>(std::move(spatial_scheme), var_name));    
-            } 
-            else if (term_name == "twisting") {
-                if (time_scheme_name == "AdamsBashforth2") ab2_terms.push_back(std::make_unique<TwistingTerm>(std::move(spatial_scheme), var_name));
-                else if (time_scheme_name == "ForwardEuler") fe_terms.push_back(std::make_unique<TwistingTerm>(std::move(spatial_scheme), var_name));
-            } 
-            else if (term_name == "buoyancy") {
-                if (time_scheme_name == "AdamsBashforth2") ab2_terms.push_back(std::make_unique<BuoyancyTerm>(std::move(spatial_scheme), var_name));
-                else if (time_scheme_name == "ForwardEuler") fe_terms.push_back(std::make_unique<BuoyancyTerm>(std::move(spatial_scheme), var_name));
-            }
-            std::cout << var_name << ": " << term_name << " " << time_scheme_name << std::endl;
-        }
-        return std::make_unique<AdamsBashforth2>(var_name, std::move(ab2_terms), std::move(fe_terms));
-    }
-    
-    throw std::runtime_error("Unknown temporal scheme: " + scheme_name);
-}
-
 
 DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config, 
                              const Core::Grid& grid, 
                              const Core::Parameters& params,
                              Core::State& state)
-    : config_(config), state_(state), grid_(grid), params_(params) {
+    : config_(config), grid_(grid), params_(params), state_(state) {
+
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    if (rank == 0) {
+        std::cout << "\n--- Initializing Dynamical Core ---" << std::endl;
+    }
     
-    auto prognostic_config = config.get_value<nlohmann::json>("dynamics.prognostic_variables");
+    auto prognostic_config = config_.get_value<nlohmann::json>("dynamics.prognostic_variables");
     
     for (auto& [var_name, var_conf] : prognostic_config.items()) {
-        prognostic_variables_.push_back(var_name);
+        if (rank == 0) {
+            std::cout << "  * Loading prognostic variable: " << var_name << std::endl;
+        }
+        std::vector<std::unique_ptr<TendencyTerm>> ab2_terms;
+        std::vector<std::unique_ptr<TendencyTerm>> fe_terms;
+        bool has_ab2 = false;
+        bool has_fe = false;
+
+        if (var_conf.contains("tendency_terms")) {
+            for (auto& [term_name, term_conf] : var_conf.at("tendency_terms").items()) {
+                std::string spatial_scheme_name = term_conf.at("spatial_scheme");
+                std::string time_scheme_name = term_conf.value("scheme", "AdamsBashforth2");
+
+                if (rank == 0) {
+                    std::cout << "    - Tendency term: " << term_name 
+                              << " | Time Scheme: " << time_scheme_name 
+                              << " | Spatial Scheme: " << spatial_scheme_name << std::endl;
+                }
+
+                std::unique_ptr<SpatialScheme> spatial_scheme;
+                if (spatial_scheme_name == "Takacs") {
+                    spatial_scheme = std::make_unique<Takacs>(grid_, config_);
+                } 
+                else {
+                    throw std::runtime_error("Unknown spatial scheme: " + spatial_scheme_name);
+                }
+                
+                std::unique_ptr<TendencyTerm> term;
+                if (term_name == "advection") term = std::make_unique<AdvectionTerm>(std::move(spatial_scheme), var_name);
+                else if (term_name == "stretching") term = std::make_unique<StretchingTerm>(std::move(spatial_scheme), var_name);
+                else if (term_name == "twisting") term = std::make_unique<TwistingTerm>(std::move(spatial_scheme), var_name);
+                else if (term_name == "buoyancy") term = std::make_unique<BuoyancyTerm>(std::move(spatial_scheme), var_name);
+
+                if (time_scheme_name == "AdamsBashforth2") {
+                    ab2_terms.push_back(std::move(term));
+                    has_ab2 = true;
+                } 
+                else {
+                    fe_terms.push_back(std::move(term));
+                    has_fe = true;
+                }
+            }
+        }
         
-        // Create time integration instance
-        variable_schemes_[var_name] = create_temporal_scheme(var_name, var_conf);
+        tendency_calculators_[var_name] = std::make_unique<TendencyCalculator>(var_name, std::move(ab2_terms), std::move(fe_terms));
+        time_integrators_[var_name] = std::make_unique<TimeIntegrator>(var_name, has_ab2, has_fe);
         
         int nz = grid_.get_local_total_points_z();
         int ny = grid_.get_local_total_points_y();
         int nx = grid_.get_local_total_points_x();
 
-        // Create time integration shadow vairables in State (such as th_m)
-        auto required_suffixes = variable_schemes_[var_name]->get_required_state_suffixes();
-        for (const auto& suffix : required_suffixes) {
-            std::string shadow_field_name = var_name + suffix;
-            state_.add_field<3>(shadow_field_name, {nz, ny, nx});
-            std::cout << "DynamicalCore: Automatically declared state variable '" << shadow_field_name << "' for prognostic variable '" << var_name << "'." << std::endl;
+        if (has_ab2 || has_fe) {
+             state_.add_field<3>(var_name + "_m", {nz, ny, nx});
         }
+        if (has_ab2) {
+             state_.add_field<4>("d_" + var_name, {2, nz, ny, nx});
+        }
+        if (has_fe) {
+             state_.add_field<3>("fe_tendency_" + var_name, {nz, ny, nx});
+        }
+    }
 
-        // Create tendency 4D variables to State for AB2 scheme
-        if (var_conf.contains("temporal_scheme") && var_conf.at("temporal_scheme") == "AdamsBashforth2") {
-            std::string tendency_field_name = "d_" + var_name; 
-            state_.add_field<4>(tendency_field_name, {2, nz, ny, nx});
-            std::cout << "DynamicalCore: Automatically declared 4D state variable '" << tendency_field_name << "' for AdamsBashforth2 scheme of '" << var_name << "'." << std::endl;
+    auto integration_config = config_.get_value<nlohmann::json>("dynamics.time_integration.procedure");
+    for (const auto& step_conf : integration_config) {
+        IntegrationStep step;
+        step.step = step_conf.at("step");
+        step.description = step_conf.value("description", "");
+        if (step_conf.contains("calculate_tendencies")) {
+            step.vars_to_calculate_tendency = step_conf.at("calculate_tendencies").get<std::vector<std::string>>();
         }
+        if (step_conf.contains("update_states")) {
+            step.vars_to_update = step_conf.at("update_states").get<std::vector<std::string>>();
+        }
+        integration_procedure_.push_back(step);
+    }
+
+    if (rank == 0) {
+        std::cout << "\n--- Time Integration Procedure ---" << std::endl;
+        for (const auto& step : integration_procedure_) {
+            std::cout << "  Step " << step.step << ": " << step.description << std::endl;
+            
+            if (!step.vars_to_calculate_tendency.empty()) {
+                std::cout << "    Calculate Tendencies for: ";
+                for(const auto& v : step.vars_to_calculate_tendency) std::cout << v << " ";
+                std::cout << std::endl;
+            }
+            if (!step.vars_to_update.empty()) {
+                std::cout << "    Update States for: ";
+                for(const auto& v : step.vars_to_update) std::cout << v << " ";
+                std::cout << std::endl;
+            }
+        }
+        std::cout << "------------------------------------" << std::endl;
     }
 }
 
 DynamicalCore::~DynamicalCore() = default;
 
 void DynamicalCore::step(Core::State& state, double dt) {
-    // Before tendency calculation, get the diagnostic fields such as rotation
+    Core::HaloExchanger halo_exchanger(grid_);
     compute_diagnostic_fields();
 
-    // Calculate all tendencies
-    bool zeta_flag = false;
-    for (const auto& var_name : prognostic_variables_) {
-        variable_schemes_.at(var_name)->calculate_tendency(state, grid_, params_);
-        if (var_name == "zeta") zeta_flag = true;
-    }
+    for (const auto& procedure_step : integration_procedure_) {
+        for (const auto& var_name : procedure_step.vars_to_calculate_tendency) {
+            if (tendency_calculators_.count(var_name)) {
+                tendency_calculators_.at(var_name)->calculate_tendencies(state, grid_, params_, time_step_count_);
+            }
+        }
 
-    // Step to the next step
-    // FIXME: The boundary should correspond to the variables
-    Core::HaloExchanger halo_exchanger(grid_);
-    for (const auto& var_name : prognostic_variables_) {
-        variable_schemes_.at(var_name)->step(state, grid_, params_, dt);
+        for (const auto& var_name : procedure_step.vars_to_update) {
+            if (time_integrators_.count(var_name)) {
+                time_integrators_.at(var_name)->step(state, grid_, params_, dt);
+                
+                VVM::Core::BoundaryConditionManager bc_manager(grid_, config_, var_name);
+                if (var_name == "zeta") halo_exchanger.exchange_halos_top_slice(state.get_field<3>(var_name));
+                else halo_exchanger.exchange_halos(state.get_field<3>(var_name));
+                
+                bc_manager.apply_z_bcs_to_field(state.get_field<3>(var_name));
 
-        VVM::Core::BoundaryConditionManager bc_manager(grid_, config_, var_name);
-        if (var_name == "zeta") halo_exchanger.exchange_halos_top_slice(state.get_field<3>(var_name));
-        else halo_exchanger.exchange_halos(state.get_field<3>(var_name));
-        bc_manager.apply_z_bcs_to_field(state.get_field<3>(var_name));
+                if (var_name == "zeta") compute_zeta_vertical_structure(state);
+            }
+        }
     }
-
-    if (zeta_flag) {
-        compute_zeta_vertical_structure(state);
-    }
+    time_step_count_++;
 }
 
 void DynamicalCore::compute_diagnostic_fields() const {

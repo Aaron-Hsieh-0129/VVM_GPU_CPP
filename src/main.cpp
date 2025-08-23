@@ -135,13 +135,17 @@ int main(int argc, char* argv[]) {
                         eta(k,j,i) = 50;
                     }
                 }
-                // u(k,j,i) = 32./2. - global_i - 1;
-                // v(k,j,i) = 32./2. - global_j - 1;
-                // u(k,j,i) = 32./2. - global_j - 1;
-                u(k,j,i) = 32./2. - (global_i+global_j)/2. - 1;
-                v(k,j,i) = 32./2. - (global_i+global_j)/2. - 1;
-                
 
+                if (global_j >= 4 && global_j <= 32-1-3 && global_i >= 4 && global_i <= 32-1-3) {
+                    // u(k,j,i) = 32./2. - global_i - 1;
+                    // v(k,j,i) = 32./2. - global_j - 1;
+                    // u(k,j,i) = 32./2. - global_j - 1;
+                    u(k,j,i) = 32./2. - (global_i+global_j)/2. - 1;
+                    v(k,j,i) = 32./2. - (global_i+global_j)/2. - 1;
+
+                    u(k,j,i) /= 8;
+                    v(k,j,i) /= 8;
+                }
                 // if (k == 0 || k == nz-1 || k == nz-2) w(k,j,i) = 0;
         });
         // if (rank == 0) {
