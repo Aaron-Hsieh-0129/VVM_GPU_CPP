@@ -22,7 +22,14 @@ public:
 private:
     const Core::Grid& grid_;
     const Utils::ConfigurationManager& config_;
-    Core::HaloExchanger halo_exchanger_;
+    mutable Core::HaloExchanger halo_exchanger_;
+
+    mutable Core::Field<3> YTEM_field_;
+    mutable Core::Field<3> W3DNP1_field_;
+    mutable Core::Field<3> W3DN_field_;
+    mutable Core::Field<3> RHSV_field_;
+    mutable Core::Field<3> pm_temp_field_;
+    mutable Core::Field<3> pm_field_;
 
     void solve_poisson_2d(const Core::Field<3>& source, Core::Field<3>& result) const;
 };
