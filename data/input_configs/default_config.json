@@ -20,6 +20,10 @@
             "bottom": "ZERO_GRADIENT"
         },
         "flux": {
+            "top": "ZERO",
+            "bottom": "ZERO"
+        },
+        "th": {
             "top": "ZERO_GRADIENT",
             "bottom": "ZERO_GRADIENT"
         },
@@ -112,7 +116,7 @@
                 },
                 {
                     "step": 3,
-                    "description": "Update all other variables to t+1",
+                    "description": "Update all other prognostic variables to t+1",
                     "update_states": ["xi", "eta", "zeta"]
                 }
             ]

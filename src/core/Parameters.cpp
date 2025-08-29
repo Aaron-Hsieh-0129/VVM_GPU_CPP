@@ -17,6 +17,7 @@ Parameters::Parameters(const Utils::ConfigurationManager& config, const Grid& gr
     rdx2("rdx2"),
     rdy2("rdy2"),
     rdz2("rdz2"),
+    WRXMU("WRXMU"),
     z_mid("z_mid", {grid.get_local_total_points_z()}),
     z_up("z_up", {grid.get_local_total_points_z()}),
     flex_height_coef_mid("flex_height_coef_mid", {grid.get_local_total_points_z()}),
@@ -24,7 +25,12 @@ Parameters::Parameters(const Utils::ConfigurationManager& config, const Grid& gr
     dz_mid("dz_mid", {grid.get_local_total_points_z()}),
     dz_up("dz_up", {grid.get_local_total_points_z()}),
     fact1_xi_eta("fact1_xi_eta", {grid.get_local_total_points_z()}),
-    fact2_xi_eta("fact2_xi_eta", {grid.get_local_total_points_z()})
+    fact2_xi_eta("fact2_xi_eta", {grid.get_local_total_points_z()}),
+    AGAU("AGAU", {grid.get_local_total_points_z()}),
+    BGAU("BGAU", {grid.get_local_total_points_z()}),
+    CGAU("CGAU", {grid.get_local_total_points_z()}),
+    bn_new("bn_new", {grid.get_local_total_points_z()}),
+    cn_new("cn_new", {grid.get_local_total_points_z()})
 {
     Kokkos::deep_copy(gravity, config.get_value<double>("constants.gravity"));
     Kokkos::deep_copy(Rd, config.get_value<double>("constants.Rd"));
@@ -46,6 +52,8 @@ Parameters::Parameters(const Utils::ConfigurationManager& config, const Grid& gr
     Kokkos::deep_copy(rdx2, 1.0 / (dx_val * dx_val));
     Kokkos::deep_copy(rdy2, 1.0 / (dy_val * dy_val));
     Kokkos::deep_copy(rdz2, 1.0 / (dz_val * dz_val));
+
+    Kokkos::deep_copy(WRXMU, 2.5e-7);
 
     Kokkos::fence();
 
