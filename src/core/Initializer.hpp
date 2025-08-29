@@ -14,8 +14,9 @@ namespace Core {
 class Initializer {
 public:
     Initializer(const Utils::ConfigurationManager& config, const Grid& grid, Parameters& parameters, State &state);
-    void initialize_state(State& state) const;
+    void initialize_state() const;
     void initialize_grid() const;
+    void initialize_poisson() const;
 
 private:
     std::unique_ptr<VVM::IO::Reader> reader_;

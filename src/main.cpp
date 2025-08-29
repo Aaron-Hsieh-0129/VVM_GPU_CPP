@@ -79,7 +79,7 @@ int main(int argc, char* argv[]) {
         // exit(1);
 
         VVM::Core::Initializer init(config, grid, parameters, state);
-        init.initialize_state(state);
+        init.initialize_state();
 
 
         // B.C. process
@@ -107,6 +107,9 @@ int main(int argc, char* argv[]) {
         const int global_start_j = grid.get_local_physical_start_y();
         const int global_start_i = grid.get_local_physical_start_x();
 
+        auto dx = parameters.dx;
+        auto z_mid = parameters.z_mid.get_device_data();
+
         
         Kokkos::parallel_for("th_init_with_perturbation", 
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
@@ -122,6 +125,7 @@ int main(int argc, char* argv[]) {
                 th(k,j,i) = 300;
                 // if (k == 3 && j == ny/2 && i == nx/2 && (rank == 0 || rank == 1)) th(k,j,i) += 50;
 
+                /*
                 if ((32/2-3-1 <= global_j && 32/2+3-1 >= global_j) && (32/2-3-1 <= global_i && 32/2+3-1 >= global_i)) {
                     if (k == h+15) {
                         xi(k,j,i) = 50;
@@ -147,6 +151,14 @@ int main(int argc, char* argv[]) {
                     v(k,j,i) /= 8;
                 }
                 // if (k == 0 || k == nz-1 || k == nz-2) w(k,j,i) = 0;
+                */
+
+                double radius_norm = std::sqrt(
+                             std::pow(((global_i+1)-32./2.)*dx()/1000., 2) + std::pow((z_mid(k)-3200.)/500., 2)
+                          );
+                if (radius_norm <= 1) {
+                    th(k,j,i) = th(k,j,i) + 5.*(std::cos(3.14159265*0.5*radius_norm));
+                }
         });
         // if (rank == 0) {
         //     std::cout << "\n--- Field State BEFORE Halo Exchange ---" << std::endl;

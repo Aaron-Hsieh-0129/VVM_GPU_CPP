@@ -30,6 +30,7 @@ public:
     Kokkos::View<double> rdx2;
     Kokkos::View<double> rdy2;
     Kokkos::View<double> rdz2;
+    Kokkos::View<double> WRXMU;
 
     // 1D Kokkos Views
     Field<1> z_mid;
@@ -40,6 +41,11 @@ public:
     Field<1> dz_up;
     Field<1> fact1_xi_eta;
     Field<1> fact2_xi_eta;
+    Field<1> AGAU;
+    Field<1> BGAU;
+    Field<1> CGAU;
+    Field<1> bn_new;
+    Field<1> cn_new;
 
     Parameters(const Utils::ConfigurationManager& config, const Grid& grid);
 

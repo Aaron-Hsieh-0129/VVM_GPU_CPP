@@ -18,8 +18,8 @@ void Takacs::calculate_flux_convergence_x(
     const int nx = grid.get_local_total_points_x();
     const int h = grid.get_halo_cells();
 
-    auto& u = u_field.get_device_data();
-    auto& q = scalar.get_device_data();
+    const auto& u = u_field.get_device_data();
+    const auto& q = scalar.get_device_data();
     Core::Field<3> flux_field("flux", {nz, ny, nx});
     auto& flux = flux_field.get_mutable_device_data();
     auto& tendency = out_tendency.get_mutable_device_data();
@@ -76,8 +76,8 @@ void Takacs::calculate_flux_convergence_y(
     const int nx = grid.get_local_total_points_x();
     const int h = grid.get_halo_cells();
 
-    auto& v = v_field.get_device_data();
-    auto& q = scalar.get_device_data();
+    const auto& v = v_field.get_device_data();
+    const auto& q = scalar.get_device_data();
     Core::Field<3> flux_field("flux", {nz, ny, nx});
     auto& flux = flux_field.get_mutable_device_data();
     auto& tendency = out_tendency.get_mutable_device_data();
@@ -134,7 +134,7 @@ void Takacs::calculate_flux_convergence_z(
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
     const int h = grid.get_halo_cells();
-    auto rhobar_divide = rhobar_divide_field.get_device_data();
+    const auto& rhobar_divide = rhobar_divide_field.get_device_data();
 
 
     int k_start = h;
@@ -147,8 +147,8 @@ void Takacs::calculate_flux_convergence_z(
         k_end = nz-h;
     }
 
-    auto& w = w_field.get_device_data();
-    auto& q = scalar.get_device_data();
+    const auto& w = w_field.get_device_data();
+    const auto& q = scalar.get_device_data();
     Core::Field<3> flux_field("flux", {nz, ny, nx});
     auto& flux = flux_field.get_mutable_device_data();
     auto& tendency = out_tendency.get_mutable_device_data();
@@ -180,6 +180,34 @@ void Takacs::calculate_flux_convergence_z(
             }
         );
     }
+    else if (var_name == "xi" || var_name == "eta") {
+        Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1,h,h}, {nz-h-1,ny-h,nx-h}),
+            KOKKOS_LAMBDA(int k, int j, int i) {
+                flux(k,j,i) = w(k,j,i)*(q(k+1,j,i)+q(k,j,i));
+                if (k == h && w(k,j,i) < 0.) {
+                    flux(k,j,i) += -1./3.*(
+                            -wminus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(wminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(wminus(k+1,j,i)))*(q(k+2,j,i)-q(k+1,j,i)) 
+                          );
+                }
+                else if (k == nz-h-2 && w(k,j,i) >= 0.) {
+                    flux(k,j,i) += -1./3.*( 
+                             wplus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(wplus(k,j,i))*Kokkos::sqrt(wplus(k-1,j,i))*(q(k,j,i)-q(k-1,j,i)) 
+                          );
+                }
+                else if (k == h-1 && w(k,j,i) < 0.)  {
+                    flux(k,j,i) += -1./3.*( 
+                            wminus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(wminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(wminus(k+1,j,i)))*(q(k+2,j,i)-q(k+1,j,i)) 
+                          );
+                }
+                else {
+                    flux(k,j,i) += -1./3.*( 
+                             wplus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(wplus(k,j,i))*Kokkos::sqrt(wplus(k-1,j,i))*(q(k,j,i)-q(k-1,j,i)) - 
+                            wminus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(wminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(wminus(k+1,j,i)))*(q(k+2,j,i)-q(k+1,j,i)) 
+                          );
+                }
+            }
+        );
+    }
     else {
         Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end,ny-h,nx-h}),
             KOKKOS_LAMBDA(int k, int j, int i) {
@@ -205,7 +233,10 @@ void Takacs::calculate_flux_convergence_z(
     }
 
     // No need of x-y halo exchanges because this is z direction tendency
-    if (var_name != "zeta") flux_bc_manager_.apply_z_bcs_to_field(flux_field);
+    if (var_name != "zeta" && var_name != "xi" && var_name != "eta") flux_bc_manager_.apply_z_bcs_to_field(flux_field);
+    // int rank;
+    // MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    // if (rank == 0 && var_name == "th") flux_field.print_slice_z_at_k(grid, 0, 1);
 
     // DEBUG print
     // Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {ny,nx}),
@@ -237,7 +268,7 @@ void Takacs::calculate_flux_convergence_z(
     }
     else if (var_name == "xi" || var_name == "eta") {
         Kokkos::parallel_for("flux_convergence_tendency", 
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end, ny-h, nx-h}),
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
                 tendency(k,j,i) += -0.5*(flux(k,j,i) - flux(k-1,j,i)) * rdz_view() * flex_height_coef_up(k);
             }
@@ -245,7 +276,7 @@ void Takacs::calculate_flux_convergence_z(
     }
     else {
         Kokkos::parallel_for("flux_convergence_tendency", 
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end, ny-h, nx-h}),
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
                 tendency(k,j,i) += -0.5*(flux(k,j,i) - flux(k-1,j,i)) * rdz_view() * flex_height_coef_mid(k) / rhobar_divide(k);
             }
@@ -261,9 +292,9 @@ void Takacs::calculate_stretching_tendency_x(
     const auto& u = state.get_field<3>("u").get_device_data();
     const auto& xi = state.get_field<3>("xi").get_device_data();
     const auto& rhobar = state.get_field<1>("rhobar").get_device_data();
-    auto tendency = out_tendency.get_mutable_device_data();
+    auto& tendency = out_tendency.get_mutable_device_data();
     
-    const double rdx = params.get_value_host(params.rdx);
+    const auto& rdx = params.rdx;
 
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
@@ -287,7 +318,7 @@ void Takacs::calculate_stretching_tendency_x(
                 (fact1_xi_eta(k) * rhobar(k+1) * (u(k+1, j, i) - u(k+1, j, i-1)) +
                  fact2_xi_eta(k) * rhobar(k)   * (u(k,   j, i) - u(k,   j, i-1)) );
 
-            tendency(k, j, i) += 0.125 * rdx * (term_at_j_plus_1 + term_at_j);
+            tendency(k, j, i) += 0.125 * rdx() * (term_at_j_plus_1 + term_at_j);
         }
     );
     return;
@@ -300,9 +331,9 @@ void Takacs::calculate_stretching_tendency_y(
     const auto& v = state.get_field<3>("v").get_device_data();
     const auto& eta = state.get_field<3>("eta").get_device_data();
     const auto& rhobar = state.get_field<1>("rhobar").get_device_data();
-    auto tendency = out_tendency.get_mutable_device_data();
+    auto& tendency = out_tendency.get_mutable_device_data();
     
-    const double rdy = params.get_value_host(params.rdy);
+    const auto& rdy = params.get_value_host(params.rdy);
 
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
@@ -339,9 +370,9 @@ void Takacs::calculate_stretching_tendency_z(
     const auto& w = state.get_field<3>("w").get_device_data();
     const auto& zeta = state.get_field<3>("zeta").get_device_data();
     const auto& rhobar = state.get_field<1>("rhobar").get_device_data();
-    auto tendency = out_tendency.get_mutable_device_data();
+    auto& tendency = out_tendency.get_mutable_device_data();
 
-    const double rdz = params.get_value_host(params.rdz);
+    const auto& rdz = params.get_value_host(params.rdz);
 
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
@@ -376,10 +407,10 @@ void Takacs::calculate_R_xi(
     
     const auto& v = state.get_field<3>("v").get_device_data();
     const auto& w = state.get_field<3>("w").get_device_data();
-    auto R_xi = out_R_xi.get_mutable_device_data();
+    auto& R_xi = out_R_xi.get_mutable_device_data();
 
-    auto rdy = params.rdy;
-    auto rdz = params.rdz;
+    const auto& rdy = params.rdy;
+    const auto& rdz = params.rdz;
     const auto& flex_height_coef_up = params.flex_height_coef_up.get_device_data();
 
     const int nz = grid.get_local_total_points_z();
@@ -406,10 +437,10 @@ void Takacs::calculate_R_eta(
 
     const auto& u = state.get_field<3>("u").get_device_data();
     const auto& w = state.get_field<3>("w").get_device_data();
-    auto R_eta = out_R_eta.get_mutable_device_data();
+    auto& R_eta = out_R_eta.get_mutable_device_data();
 
-    auto rdx = params.rdx;
-    auto rdz = params.rdz;
+    const auto& rdx = params.rdx;
+    const auto& rdz = params.rdz;
     const auto& flex_height_coef_up = params.flex_height_coef_up.get_device_data();
 
     const int nz = grid.get_local_total_points_z();
@@ -436,7 +467,7 @@ void Takacs::calculate_R_zeta(
 
     const auto& u = state.get_field<3>("u").get_device_data();
     const auto& v = state.get_field<3>("v").get_device_data();
-    auto R_zeta = out_R_zeta.get_mutable_device_data();
+    auto& R_zeta = out_R_zeta.get_mutable_device_data();
 
     auto rdx = params.rdx;
     auto rdy = params.rdy;
@@ -466,13 +497,13 @@ void Takacs::calculate_twisting_tendency_x(
 
     const auto& R_eta_field = state.get_field<3>("R_eta");
     const auto& R_zeta_field = state.get_field<3>("R_zeta");
-    auto R_eta = R_eta_field.get_device_data();
-    auto R_zeta = R_zeta_field.get_device_data();
+    auto& R_eta = R_eta_field.get_device_data();
+    auto& R_zeta = R_zeta_field.get_device_data();
     const auto& rhobar = state.get_field<1>("rhobar").get_device_data();
     const auto& rhobar_up = state.get_field<1>("rhobar_up").get_device_data();
     const auto& eta = state.get_field<3>("eta").get_device_data();
     const auto& zeta = state.get_field<3>("zeta").get_device_data();
-    auto tendency = out_tendency.get_mutable_device_data();
+    auto& tendency = out_tendency.get_mutable_device_data();
 
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
@@ -511,21 +542,21 @@ void Takacs::calculate_twisting_tendency_y(
 
     const auto& R_xi_field = state.get_field<3>("R_xi");
     const auto& R_zeta_field = state.get_field<3>("R_zeta");
-    auto R_xi = R_xi_field.get_device_data();
-    auto R_zeta = R_zeta_field.get_device_data();
+    auto& R_xi = R_xi_field.get_device_data();
+    auto& R_zeta = R_zeta_field.get_device_data();
     const auto& rhobar = state.get_field<1>("rhobar").get_device_data();
     const auto& rhobar_up = state.get_field<1>("rhobar_up").get_device_data();
     const auto& xi = state.get_field<3>("xi").get_device_data();
     const auto& zeta = state.get_field<3>("zeta").get_device_data();
-    auto tendency = out_tendency.get_mutable_device_data();
+    auto& tendency = out_tendency.get_mutable_device_data();
 
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
     const int h = grid.get_halo_cells();
 
-    auto fact1_xi_eta = params.fact1_xi_eta.get_device_data();
-    auto fact2_xi_eta = params.fact2_xi_eta.get_device_data();
+    const auto& fact1_xi_eta = params.fact1_xi_eta.get_device_data();
+    const auto& fact2_xi_eta = params.fact2_xi_eta.get_device_data();
 
     // Implements Eq. (3.29) for [0.5ρ₀(xi*Rzeta+zeta*Rxi)]
     Kokkos::parallel_for("twisting_term_eta",
@@ -556,13 +587,13 @@ void Takacs::calculate_twisting_tendency_z(
 
     const auto& R_xi_field = state.get_field<3>("R_xi");
     const auto& R_eta_field = state.get_field<3>("R_eta");
-    auto R_xi = R_xi_field.get_device_data();
-    auto R_eta = R_eta_field.get_device_data();
+    auto& R_xi = R_xi_field.get_device_data();
+    auto& R_eta = R_eta_field.get_device_data();
     const auto& rhobar = state.get_field<1>("rhobar").get_device_data();
     const auto& rhobar_up = state.get_field<1>("rhobar_up").get_device_data();
     const auto& xi = state.get_field<3>("xi").get_device_data();
     const auto& eta = state.get_field<3>("eta").get_device_data();
-    auto tendency = out_tendency.get_mutable_device_data();
+    auto& tendency = out_tendency.get_mutable_device_data();
 
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
@@ -610,10 +641,10 @@ void Takacs::calculate_vorticity_divergence(
 
     const auto& xi = state.get_field<3>("xi").get_device_data();
     const auto& eta = state.get_field<3>("eta").get_device_data();
-    auto out_data = out_field.get_mutable_device_data();
+    auto& out_data = out_field.get_mutable_device_data();
 
-    const double rdx = params.get_value_host(params.rdx);
-    const double rdy = params.get_value_host(params.rdy);
+    const auto& rdx = params.get_value_host(params.rdx);
+    const auto& rdy = params.get_value_host(params.rdy);
 
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
@@ -639,9 +670,9 @@ void Takacs::calculate_buoyancy_tendency_x(
     
     const auto& thbar = state.get_field<1>("thbar").get_device_data();
     const auto& th = state.get_field<3>("th").get_device_data();
-    auto tendency = out_tendency.get_mutable_device_data();
-    auto rdy = params.rdy;
-    auto gravity = params.gravity;
+    auto& tendency = out_tendency.get_mutable_device_data();
+    const auto& rdy = params.rdy;
+    const auto& gravity = params.gravity;
 
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
@@ -665,9 +696,9 @@ void Takacs::calculate_buoyancy_tendency_y(
     
     const auto& thbar = state.get_field<1>("thbar").get_device_data();
     const auto& th = state.get_field<3>("th").get_device_data();
-    auto tendency = out_tendency.get_mutable_device_data();
-    auto rdx = params.rdx;
-    auto gravity = params.gravity;
+    auto& tendency = out_tendency.get_mutable_device_data();
+    auto& rdx = params.rdx;
+    auto& gravity = params.gravity;
 
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();

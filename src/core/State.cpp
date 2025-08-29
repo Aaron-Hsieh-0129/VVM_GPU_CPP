@@ -35,6 +35,7 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<3>("u", {nz_total, ny_total, nx_total});
     add_field<3>("v", {nz_total, ny_total, nx_total});
     add_field<3>("w", {nz_total, ny_total, nx_total});
+    add_field<3>("W3DNM1", {nz_total, ny_total, nx_total});
 
     // Rotation term
     add_field<3>("R_xi", {nz_total, ny_total, nx_total});

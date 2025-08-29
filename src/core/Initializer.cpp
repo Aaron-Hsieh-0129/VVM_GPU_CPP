@@ -27,12 +27,17 @@ Initializer::Initializer(const Utils::ConfigurationManager& config, const Grid& 
     // } else {
     //     std::cerr << "Warning: Unsupported input format '" << format << "'. Skipping initialization." << std::endl;
     // }
+    
+
+    // TODO: Initialize vorticity after loading velocity field
+
 }
 
-void Initializer::initialize_state(State& state) const {
+void Initializer::initialize_state() const {
     if (reader_) {
-        reader_->read_and_initialize(state);
+        reader_->read_and_initialize(state_);
     }
+    initialize_poisson();
 }
 
 void Initializer::initialize_grid() const {
@@ -45,10 +50,10 @@ void Initializer::initialize_grid() const {
     const int h = grid_.get_halo_cells();
     const int nz = grid_.get_local_total_points_z();
 
-    auto z_mid_mutable = parameters_.z_mid.get_mutable_device_data();
-    auto z_up_mutable = parameters_.z_up.get_mutable_device_data();
-    auto flex_height_coef_mid_mutable = parameters_.flex_height_coef_mid.get_mutable_device_data();
-    auto flex_height_coef_up_mutable = parameters_.flex_height_coef_up.get_mutable_device_data();
+    auto& z_mid_mutable = parameters_.z_mid.get_mutable_device_data();
+    auto& z_up_mutable = parameters_.z_up.get_mutable_device_data();
+    auto& flex_height_coef_mid_mutable = parameters_.flex_height_coef_mid.get_mutable_device_data();
+    auto& flex_height_coef_up_mutable = parameters_.flex_height_coef_up.get_mutable_device_data();
 
     Kokkos::parallel_for("Init_Z_flexZCoef", Kokkos::RangePolicy<>(h-1, nz),
         KOKKOS_LAMBDA(const int k) {
@@ -61,8 +66,8 @@ void Initializer::initialize_grid() const {
         }
     );
     
-    auto dz_mid_mutable = parameters_.dz_mid.get_mutable_device_data();
-    auto dz_up_mutable = parameters_.dz_up.get_mutable_device_data();
+    auto& dz_mid_mutable = parameters_.dz_mid.get_mutable_device_data();
+    auto& dz_up_mutable = parameters_.dz_up.get_mutable_device_data();
     Kokkos::parallel_for("Init_dz", Kokkos::RangePolicy<>(h, nz-h),
         KOKKOS_LAMBDA(const int k) {
             dz_mid_mutable(k) = z_up_mutable(k) - z_up_mutable(k-1);
@@ -70,8 +75,8 @@ void Initializer::initialize_grid() const {
         }
     );
 
-    auto fact1_xi_eta_mutable = parameters_.fact1_xi_eta.get_mutable_device_data();
-    auto fact2_xi_eta_mutable = parameters_.fact2_xi_eta.get_mutable_device_data();
+    auto& fact1_xi_eta_mutable = parameters_.fact1_xi_eta.get_mutable_device_data();
+    auto& fact2_xi_eta_mutable = parameters_.fact2_xi_eta.get_mutable_device_data();
     Kokkos::parallel_for("Init_zflex_fact", Kokkos::RangePolicy<>(h-1, nz-h),
         KOKKOS_LAMBDA(const int k) {
             fact1_xi_eta_mutable(k) = flex_height_coef_up_mutable(k) / flex_height_coef_mid_mutable(k+1);
@@ -98,6 +103,50 @@ void Initializer::initialize_grid() const {
     //     }
     // }
     // std::cout << std::endl;
+    return;
+}
+
+void Initializer::initialize_poisson() const {
+    const auto& rdx2 = parameters_.rdx2;
+    const auto& rdy2 = parameters_.rdy2;
+    const auto& rdz2 = parameters_.rdz2;
+    const auto& WRXMU = parameters_.WRXMU;
+    const auto& rhobar = state_.get_field<1>("rhobar").get_device_data();
+    const auto& rhobar_up = state_.get_field<1>("rhobar_up").get_device_data();
+    const auto& flex_height_coef_mid = parameters_.flex_height_coef_mid.get_device_data();
+    const auto& flex_height_coef_up = parameters_.flex_height_coef_up.get_device_data();
+    const int h = grid_.get_halo_cells();
+    const int nz = grid_.get_local_total_points_z();
+
+    // Poisson iteration coefficient
+    auto& AGAU = parameters_.AGAU.get_mutable_device_data();
+    auto& BGAU = parameters_.BGAU.get_mutable_device_data();
+    auto& CGAU = parameters_.CGAU.get_mutable_device_data();
+    Kokkos::parallel_for("Init_Poisson_Coef", Kokkos::RangePolicy<>(h, nz-h),
+        KOKKOS_LAMBDA(const int k) {
+            AGAU(k) = -flex_height_coef_up(k) * flex_height_coef_mid(k) * rdz2() / rhobar(k);
+            BGAU(k) = (WRXMU() + 2.*rdx2() + 2.*rdy2()) / rhobar_up(k) + 
+                      flex_height_coef_up(k) * (flex_height_coef_mid(k+1)/rhobar(k+1)+flex_height_coef_mid(k)/rhobar(k))*rdz2();
+            CGAU(k) = -flex_height_coef_up(k) * flex_height_coef_mid(k+1) * rdz2() / rhobar(k+1);
+        }
+    );
+
+    auto& bn_new = parameters_.bn_new.get_mutable_device_data();
+    auto& cn_new = parameters_.cn_new.get_mutable_device_data();
+
+    auto h_AGAU = parameters_.AGAU.get_host_data();
+    auto h_BGAU = parameters_.BGAU.get_host_data();
+    auto h_CGAU = parameters_.CGAU.get_host_data();
+    auto h_bn_new = parameters_.bn_new.get_host_data();
+    auto h_cn_new = parameters_.cn_new.get_host_data();
+
+    h_cn_new(h) = h_CGAU(h) / h_BGAU(h);
+    for (int k = h+1; k <= nz-h-1; k++) {
+        h_bn_new(k) = h_BGAU(k) - h_AGAU(k) * h_cn_new(k-1);
+        h_cn_new(k) = h_CGAU(k) / h_bn_new(k);
+    }
+    Kokkos::deep_copy(bn_new, h_bn_new);
+    Kokkos::deep_copy(cn_new, h_cn_new);
     return;
 }
 

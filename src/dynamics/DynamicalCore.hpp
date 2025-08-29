@@ -11,6 +11,7 @@
 #include "utils/ConfigurationManager.hpp"
 #include "temporal_schemes/TemporalScheme.hpp"
 #include "tendency_processes/TendencyCalculator.hpp"
+#include "solvers/WindSolver.hpp"
 
 namespace VVM {
 namespace Dynamics {
@@ -44,6 +45,9 @@ private:
     std::map<std::string, std::unique_ptr<TemporalScheme>> time_integrators_;
     std::vector<IntegrationStep> integration_procedure_;
     mutable size_t time_step_count_ = 0;
+
+    std::unique_ptr<WindSolver> wind_solver_;
+    void compute_wind_fields();
 };
 
 } // namespace Dynamics

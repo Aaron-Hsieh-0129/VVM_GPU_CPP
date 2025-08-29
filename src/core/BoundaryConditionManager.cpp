@@ -62,7 +62,7 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
     const ZBoundaryType top_bc = top_bc_;
     const ZBoundaryType bottom_bc = bottom_bc_;
     
-    const bool is_special_zero_bc = (top_bc == ZBoundaryType::ZERO && (var_name_ == "xi" || var_name_ == "eta" || var_name_ == "w"));
+    const bool is_special_zero_bc = (top_bc == ZBoundaryType::ZERO && (var_name_ == "xi" || var_name_ == "eta" || var_name_ == "w" || var_name_ == "flux"));
     if constexpr (Dim == 1) {
         Kokkos::parallel_for("apply_bc_1d", Kokkos::RangePolicy<>(0, h),
             KOKKOS_LAMBDA(const int k_h) {

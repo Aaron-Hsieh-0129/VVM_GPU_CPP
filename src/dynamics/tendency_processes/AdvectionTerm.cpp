@@ -21,13 +21,13 @@ void AdvectionTerm::compute_tendency(
     const auto& u_field = state.get_field<3>("u");
     const auto& v_field = state.get_field<3>("v");
     const auto& w_field = state.get_field<3>("w");
-    auto u = u_field.get_device_data();
-    auto v = v_field.get_device_data();
-    auto w = w_field.get_device_data();
+    auto& u = u_field.get_device_data();
+    auto& v = v_field.get_device_data();
+    auto& w = w_field.get_device_data();
     const auto& rhobar_field = state.get_field<1>("rhobar");
-    auto rhobar = rhobar_field.get_device_data();
+    const auto& rhobar = rhobar_field.get_device_data();
     const auto& rhobar_up_field = state.get_field<1>("rhobar_up");
-    auto rhobar_up = rhobar_up_field.get_device_data();
+    const auto& rhobar_up = rhobar_up_field.get_device_data();
 
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
@@ -40,14 +40,14 @@ void AdvectionTerm::compute_tendency(
     VVM::Core::BoundaryConditionManager bc_manager_periodic(grid, VVM::Core::ZBoundaryType::PERIODIC, VVM::Core::ZBoundaryType::PERIODIC);
 
     VVM::Core::Field<3> u_mean_field("u_mean", {nz, ny, nx});
-    auto u_mean_data = u_mean_field.get_mutable_device_data();
+    auto& u_mean_data = u_mean_field.get_mutable_device_data();
     VVM::Core::Field<3> v_mean_field("v_mean", {nz, ny, nx});
-    auto v_mean_data = v_mean_field.get_mutable_device_data();
+    auto& v_mean_data = v_mean_field.get_mutable_device_data();
     VVM::Core::Field<3> w_mean_field("w_mean", {nz, ny, nx});
-    auto w_mean_data = w_mean_field.get_mutable_device_data();
+    auto& w_mean_data = w_mean_field.get_mutable_device_data();
     if (variable_name_ == "xi") {
-        auto fact1_xi_eta = params.fact1_xi_eta.get_device_data();
-        auto fact2_xi_eta = params.fact2_xi_eta.get_device_data();
+        const auto& fact1_xi_eta = params.fact1_xi_eta.get_device_data();
+        const auto& fact2_xi_eta = params.fact2_xi_eta.get_device_data();
         Kokkos::parallel_for("calculate_rhou_for_xi",
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
@@ -74,8 +74,8 @@ void AdvectionTerm::compute_tendency(
         );
     }
     else if (variable_name_ == "eta") {
-        auto fact1_xi_eta = params.fact1_xi_eta.get_device_data();
-        auto fact2_xi_eta = params.fact2_xi_eta.get_device_data();
+        const auto& fact1_xi_eta = params.fact1_xi_eta.get_device_data();
+        const auto& fact2_xi_eta = params.fact2_xi_eta.get_device_data();
         Kokkos::parallel_for("calculate_rhou_for_eta",
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {

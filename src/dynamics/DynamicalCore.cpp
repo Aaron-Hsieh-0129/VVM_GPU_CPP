@@ -1,5 +1,4 @@
 #include "DynamicalCore.hpp"
-// #include "temporal_schemes/AdamsBashforth2.hpp"
 #include "temporal_schemes/TimeIntegrator.hpp"
 #include "tendency_processes/AdvectionTerm.hpp"
 #include "tendency_processes/StretchingTerm.hpp"
@@ -17,7 +16,8 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
                              const Core::Grid& grid, 
                              const Core::Parameters& params,
                              Core::State& state)
-    : config_(config), grid_(grid), params_(params), state_(state) {
+    : config_(config), grid_(grid), params_(params), state_(state), 
+      wind_solver_(std::make_unique<WindSolver>(grid, config)) {
 
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -122,6 +122,7 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
         }
         std::cout << "------------------------------------" << std::endl;
     }
+
 }
 
 DynamicalCore::~DynamicalCore() = default;
@@ -151,6 +152,8 @@ void DynamicalCore::step(Core::State& state, double dt) {
             }
         }
     }
+
+    compute_wind_fields();
     time_step_count_++;
 }
 
@@ -198,6 +201,10 @@ void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
     halo_exchanger.exchange_halos(zeta_field);
     VVM::Core::BoundaryConditionManager bc_manager(grid_, config_, "zeta");
     bc_manager.apply_z_bcs_to_field(zeta_field);
+}
+
+void DynamicalCore::compute_wind_fields() {
+    wind_solver_->solve_w(state_, params_);
 }
 
 } // namespace Dynamics
