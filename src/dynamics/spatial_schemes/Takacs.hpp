@@ -64,7 +64,7 @@ public:
         const Core::State& state, const Core::Grid& grid,
         const Core::Parameters& params, Core::Field<3>& out_tendency) const override;
 private:
-    Core::HaloExchanger halo_exchanger_;
+    mutable Core::HaloExchanger halo_exchanger_;
     Core::BoundaryConditionManager flux_bc_manager_;
 };
 

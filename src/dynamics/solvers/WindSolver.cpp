@@ -5,7 +5,13 @@ namespace VVM {
 namespace Dynamics {
 
 WindSolver::WindSolver(const Core::Grid& grid, const Utils::ConfigurationManager& config)
-    : grid_(grid), config_(config), halo_exchanger_(grid) {}
+    : grid_(grid), config_(config), halo_exchanger_(grid),
+      YTEM_field_("YTEM", {grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      W3DNP1_field_("W3DNP1", {grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      W3DN_field_("W3DN", {grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      RHSV_field_("RHSV", {grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      pm_temp_field_("pm_temp", {grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      pm_field_("pm", {grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}) {}
 
 void WindSolver::solve_w(Core::State& state, const Core::Parameters& params) const {
     const int nz = grid_.get_local_total_points_z();
@@ -32,8 +38,13 @@ void WindSolver::solve_w(Core::State& state, const Core::Parameters& params) con
 
     auto& w = state.get_field<3>("w").get_mutable_device_data();
 
-    Core::Field<3> YTEM_field("YTEM", {nz, ny, nx});
-    auto& YTEM = YTEM_field.get_mutable_device_data();
+    auto& YTEM = YTEM_field_.get_mutable_device_data();
+    auto& W3DNP1 = W3DNP1_field_.get_mutable_device_data();
+    auto& W3DN = W3DN_field_.get_mutable_device_data();
+    auto& RHSV = RHSV_field_.get_mutable_device_data();
+    auto& pm_temp = pm_temp_field_.get_mutable_device_data();
+    auto& pm = pm_field_.get_mutable_device_data();
+
     Kokkos::parallel_for("Poisson", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h,ny-h,nx-h}),
         KOKKOS_LAMBDA(int k, int j, int i) {
              YTEM(k,j,i)=-(eta(k,j,i) - eta(k,j,i-1))*rdx()
@@ -46,8 +57,6 @@ void WindSolver::solve_w(Core::State& state, const Core::Parameters& params) con
     // exit(1);
 
     // Linear extrapolation of initial guess
-    Core::Field<3> W3DNP1_field("W3DNP1", {nz, ny, nx});
-    auto& W3DNP1 = W3DNP1_field.get_mutable_device_data();
     auto& W3DNM1 = state.get_field<3>("W3DNM1").get_mutable_device_data();
     Kokkos::parallel_for("W3DNP1", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,0,0}, {nz-h,ny,nx}),
         KOKKOS_LAMBDA(int k, int j, int i) {
@@ -69,15 +78,7 @@ void WindSolver::solve_w(Core::State& state, const Core::Parameters& params) con
 
     const auto& bn_new = params.bn_new.get_device_data();
     const auto& cn_new = params.cn_new.get_device_data();
-    Core::Field<3> W3DN_field("W3DN", {nz, ny, nx});
-    auto& W3DN = W3DN_field.get_mutable_device_data();
-    Core::Field<3> RHSV_field("RHSV", {nz, ny, nx});
-    auto& RHSV = RHSV_field.get_mutable_device_data();
 
-    Core::Field<3> pm_temp_field("pm_temp", {nz, ny, nx});
-    auto& pm_temp = pm_temp_field.get_mutable_device_data();
-    Core::Field<3> pm_field("pm", {nz, ny, nx});
-    auto& pm = pm_field.get_mutable_device_data();
     VVM::Core::BoundaryConditionManager bc_manager(grid_, config_, "w");
     for (int iter = 0; iter < 200; iter++) {
         Kokkos::parallel_for("copy_w_to_w3dn", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,0,0}, {nz-h-1,ny,nx}),
