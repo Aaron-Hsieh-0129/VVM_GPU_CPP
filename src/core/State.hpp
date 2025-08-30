@@ -30,7 +30,7 @@ class State {
     friend class VVM::Dynamics::AdamsBashforth2;
 public:
     // Constructor
-    State(const Utils::ConfigurationManager& config, const Parameters& params);
+    State(const Utils::ConfigurationManager& config, const Parameters& params, const Grid& grid);
 
     template<size_t Dim>
     void add_field(const std::string& name, std::initializer_list<int> dims_list) {
@@ -74,6 +74,62 @@ public:
         }
     }
 
+    template<size_t Dim>
+    double calculate_horizontal_mean(const Field<Dim>& field, int k_level = -1) const {
+        auto view = field.get_device_data();
+
+        const int ny_local = grid_.get_local_physical_points_y();
+        const int nx_local = grid_.get_local_physical_points_x();
+        const int h = grid_.get_halo_cells();
+        const int gnx = grid_.get_global_points_x();
+        const int gny = grid_.get_global_points_y();
+        const double total_points_horizontal = static_cast<double>(gnx * gny);
+
+        if (total_points_horizontal == 0) {
+            return 0.0;
+        }
+
+        double local_sum = 0.0;
+
+        if constexpr (Dim == 3) {
+            if (k_level < h || k_level >= grid_.get_local_total_points_z() - h) {
+                int rank;
+                MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+                if (rank == 0) {
+                    std::cerr << "Warning: k_level " << k_level << " is in the halo region for the 3D field '" << field.get_name() << "'. Returning 0." << std::endl;
+                }
+                return 0.0;
+            }
+
+            Kokkos::parallel_reduce("calculate_3d_local_sum",
+                Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h, h}, {ny_local + h, nx_local + h}),
+                KOKKOS_LAMBDA(const int j, const int i, double& update_sum) {
+                    update_sum += view(k_level, j, i);
+                }, local_sum);
+
+        } 
+        else if constexpr (Dim == 2) {
+            Kokkos::parallel_reduce("calculate_2d_local_sum",
+                Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h, h}, {ny_local + h, nx_local + h}),
+                KOKKOS_LAMBDA(const int j, const int i, double& update_sum) {
+                    update_sum += view(j, i);
+                }, local_sum);
+        } 
+        else {
+            int rank;
+            MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+            if (rank == 0) {
+                std::cerr << "Warning: calculate_horizontal_mean does not support " << Dim << "D fields. Returning 0." << std::endl;
+            }
+            return 0.0;
+        }
+
+        double global_sum = 0.0;
+        MPI_Allreduce(&local_sum, &global_sum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+        return global_sum / total_points_horizontal;
+    }
+
     // Provide iterators to loop over all fields
     auto begin() { return fields_.begin(); } // First value
     auto end() { return fields_.end(); } // Last value
@@ -82,6 +138,7 @@ public:
 
 private:
     const Utils::ConfigurationManager& config_ref_;
+    const Grid& grid_;
     const Parameters& parameters_;
     std::map<std::string, AnyField> fields_;
 };

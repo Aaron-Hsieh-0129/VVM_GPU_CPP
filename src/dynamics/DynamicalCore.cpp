@@ -17,7 +17,7 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
                              const Core::Parameters& params,
                              Core::State& state)
     : config_(config), grid_(grid), params_(params), state_(state), 
-      wind_solver_(std::make_unique<WindSolver>(grid, config)) {
+      wind_solver_(std::make_unique<WindSolver>(grid, config, params)) {
 
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -49,7 +49,7 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
 
                 std::unique_ptr<SpatialScheme> spatial_scheme;
                 if (spatial_scheme_name == "Takacs") {
-                    spatial_scheme = std::make_unique<Takacs>(grid_, config_);
+                    spatial_scheme = std::make_unique<Takacs>(grid_);
                 } 
                 else {
                     throw std::runtime_error("Unknown spatial scheme: " + spatial_scheme_name);
@@ -158,7 +158,7 @@ void DynamicalCore::step(Core::State& state, double dt) {
 }
 
 void DynamicalCore::compute_diagnostic_fields() const {
-    auto scheme = std::make_unique<Takacs>(grid_, config_);
+    auto scheme = std::make_unique<Takacs>(grid_);
 
     auto& R_xi_field = state_.get_field<3>("R_xi");
     auto& R_eta_field = state_.get_field<3>("R_eta");
@@ -170,7 +170,7 @@ void DynamicalCore::compute_diagnostic_fields() const {
 }
 
 void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
-    auto scheme = std::make_unique<Takacs>(grid_, config_);
+    auto scheme = std::make_unique<Takacs>(grid_);
     auto& zeta_field = state.get_field<3>("zeta");
     auto zeta_data = zeta_field.get_mutable_device_data();
 
@@ -204,7 +204,8 @@ void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
 }
 
 void DynamicalCore::compute_wind_fields() {
-    wind_solver_->solve_w(state_, params_);
+    wind_solver_->solve_w(state_);
+    wind_solver_->solve_uv(state_);
 }
 
 } // namespace Dynamics
