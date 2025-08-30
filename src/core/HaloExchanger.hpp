@@ -5,6 +5,7 @@
 #include "Field.hpp"
 #include "State.hpp"
 #include <algorithm> // For std::max
+#include <vector>
 
 namespace VVM {
 namespace Core {
@@ -20,6 +21,13 @@ enum class HaloExchangeTags {
     SLICE_SEND_TO_BOTTOM = 41
 };
 
+// Struct to hold MPI requests for non-blocking communication
+struct HaloExchangeRequests {
+    std::vector<MPI_Request> requests;
+    int count = 0;
+};
+
+
 class HaloExchanger {
 public:
     explicit HaloExchanger(const Grid& grid);
@@ -29,16 +37,26 @@ public:
     template<size_t Dim>
     void exchange_halos(Field<Dim>& field) const {
         if constexpr (Dim >= 2) {
-            exchange_halo_y(field);
-            exchange_halo_x(field);
+            auto reqs_y = post_exchange_halo_y(field);
+            wait_exchange_halo_y(field, reqs_y);
+
+            auto reqs_x = post_exchange_halo_x(field);
+            wait_exchange_halo_x(field, reqs_x);
         }
     }
 
+    // --- Asynchronous Halo Exchange Functions ---
     template<size_t Dim>
-    void exchange_halo_x(Field<Dim>& field) const;
+    HaloExchangeRequests post_exchange_halo_x(Field<Dim>& field) const;
 
     template<size_t Dim>
-    void exchange_halo_y(Field<Dim>& field) const;
+    void wait_exchange_halo_x(Field<Dim>& field, HaloExchangeRequests& reqs) const;
+
+    template<size_t Dim>
+    HaloExchangeRequests post_exchange_halo_y(Field<Dim>& field) const;
+
+    template<size_t Dim>
+    void wait_exchange_halo_y(Field<Dim>& field, HaloExchangeRequests& reqs) const;
 
     void exchange_halos_slice(Field<3>& field, int k_layer) const;
     void exchange_halos_top_slice(Field<3>& field) const {
@@ -125,9 +143,9 @@ inline void HaloExchanger::exchange_halos(State& state) const {
 }
 
 template<size_t Dim>
-void HaloExchanger::exchange_halo_x(Field<Dim>& field) const {
+HaloExchangeRequests HaloExchanger::post_exchange_halo_x(Field<Dim>& field) const {
     const int h = grid_ref_.get_halo_cells();
-    if (h == 0) return;
+    if (h == 0) return {};
 
     auto data = field.get_mutable_device_data();
     const int nx_phys = grid_ref_.get_local_physical_points_x();
@@ -137,8 +155,8 @@ void HaloExchanger::exchange_halo_x(Field<Dim>& field) const {
     else if constexpr (Dim == 3) count = buffer_size_x_3d_;
     else if constexpr (Dim == 4) count = static_cast<size_t>(h) * data.extent(2) * data.extent(1) * data.extent(0);
 
-    if (count == 0) return;
-
+    if (count == 0) return {};
+    
     auto send_l = Kokkos::subview(send_x_left_, std::make_pair((size_t)0, count));
     auto recv_l = Kokkos::subview(recv_x_left_, std::make_pair((size_t)0, count));
     auto send_r = Kokkos::subview(send_x_right_, std::make_pair((size_t)0, count));
@@ -172,18 +190,37 @@ void HaloExchanger::exchange_halo_x(Field<Dim>& field) const {
                 send_r(idx) = data(w, k, j, h + nx_phys - h + i_h);
         });
     }
+    Kokkos::fence();
+
+    HaloExchangeRequests req_obj;
+    req_obj.requests.resize(4);
+
+    if(neighbor_right_ != MPI_PROC_NULL) MPI_Irecv(recv_r.data(), count, MPI_DOUBLE, neighbor_right_, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT), cart_comm_, &req_obj.requests[req_obj.count++]);
+    if(neighbor_left_  != MPI_PROC_NULL) MPI_Irecv(recv_l.data(), count, MPI_DOUBLE, neighbor_left_, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT), cart_comm_, &req_obj.requests[req_obj.count++]);
+    if(neighbor_left_  != MPI_PROC_NULL) MPI_Isend(send_l.data(), count, MPI_DOUBLE, neighbor_left_, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT), cart_comm_, &req_obj.requests[req_obj.count++]);
+    if(neighbor_right_ != MPI_PROC_NULL) MPI_Isend(send_r.data(), count, MPI_DOUBLE, neighbor_right_, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT), cart_comm_, &req_obj.requests[req_obj.count++]);
+
+    return req_obj;
+}
+
+template<size_t Dim>
+void HaloExchanger::wait_exchange_halo_x(Field<Dim>& field, HaloExchangeRequests& reqs) const {
+    if (reqs.count == 0) return;
+
+    MPI_Waitall(reqs.count, reqs.requests.data(), MPI_STATUSES_IGNORE);
+    Kokkos::fence();
+
+    const int h = grid_ref_.get_halo_cells();
+    auto data = field.get_mutable_device_data();
+    const int nx_phys = grid_ref_.get_local_physical_points_x();
     
-    Kokkos::fence();
-    MPI_Request reqs[4];
-    int req_count = 0;
+    size_t count = 0;
+    if constexpr (Dim == 2) count = buffer_size_x_2d_;
+    else if constexpr (Dim == 3) count = buffer_size_x_3d_;
+    else if constexpr (Dim == 4) count = static_cast<size_t>(h) * data.extent(2) * data.extent(1) * data.extent(0);
 
-    if(neighbor_right_ != MPI_PROC_NULL) MPI_Irecv(recv_r.data(), count, MPI_DOUBLE, neighbor_right_, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT), cart_comm_, &reqs[req_count++]);
-    if(neighbor_left_  != MPI_PROC_NULL) MPI_Irecv(recv_l.data(), count, MPI_DOUBLE, neighbor_left_, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT), cart_comm_, &reqs[req_count++]);
-    if(neighbor_left_  != MPI_PROC_NULL) MPI_Isend(send_l.data(), count, MPI_DOUBLE, neighbor_left_, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT), cart_comm_, &reqs[req_count++]);
-    if(neighbor_right_ != MPI_PROC_NULL) MPI_Isend(send_r.data(), count, MPI_DOUBLE, neighbor_right_, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT), cart_comm_, &reqs[req_count++]);
-
-    if (req_count > 0) MPI_Waitall(req_count, reqs, MPI_STATUSES_IGNORE);
-    Kokkos::fence();
+    auto recv_l = Kokkos::subview(recv_x_left_, std::make_pair((size_t)0, count));
+    auto recv_r = Kokkos::subview(recv_x_right_, std::make_pair((size_t)0, count));
 
     // Unpack data
     const int neighbor_left = neighbor_left_;
@@ -219,9 +256,9 @@ void HaloExchanger::exchange_halo_x(Field<Dim>& field) const {
 }
 
 template<size_t Dim>
-void HaloExchanger::exchange_halo_y(Field<Dim>& field) const {
+HaloExchangeRequests HaloExchanger::post_exchange_halo_y(Field<Dim>& field) const {
     const int h = grid_ref_.get_halo_cells();
-    if (h == 0) return;
+    if (h == 0) return {};
 
     auto data = field.get_mutable_device_data();
     const int ny_phys = grid_ref_.get_local_physical_points_y();
@@ -231,7 +268,7 @@ void HaloExchanger::exchange_halo_y(Field<Dim>& field) const {
     else if constexpr (Dim == 3) count = buffer_size_y_3d_;
     else if constexpr (Dim == 4) count = static_cast<size_t>(h) * data.extent(3) * data.extent(1) * data.extent(0);
     
-    if (count == 0) return;
+    if (count == 0) return {};
 
     auto send_b = Kokkos::subview(send_y_bottom_, std::make_pair((size_t)0, count));
     auto recv_b = Kokkos::subview(recv_y_bottom_, std::make_pair((size_t)0, count));
@@ -267,18 +304,37 @@ void HaloExchanger::exchange_halo_y(Field<Dim>& field) const {
                 send_t(idx) = data(w, k, h + ny_phys - h + j_h, i);
         });
     }
-
     Kokkos::fence();
-    MPI_Request reqs[4];
-    int req_count = 0;
+
+    HaloExchangeRequests req_obj;
+    req_obj.requests.resize(4);
     
-    if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Irecv(recv_b.data(), count, MPI_DOUBLE, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SEND_TO_TOP), cart_comm_, &reqs[req_count++]);
-    if(neighbor_top_    != MPI_PROC_NULL) MPI_Irecv(recv_t.data(), count, MPI_DOUBLE, neighbor_top_, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM), cart_comm_, &reqs[req_count++]);
-    if(neighbor_top_    != MPI_PROC_NULL) MPI_Isend(send_t.data(), count, MPI_DOUBLE, neighbor_top_, static_cast<int>(HaloExchangeTags::SEND_TO_TOP), cart_comm_, &reqs[req_count++]);
-    if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Isend(send_b.data(), count, MPI_DOUBLE, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM), cart_comm_, &reqs[req_count++]);
+    if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Irecv(recv_b.data(), count, MPI_DOUBLE, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SEND_TO_TOP), cart_comm_, &req_obj.requests[req_obj.count++]);
+    if(neighbor_top_    != MPI_PROC_NULL) MPI_Irecv(recv_t.data(), count, MPI_DOUBLE, neighbor_top_, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM), cart_comm_, &req_obj.requests[req_obj.count++]);
+    if(neighbor_top_    != MPI_PROC_NULL) MPI_Isend(send_t.data(), count, MPI_DOUBLE, neighbor_top_, static_cast<int>(HaloExchangeTags::SEND_TO_TOP), cart_comm_, &req_obj.requests[req_obj.count++]);
+    if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Isend(send_b.data(), count, MPI_DOUBLE, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM), cart_comm_, &req_obj.requests[req_obj.count++]);
 
-    if(req_count > 0) MPI_Waitall(req_count, reqs, MPI_STATUSES_IGNORE);
+    return req_obj;
+}
+
+template<size_t Dim>
+void HaloExchanger::wait_exchange_halo_y(Field<Dim>& field, HaloExchangeRequests& reqs) const {
+    if (reqs.count == 0) return;
+
+    MPI_Waitall(reqs.count, reqs.requests.data(), MPI_STATUSES_IGNORE);
     Kokkos::fence();
+
+    const int h = grid_ref_.get_halo_cells();
+    auto data = field.get_mutable_device_data();
+    const int ny_phys = grid_ref_.get_local_physical_points_y();
+
+    size_t count = 0;
+    if constexpr (Dim == 2) count = buffer_size_y_2d_;
+    else if constexpr (Dim == 3) count = buffer_size_y_3d_;
+    else if constexpr (Dim == 4) count = static_cast<size_t>(h) * data.extent(3) * data.extent(1) * data.extent(0);
+
+    auto recv_b = Kokkos::subview(recv_y_bottom_, std::make_pair((size_t)0, count));
+    auto recv_t = Kokkos::subview(recv_y_top_, std::make_pair((size_t)0, count));
 
     // Unpack data
     const int neighbor_bottom = neighbor_bottom_;
@@ -313,6 +369,7 @@ void HaloExchanger::exchange_halo_y(Field<Dim>& field) const {
     }
     Kokkos::fence();
 }
+
 
 inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) const {
     const int h = grid_ref_.get_halo_cells();

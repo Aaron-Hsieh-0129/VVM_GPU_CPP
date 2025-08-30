@@ -4,6 +4,8 @@
 #include "SpatialScheme.hpp"
 #include "core/HaloExchanger.hpp"
 #include "utils/ConfigurationManager.hpp"
+#include "utils/Timer.hpp"
+#include "utils/TimingManager.hpp"
 #include "core/BoundaryConditionManager.hpp"
 
 namespace VVM {

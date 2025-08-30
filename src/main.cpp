@@ -6,6 +6,8 @@
 #include <cmath> // For std::exp
 
 #include "utils/ConfigurationManager.hpp"
+#include "utils/Timer.hpp"
+#include "utils/TimingManager.hpp"
 #include "io/OutputManager.hpp"
 #include "core/Grid.hpp"
 #include "core/Field.hpp"
@@ -31,6 +33,9 @@ int main(int argc, char* argv[]) {
 
     Kokkos::initialize(argc, argv);
     {
+        VVM::Utils::Timer total_timer("total vvm");
+        VVM::Utils::TimingManager::get_instance().start_timer("initialize");
+
         if (rank == 0) {
             std::cout << "VVM Model Simulation Started." << std::endl;
         }
@@ -200,6 +205,7 @@ int main(int argc, char* argv[]) {
         double current_time = 0.0;
         double next_output_time = output_interval;
 
+        VVM::Utils::TimingManager::get_instance().stop_timer("initialize");
         // Simulation loop
         while (current_time < total_time) {
             dynamical_core.step(state, dt);
@@ -215,6 +221,8 @@ int main(int argc, char* argv[]) {
             }
         }
     }
+    VVM::Utils::TimingManager::get_instance().print_timings(MPI_COMM_WORLD);
+
     Kokkos::finalize();
     MPI_Finalize();
     return 0;

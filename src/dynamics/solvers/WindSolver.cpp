@@ -19,6 +19,8 @@ WindSolver::WindSolver(const Core::Grid& grid, const Utils::ConfigurationManager
       ATEMP_field_("ATEMP", {grid.get_local_total_points_y(), grid.get_local_total_points_x()}) {}
 
 void WindSolver::solve_w(Core::State& state) {
+    VVM::Utils::Timer advection_x_timer("SOLVE_W");
+
     const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
     const int nx = grid_.get_local_total_points_x();
@@ -126,6 +128,8 @@ void WindSolver::solve_w(Core::State& state) {
 
 
 void WindSolver::solve_uv(Core::State& state) {
+    VVM::Utils::Timer advection_x_timer("SOLVE_UV");
+
     const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
     const int nx = grid_.get_local_total_points_x();
