@@ -11,6 +11,8 @@
 #include "core/State.hpp"
 #include "core/Parameters.hpp"
 #include "utils/ConfigurationManager.hpp"
+#include "utils/Timer.hpp"
+#include "utils/TimingManager.hpp"
 
 namespace VVM {
 namespace IO {

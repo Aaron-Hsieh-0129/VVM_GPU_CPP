@@ -133,6 +133,8 @@ void OutputManager::define_variables(const VVM::Core::State& state) {
 }
 
 void OutputManager::write(const VVM::Core::State& state, double time) {
+    VVM::Utils::Timer advection_x_timer("OUTPUT");
+
     if (field_variables_.empty()) {
         define_variables(state);
     }
