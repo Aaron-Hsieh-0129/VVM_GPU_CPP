@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
         VVM::Core::Parameters parameters(config, grid);
         grid.print_info();
         VVM::IO::OutputManager output_manager(config, grid, parameters, MPI_COMM_WORLD);
-        VVM::Core::State state(config, parameters);
+        VVM::Core::State state(config, parameters, grid);
         VVM::Core::HaloExchanger halo_exchanger(grid);
         VVM::Core::BoundaryConditionManager bc_manager(grid);
 
@@ -68,7 +68,6 @@ int main(int argc, char* argv[]) {
             Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, nx}),
             KOKKOS_LAMBDA(const int j, const int i) {
                 htflx_sfc_mutable(j, i) = static_cast<double>(100*rank + 10*j + i);
-                // zeta(nz-h-1,j,i) = static_cast<double>(100*rank + 10*j + i);
             }
         );
         // if (rank == 0) zeta_field.print_slice_z_at_k(grid, 0, nz-h-1);
@@ -77,6 +76,11 @@ int main(int argc, char* argv[]) {
         // if (rank == 0) zeta_field.print_slice_z_at_k(grid, 0, nz-h-1);
         // Kokkos::fence();
         // exit(1);
+
+        double heat_flux_mean = state.calculate_horizontal_mean(htflx_sfc);
+        if (rank == 0) {
+            std::cout << "Average of heat flux is: " << heat_flux_mean << std::endl;
+        }
 
         VVM::Core::Initializer init(config, grid, parameters, state);
         init.initialize_state();
@@ -107,8 +111,9 @@ int main(int argc, char* argv[]) {
         const int global_start_j = grid.get_local_physical_start_y();
         const int global_start_i = grid.get_local_physical_start_x();
 
-        auto dx = parameters.dx;
-        auto z_mid = parameters.z_mid.get_device_data();
+        const auto& dx = parameters.dx;
+        const auto& dy = parameters.dy;
+        const auto& z_mid = parameters.z_mid.get_device_data();
 
         
         Kokkos::parallel_for("th_init_with_perturbation", 
@@ -155,6 +160,7 @@ int main(int argc, char* argv[]) {
 
                 double radius_norm = std::sqrt(
                              std::pow(((global_i+1)-32./2.)*dx()/1000., 2) + std::pow((z_mid(k)-3200.)/500., 2)
+                             // std::pow(((global_j+1)-32./2.)*dy()/1000., 2) + std::pow((z_mid(k)-3200.)/500., 2)
                           );
                 if (radius_norm <= 1) {
                     th(k,j,i) = th(k,j,i) + 5.*(std::cos(3.14159265*0.5*radius_norm));

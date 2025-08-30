@@ -12,7 +12,7 @@ AdvectionTerm::~AdvectionTerm() = default;
 
 
 void AdvectionTerm::compute_tendency(
-    const Core::State& state, 
+    Core::State& state, 
     const Core::Grid& grid,
     const Core::Parameters& params,
     Core::Field<3>& out_tendency) const {
@@ -21,9 +21,13 @@ void AdvectionTerm::compute_tendency(
     const auto& u_field = state.get_field<3>("u");
     const auto& v_field = state.get_field<3>("v");
     const auto& w_field = state.get_field<3>("w");
-    auto& u = u_field.get_device_data();
-    auto& v = v_field.get_device_data();
-    auto& w = w_field.get_device_data();
+    auto& u_mean_field = state.get_field<3>("u_mean");
+    auto& v_mean_field = state.get_field<3>("v_mean");
+    auto& w_mean_field = state.get_field<3>("w_mean");
+
+    const auto& u = u_field.get_device_data();
+    const auto& v = v_field.get_device_data();
+    const auto& w = w_field.get_device_data();
     const auto& rhobar_field = state.get_field<1>("rhobar");
     const auto& rhobar = rhobar_field.get_device_data();
     const auto& rhobar_up_field = state.get_field<1>("rhobar_up");
@@ -39,17 +43,14 @@ void AdvectionTerm::compute_tendency(
     VVM::Core::BoundaryConditionManager bc_manager_zero(grid, VVM::Core::ZBoundaryType::ZERO, VVM::Core::ZBoundaryType::ZERO);
     VVM::Core::BoundaryConditionManager bc_manager_periodic(grid, VVM::Core::ZBoundaryType::PERIODIC, VVM::Core::ZBoundaryType::PERIODIC);
 
-    VVM::Core::Field<3> u_mean_field("u_mean", {nz, ny, nx});
     auto& u_mean_data = u_mean_field.get_mutable_device_data();
-    VVM::Core::Field<3> v_mean_field("v_mean", {nz, ny, nx});
     auto& v_mean_data = v_mean_field.get_mutable_device_data();
-    VVM::Core::Field<3> w_mean_field("w_mean", {nz, ny, nx});
     auto& w_mean_data = w_mean_field.get_mutable_device_data();
     if (variable_name_ == "xi") {
         const auto& fact1_xi_eta = params.fact1_xi_eta.get_device_data();
         const auto& fact2_xi_eta = params.fact2_xi_eta.get_device_data();
         Kokkos::parallel_for("calculate_rhou_for_xi",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,h,h}, {nz-1, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
                 u_mean_data(k,j,i) = 0.25*(fact1_xi_eta(k) * rhobar(k+1) * ( u(k+1,j,i) + u(k+1,j+1,i))
                                          + fact2_xi_eta(k) * rhobar(k)   * ( u(k,j,i)   + u(k,j+1,i)  )  );
@@ -57,7 +58,7 @@ void AdvectionTerm::compute_tendency(
         );
 
         Kokkos::parallel_for("calculate_rhov_for_xi",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,h,h}, {nz-1, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
                 v_mean_data(k,j,i) = 0.25*(fact1_xi_eta(k) * rhobar(k+1) * ( v(k+1,j,i) + v(k+1,j+1,i))
                                          + fact2_xi_eta(k) * rhobar(k)   * ( v(k,j,i)   + v(k,j+1,i)  )  );
@@ -66,7 +67,7 @@ void AdvectionTerm::compute_tendency(
 
         // WARNING: I think the w needs to have fact but it turns out the source code doesn't have this. The code follows it for now.
         Kokkos::parallel_for("calculate_rhow_for_xi",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,h,h}, {nz-1, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
                 w_mean_data(k,j,i) = 0.25*(rhobar_up(k+1) * ( w(k+1,j,i) + w(k+1,j+1,i))
                                          + rhobar_up(k)   * ( w(k,j,i)   + w(k,j+1,i)  )  );
@@ -77,7 +78,7 @@ void AdvectionTerm::compute_tendency(
         const auto& fact1_xi_eta = params.fact1_xi_eta.get_device_data();
         const auto& fact2_xi_eta = params.fact2_xi_eta.get_device_data();
         Kokkos::parallel_for("calculate_rhou_for_eta",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,h,h}, {nz-1, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
                 u_mean_data(k,j,i) = 0.25*(fact1_xi_eta(k) * rhobar(k+1) * ( u(k+1,j,i) + u(k+1,j,i+1))
                                          + fact2_xi_eta(k) * rhobar(k)   * ( u(k,j,i)   + u(k,j,i+1)  )  );
@@ -85,7 +86,7 @@ void AdvectionTerm::compute_tendency(
         );
 
         Kokkos::parallel_for("calculate_rhov_for_eta",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,h,h}, {nz-1, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
                 v_mean_data(k,j,i) = 0.25*(fact1_xi_eta(k) * rhobar(k+1) * ( v(k+1,j,i) + v(k+1,j,i+1))
                                          + fact2_xi_eta(k) * rhobar(k)   * ( v(k,j,i)   + v(k,j,i+1)  )  );
@@ -94,7 +95,7 @@ void AdvectionTerm::compute_tendency(
 
         // WARNING: I think the w needs to have fact but it turns out the source code doesn't have this. The code follows it for now.
         Kokkos::parallel_for("calculate_rhow_for_eta",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,h,h}, {nz-1, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
                 w_mean_data(k,j,i) = 0.25*(rhobar_up(k+1) * ( w(k+1,j,i) + w(k+1,j,i+1))
                                          + rhobar_up(k)   * ( w(k,j,i)   + w(k,j,i+1)  )  );
@@ -155,9 +156,7 @@ void AdvectionTerm::compute_tendency(
         haloexchanger.exchange_halos_top_slice(w_mean_field);
         haloexchanger.exchange_halos_slice(w_mean_field, nz-h-2);
     }
-    bc_manager_zerograd.apply_z_bcs_to_field(u_mean_field);
-    bc_manager_zerograd.apply_z_bcs_to_field(v_mean_field);
-    bc_manager_zero.apply_z_bcs_to_field(w_mean_field);
+    // No need of vertical boundary process
 
     if (variable_name_ == "xi" || variable_name_ == "eta" || variable_name_ == "zeta") {
         scheme_->calculate_flux_convergence_x(advected_field, u_mean_field, grid, params, out_tendency, variable_name_);

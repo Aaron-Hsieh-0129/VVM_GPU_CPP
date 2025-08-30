@@ -5,9 +5,8 @@
 namespace VVM {
 namespace Dynamics {
 
-Takacs::Takacs(const Core::Grid& grid, const Utils::ConfigurationManager& config)
-    : halo_exchanger_(grid),
-      flux_bc_manager_(grid, config, "flux") {}
+Takacs::Takacs(const Core::Grid& grid)
+    : halo_exchanger_(grid) {}
 
 void Takacs::calculate_flux_convergence_x(
     const Core::Field<3>& scalar, const Core::Field<3>& u_field,
@@ -184,20 +183,19 @@ void Takacs::calculate_flux_convergence_z(
         Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1,h,h}, {nz-h-1,ny-h,nx-h}),
             KOKKOS_LAMBDA(int k, int j, int i) {
                 flux(k,j,i) = w(k,j,i)*(q(k+1,j,i)+q(k,j,i));
-                if (k == h && w(k,j,i) < 0.) {
-                    flux(k,j,i) += -1./3.*(
-                            -wminus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(wminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(wminus(k+1,j,i)))*(q(k+2,j,i)-q(k+1,j,i)) 
-                          );
+                if (k == h-1)  {
+                    if (w(k,j,i) < 0.) {
+                        flux(k,j,i) += -1./3.*( 
+                                -wminus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(wminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(wminus(k+1,j,i)))*(q(k+2,j,i)-q(k+1,j,i)) 
+                              );
+                    }
                 }
-                else if (k == nz-h-2 && w(k,j,i) >= 0.) {
-                    flux(k,j,i) += -1./3.*( 
-                             wplus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(wplus(k,j,i))*Kokkos::sqrt(wplus(k-1,j,i))*(q(k,j,i)-q(k-1,j,i)) 
-                          );
-                }
-                else if (k == h-1 && w(k,j,i) < 0.)  {
-                    flux(k,j,i) += -1./3.*( 
-                            wminus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(wminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(wminus(k+1,j,i)))*(q(k+2,j,i)-q(k+1,j,i)) 
-                          );
+                else if (k == nz-h-2) {
+                    if (w(k,j,i) >= 0.) {
+                        flux(k,j,i) += -1./3.*( 
+                                 wplus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(wplus(k,j,i))*Kokkos::sqrt(wplus(k-1,j,i))*(q(k,j,i)-q(k-1,j,i)) 
+                              );
+                    }
                 }
                 else {
                     flux(k,j,i) += -1./3.*( 
@@ -212,15 +210,19 @@ void Takacs::calculate_flux_convergence_z(
         Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end,ny-h,nx-h}),
             KOKKOS_LAMBDA(int k, int j, int i) {
                 flux(k,j,i) = w(k,j,i)*(q(k+1,j,i)+q(k,j,i));
-                if (k == h && w(k,j,i) < 0.) {
-                    flux(k,j,i) += -1./3.*(
-                            -wminus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(wminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(wminus(k+1,j,i)))*(q(k+2,j,i)-q(k+1,j,i)) 
-                          );
+                if (k == h) {
+                    if (w(k,j,i) < 0.) {
+                        flux(k,j,i) += -1./3.*(
+                                -wminus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(wminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(wminus(k+1,j,i)))*(q(k+2,j,i)-q(k+1,j,i)) 
+                              );
+                    }
                 }
-                else if (k == nz-h-1 && w(k,j,i) >= 0.) {
-                    flux(k,j,i) += -1./3.*( 
-                             wplus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(wplus(k,j,i))*Kokkos::sqrt(wplus(k-1,j,i))*(q(k,j,i)-q(k-1,j,i)) 
-                          );
+                else if (k == nz-h-1) {
+                    if (w(k,j,i) >= 0.) {
+                        flux(k,j,i) += -1./3.*( 
+                                 wplus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(wplus(k,j,i))*Kokkos::sqrt(wplus(k-1,j,i))*(q(k,j,i)-q(k-1,j,i)) 
+                              );
+                    }
                 }
                 else {
                     flux(k,j,i) += -1./3.*( 
@@ -231,12 +233,8 @@ void Takacs::calculate_flux_convergence_z(
             }
         );
     }
-
     // No need of x-y halo exchanges because this is z direction tendency
-    if (var_name != "zeta" && var_name != "xi" && var_name != "eta") flux_bc_manager_.apply_z_bcs_to_field(flux_field);
-    // int rank;
-    // MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    // if (rank == 0 && var_name == "th") flux_field.print_slice_z_at_k(grid, 0, 1);
+    // No need of vertical boundary process because it's supposed to be 0 in ghost points and it's been processed during initialization
 
     // DEBUG print
     // Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {ny,nx}),
@@ -650,7 +648,6 @@ void Takacs::calculate_vorticity_divergence(
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
     const int h = grid.get_halo_cells();
-    VVM::Core::HaloExchanger haloexchanger(grid);
 
     Kokkos::parallel_for("vorticity_divergence",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz - h, ny - h, nx - h}),

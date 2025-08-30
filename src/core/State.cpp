@@ -4,12 +4,10 @@
 namespace VVM {
 namespace Core {
 
-State::State(const Utils::ConfigurationManager& config, const Parameters& params)
-    : config_ref_(config), parameters_(params) {
+State::State(const Utils::ConfigurationManager& config, const Parameters& params, const Grid& grid)
+    : config_ref_(config), parameters_(params), grid_(grid) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
-    VVM::Core::Grid grid(config_ref_);
 
     // Get local points including halo cells
     int nx_total = grid.get_local_total_points_x();
@@ -26,6 +24,12 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
 
     // 2D field
     add_field<2>("htflx_sfc", {ny_total, nx_total});
+    add_field<2>("psi", {ny_total, nx_total});
+    add_field<2>("psinm1", {ny_total, nx_total});
+    add_field<2>("chi", {ny_total, nx_total});
+    add_field<2>("chinm1", {ny_total, nx_total});
+    add_field<2>("utop", {ny_total, nx_total});
+    add_field<2>("vtop", {ny_total, nx_total});
 
     // 3D field
     add_field<3>("th", {nz_total, ny_total, nx_total});
@@ -35,6 +39,9 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<3>("u", {nz_total, ny_total, nx_total});
     add_field<3>("v", {nz_total, ny_total, nx_total});
     add_field<3>("w", {nz_total, ny_total, nx_total});
+    add_field<3>("u_mean", {nz_total, ny_total, nx_total});
+    add_field<3>("v_mean", {nz_total, ny_total, nx_total});
+    add_field<3>("w_mean", {nz_total, ny_total, nx_total});
     add_field<3>("W3DNM1", {nz_total, ny_total, nx_total});
 
     // Rotation term
@@ -52,8 +59,6 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
 
     // TODO: Add tracer auto loading from configuration file
 }
-
-// get_field is now a template in the header file.
 
 } // namespace Core
 } // namespace VVM

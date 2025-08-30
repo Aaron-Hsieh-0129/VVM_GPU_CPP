@@ -9,7 +9,7 @@ StretchingTerm::StretchingTerm(std::unique_ptr<SpatialScheme> scheme, std::strin
 StretchingTerm::~StretchingTerm() = default;
 
 void StretchingTerm::compute_tendency(
-    const Core::State& state,
+    Core::State& state,
     const Core::Grid& grid,
     const Core::Parameters& params,
     Core::Field<3>& out_tendency) const {

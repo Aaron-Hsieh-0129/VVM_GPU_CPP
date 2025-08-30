@@ -13,7 +13,7 @@ public:
     virtual ~TendencyTerm() = default;
     
     virtual void compute_tendency(
-        const Core::State& state, 
+        Core::State& state, 
         const Core::Grid& grid,
         const Core::Parameters& params, 
         Core::Field<3>& out_tendency) const = 0;
