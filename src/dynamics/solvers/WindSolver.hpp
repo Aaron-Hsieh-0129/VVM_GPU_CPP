@@ -15,6 +15,11 @@
 namespace VVM {
 namespace Dynamics {
 
+enum class WSolverMethod {
+    TRIDIAGONAL, // Original method
+    JACOBI       // 3D Jacobi iteration
+};
+
 class WindSolver {
 public:
     WindSolver(const Core::Grid& grid, const Utils::ConfigurationManager& config, const Core::Parameters& params);
@@ -28,6 +33,7 @@ private:
     const Utils::ConfigurationManager& config_;
     mutable Core::HaloExchanger halo_exchanger_;
     const Core::Parameters& params_;
+    WSolverMethod w_solver_method_;
 
     mutable Core::Field<3> YTEM_field_;
     mutable Core::Field<3> W3DNP1_field_;

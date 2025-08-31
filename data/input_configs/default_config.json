@@ -71,6 +71,10 @@
         "Rd": 287.0
     },
     "dynamics": {
+        "solver": {
+            "w_solver_method": "tridiagonal",
+            "_w_solver_method_options": "Choose 'tridiagonal' (original) or 'jacobi' (3D parallel)"
+        },
         "prognostic_variables": {
             "th": {
                 "tendency_terms": {

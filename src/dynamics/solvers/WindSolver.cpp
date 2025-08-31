@@ -16,10 +16,20 @@ WindSolver::WindSolver(const Core::Grid& grid, const Utils::ConfigurationManager
       ROP1_field_("ROP1", {grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
       RIP2_field_("RIP2", {grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
       ROP2_field_("ROP2", {grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
-      ATEMP_field_("ATEMP", {grid.get_local_total_points_y(), grid.get_local_total_points_x()}) {}
+      ATEMP_field_("ATEMP", {grid.get_local_total_points_y(), grid.get_local_total_points_x()}) {
+
+    std::string solver_method_str = config.get_value<std::string>("dynamics.solver.w_solver_method");
+    if (solver_method_str == "tridiagonal") {
+        w_solver_method_ = WSolverMethod::TRIDIAGONAL;
+    } 
+    else {
+        w_solver_method_ = WSolverMethod::JACOBI;
+    }
+
+}
 
 void WindSolver::solve_w(Core::State& state) {
-    VVM::Utils::Timer advection_x_timer("SOLVE_W");
+    VVM::Utils::Timer solve_w_timer("SOLVE_W");
 
     const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
@@ -81,46 +91,68 @@ void WindSolver::solve_w(Core::State& state) {
     const auto& cn_new = params_.cn_new.get_device_data();
 
     VVM::Core::BoundaryConditionManager bc_manager(grid_, config_, "w");
-    for (int iter = 0; iter < 200; iter++) {
-        // Copy w to w3dn
-        Kokkos::deep_copy(W3DN, w);
+    if (w_solver_method_ == WSolverMethod::TRIDIAGONAL) {
+        for (int iter = 0; iter < 200; iter++) {
+            // Copy w to w3dn
+            Kokkos::deep_copy(W3DN, w);
 
-        Kokkos::parallel_for("calculate_RHSV", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1,ny-h,nx-h}),
-            KOKKOS_LAMBDA(int k, int j, int i) {
-                RHSV(k,j,i) = WRXMU() * W3DN(k,j,i)
-                           + (W3DN(k,j,i+1)+W3DN(k,j,i-1))*rdx2()
-                           + (W3DN(k,j+1,i)+W3DN(k,j-1,i))*rdy2()
-                           + YTEM(k,j,i);
-            }
-        );
-
-        // Gauss elimination
-        Kokkos::parallel_for("fused_tridiagonal_solver", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
-            KOKKOS_LAMBDA(int j, int i) {
-
-                // Forward elimination)
-                pm_temp(h,j,i) = RHSV(h,j,i) / BGAU(h);
-                for (int k = h+1; k <= nz-h-2; k++) {
-                    pm_temp(k,j,i) = (RHSV(k,j,i) - AGAU(k) * pm_temp(k-1,j,i)) / bn_new(k);
+            Kokkos::parallel_for("calculate_RHSV", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1,ny-h,nx-h}),
+                KOKKOS_LAMBDA(int k, int j, int i) {
+                    RHSV(k,j,i) = WRXMU() * W3DN(k,j,i)
+                               + (W3DN(k,j,i+1)+W3DN(k,j,i-1))*rdx2()
+                               + (W3DN(k,j+1,i)+W3DN(k,j-1,i))*rdy2()
+                               + YTEM(k,j,i);
                 }
+            );
 
-                // Backward substitution
-                pm(nz-h-2,j,i) = pm_temp(nz-h-2,j,i);
-                for (int k = nz-h-3; k >= h; k--) {
-                    pm(k,j,i) = pm_temp(k,j,i) - cn_new(k) * pm(k+1,j,i);
+            // Gauss elimination
+            Kokkos::parallel_for("fused_tridiagonal_solver", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
+                KOKKOS_LAMBDA(int j, int i) {
+
+                    // Forward elimination)
+                    pm_temp(h,j,i) = RHSV(h,j,i) / BGAU(h);
+                    for (int k = h+1; k <= nz-h-2; k++) {
+                        pm_temp(k,j,i) = (RHSV(k,j,i) - AGAU(k) * pm_temp(k-1,j,i)) / bn_new(k);
+                    }
+
+                    // Backward substitution
+                    pm(nz-h-2,j,i) = pm_temp(nz-h-2,j,i);
+                    for (int k = nz-h-3; k >= h; k--) {
+                        pm(k,j,i) = pm_temp(k,j,i) - cn_new(k) * pm(k+1,j,i);
+                    }
                 }
-            }
-        );
+            );
 
-        // Get w
-        Kokkos::parallel_for("copy_w_to_w3dn", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1,ny-h,nx-h}),
-            KOKKOS_LAMBDA(int k, int j, int i) {
-                w(k,j,i) = pm(k,j,i) / rhobar_up(k);
-            }
-        );
+            // Get w
+            Kokkos::parallel_for("copy_w_to_w3dn", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1,ny-h,nx-h}),
+                KOKKOS_LAMBDA(int k, int j, int i) {
+                    w(k,j,i) = pm(k,j,i) / rhobar_up(k);
+                }
+            );
+            halo_exchanger_.exchange_halos(state.get_field<3>("w"));
+        }
+    }
+    else {
+        for (int iter = 0; iter < 200; iter++) {
+            Kokkos::deep_copy(W3DN, w);
 
-        // FIXME: This is a strong bottleneck. Check whether it's using GPU communication.
-        halo_exchanger_.exchange_halos(state.get_field<3>("w"));
+            Kokkos::parallel_for("jacobi_w_solver", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1,ny-h,nx-h}),
+                KOKKOS_LAMBDA(int k, int j, int i) {
+                    const double horizontal_terms = (W3DN(k,j,i+1)+W3DN(k,j,i-1))*rdx2()
+                                                  + (W3DN(k,j+1,i)+W3DN(k,j-1,i))*rdy2();
+
+                    const double vertical_terms = -AGAU(k)*W3DN(k-1,j,i)*rhobar_up(k-1)
+                                                  -CGAU(k)*W3DN(k+1,j,i)*rhobar_up(k+1);
+
+                    const double diagonal_term = BGAU(k)*rhobar_up(k) - WRXMU();
+                    
+                    if (diagonal_term != 0.0) {
+                        w(k,j,i) = (YTEM(k,j,i) + horizontal_terms + vertical_terms) / diagonal_term;
+                    }
+                }
+            );
+            halo_exchanger_.exchange_halos(state.get_field<3>("w"));
+        }
     }
     bc_manager.apply_z_bcs_to_field(state.get_field<3>("w"));
     return;
@@ -128,7 +160,7 @@ void WindSolver::solve_w(Core::State& state) {
 
 
 void WindSolver::solve_uv(Core::State& state) {
-    VVM::Utils::Timer advection_x_timer("SOLVE_UV");
+    VVM::Utils::Timer solve_uv_timer("SOLVE_UV");
 
     const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
