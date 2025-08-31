@@ -4,7 +4,9 @@
 #include "Grid.hpp"
 #include "Field.hpp"
 #include "State.hpp"
-#include <algorithm> // For std::max
+#include "utils/Timer.hpp"
+#include "utils/TimingManager.hpp"
+#include <algorithm>
 #include <vector>
 
 namespace VVM {
@@ -36,6 +38,7 @@ public:
 
     template<size_t Dim>
     void exchange_halos(Field<Dim>& field) const {
+        VVM::Utils::Timer exchange_halos_timer("Exchnage_halos");
         if constexpr (Dim >= 2) {
             auto reqs_y = post_exchange_halo_y(field);
             wait_exchange_halo_y(field, reqs_y);
@@ -170,7 +173,8 @@ HaloExchangeRequests HaloExchanger::post_exchange_halo_x(Field<Dim>& field) cons
                 send_l(j * h + i_h) = data(j, h + i_h);
                 send_r(j * h + i_h) = data(j, h + nx_phys - h + i_h);
         });
-    } else if constexpr (Dim == 3) {
+    } 
+    else if constexpr (Dim == 3) {
         const int nz = data.extent(0);
         const int ny = data.extent(1);
         Kokkos::parallel_for("pack_x_3d", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, ny, h}),
@@ -179,7 +183,8 @@ HaloExchangeRequests HaloExchanger::post_exchange_halo_x(Field<Dim>& field) cons
                 send_l(idx) = data(k, j, h + i_h);
                 send_r(idx) = data(k, j, h + nx_phys - h + i_h);
         });
-    } else if constexpr (Dim == 4) {
+    } 
+    else if constexpr (Dim == 4) {
         const int nw = data.extent(0);
         const int nz = data.extent(1);
         const int ny = data.extent(2);
@@ -232,7 +237,8 @@ void HaloExchanger::wait_exchange_halo_x(Field<Dim>& field, HaloExchangeRequests
                 if (neighbor_left != MPI_PROC_NULL) data(j, i_h) = recv_l(j * h + i_h);
                 if (neighbor_right != MPI_PROC_NULL) data(j, h + nx_phys + i_h) = recv_r(j * h + i_h);
         });
-    } else if constexpr (Dim == 3) {
+    } 
+    else if constexpr (Dim == 3) {
         const int nz = data.extent(0);
         const int ny = data.extent(1);
         Kokkos::parallel_for("unpack_x_3d", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, ny, h}),
@@ -241,7 +247,8 @@ void HaloExchanger::wait_exchange_halo_x(Field<Dim>& field, HaloExchangeRequests
                 if (neighbor_left != MPI_PROC_NULL) data(k, j, i_h) = recv_l(idx);
                 if (neighbor_right != MPI_PROC_NULL) data(k, j, h + nx_phys + i_h) = recv_r(idx);
         });
-    } else if constexpr (Dim == 4) {
+    } 
+    else if constexpr (Dim == 4) {
         const int nw = data.extent(0);
         const int nz = data.extent(1);
         const int ny = data.extent(2);
@@ -284,7 +291,8 @@ HaloExchangeRequests HaloExchanger::post_exchange_halo_y(Field<Dim>& field) cons
                 send_b(idx) = data(h + j_h, i);
                 send_t(idx) = data(h + ny_phys - h + j_h, i);
         });
-    } else if constexpr (Dim == 3) {
+    } 
+    else if constexpr (Dim == 3) {
         const int nz = data.extent(0);
         const int nx = data.extent(2);
         Kokkos::parallel_for("pack_y_3d", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, nx, h}),
@@ -293,7 +301,8 @@ HaloExchangeRequests HaloExchanger::post_exchange_halo_y(Field<Dim>& field) cons
                 send_b(idx) = data(k, h + j_h, i);
                 send_t(idx) = data(k, h + ny_phys - h + j_h, i);
         });
-    } else if constexpr (Dim == 4) {
+    } 
+    else if constexpr (Dim == 4) {
         const int nw = data.extent(0);
         const int nz = data.extent(1);
         const int nx = data.extent(3);
@@ -347,7 +356,8 @@ void HaloExchanger::wait_exchange_halo_y(Field<Dim>& field, HaloExchangeRequests
                 if (neighbor_bottom != MPI_PROC_NULL) data(j_h, i) = recv_b(idx);
                 if (neighbor_top != MPI_PROC_NULL) data(h + ny_phys + j_h, i) = recv_t(idx);
         });
-    } else if constexpr (Dim == 3) {
+    } 
+    else if constexpr (Dim == 3) {
         const int nz = data.extent(0);
         const int nx = data.extent(2);
         Kokkos::parallel_for("unpack_y_3d", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, nx, h}),
@@ -356,7 +366,8 @@ void HaloExchanger::wait_exchange_halo_y(Field<Dim>& field, HaloExchangeRequests
                 if (neighbor_bottom != MPI_PROC_NULL) data(k, j_h, i) = recv_b(idx);
                 if (neighbor_top != MPI_PROC_NULL) data(k, h + ny_phys + j_h, i) = recv_t(idx);
         });
-    } else if constexpr (Dim == 4) {
+    } 
+    else if constexpr (Dim == 4) {
         const int nw = data.extent(0);
         const int nz = data.extent(1);
         const int nx = data.extent(3);
