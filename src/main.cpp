@@ -164,13 +164,14 @@ int main(int argc, char* argv[]) {
                 */
 
                 double radius_norm = std::sqrt(
-                             std::pow(((global_i+1)-32./2.)*dx()/1000., 2) + std::pow((z_mid(k)-3200.)/500., 2)
-                             // std::pow(((global_j+1)-32./2.)*dy()/1000., 2) + std::pow((z_mid(k)-3200.)/500., 2)
+                             std::pow(((global_i+1)-32./2.)*dx()/2000., 2) + std::pow((z_mid(k)-3000.)/2000., 2) 
+                           + std::pow(((global_j+1)-32./2.)*dy()/2000., 2)
                           );
                 if (radius_norm <= 1) {
                     th(k,j,i) = th(k,j,i) + 5.*(std::cos(3.14159265*0.5*radius_norm));
                 }
-        });
+            }
+        );
         // if (rank == 0) {
         //     std::cout << "\n--- Field State BEFORE Halo Exchange ---" << std::endl;
         //     state.get_field<3>("v").print_slice_z_at_k(grid, 0, 18);

@@ -167,7 +167,7 @@ void WindSolver::solve_uv(Core::State& state) {
     const int nx = grid_.get_local_total_points_x();
     const int h = grid_.get_halo_cells();
 
-    auto& zeta = state.get_field<3>("zeta").get_mutable_device_data();
+    const auto& zeta = state.get_field<3>("zeta").get_device_data();
     const auto& zeta_slice = Kokkos::subview(zeta, nz-h-1, Kokkos::ALL(), Kokkos::ALL());
     auto& RIP1 = RIP1_field_.get_mutable_device_data();
     Kokkos::deep_copy(RIP1, zeta_slice);
@@ -175,7 +175,11 @@ void WindSolver::solve_uv(Core::State& state) {
     // Solve psi
     auto& psi_field = state.get_field<2>("psi");
     auto& psinm1_field = state.get_field<2>("psinm1");
+    auto& psi = psi_field.get_mutable_device_data();
+    halo_exchanger_.exchange_halos(RIP1_field_);
     relax_2d(psi_field, psinm1_field, RIP1_field_, ROP1_field_);
+    Kokkos::deep_copy(psinm1_field.get_mutable_device_data(), psi);
+    Kokkos::deep_copy(psi, ROP1_field_.get_mutable_device_data());
 
     // Solve chi
     auto& RIP2 = RIP2_field_.get_mutable_device_data();
@@ -192,16 +196,13 @@ void WindSolver::solve_uv(Core::State& state) {
             RIP2(j,i) = flex_height_coef_mid(nz-h-1)*rhobar_up(nz-h-2)*w(nz-h-2,j,i)*rdz() / rhobar(nz-h-1);
         }
     );
+    halo_exchanger_.exchange_halos(RIP2_field_);
     relax_2d(chi_field, chinm1_field, RIP2_field_, ROP2_field_);
 
-    auto& psi = psi_field.get_mutable_device_data();
     auto& chi = chi_field.get_mutable_device_data();
     // Copy data to previous step
-    Kokkos::deep_copy(psinm1_field.get_mutable_device_data(), psi);
     Kokkos::deep_copy(chinm1_field.get_mutable_device_data(), chi);
-    Kokkos::deep_copy(psi, ROP1_field_.get_mutable_device_data());
     Kokkos::deep_copy(chi, ROP2_field_.get_mutable_device_data());
-
 
     // Calculate utop, vtop
     auto& utop_field = state.get_field<2>("utop");
@@ -251,11 +252,14 @@ void WindSolver::solve_uv(Core::State& state) {
             u(nz-h,j,i) = u(nz-h-1,j,i)
                       + ((w(nz-h-1,j,i+1) - w(nz-h-1,j,i))*rdx() - eta(nz-h-1,j,i)) * dz() / flex_height_coef_up(nz-h-1); 
             v(nz-h,j,i) = v(nz-h-1,j,i)
-                      + ((w(nz-h-1,j+1,i) - w(nz-h-1,j,i))*rdx() - xi(nz-h-1,j,i)) * dz() / flex_height_coef_up(nz-h-1); 
+                      + ((w(nz-h-1,j+1,i) - w(nz-h-1,j,i))*rdy() -  xi(nz-h-1,j,i)) * dz() / flex_height_coef_up(nz-h-1); 
         }
     );
+    VVM::Core::BoundaryConditionManager bc_manager(grid_);
     halo_exchanger_.exchange_halos(u_field);
     halo_exchanger_.exchange_halos(v_field);
+    bc_manager.apply_z_bcs_to_field(u_field);
+    bc_manager.apply_z_bcs_to_field(v_field);
     return;
 }
 
