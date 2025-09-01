@@ -3,7 +3,7 @@
 #include <cerrno>
 #include <adios2/cxx11/KokkosView.h>
 #include <Kokkos_Core.hpp> 
-#include <algorithm> // For std::max and std::min
+#include <algorithm>
 
 namespace VVM {
 namespace IO {
@@ -59,9 +59,50 @@ void OutputManager::define_variables(const VVM::Core::State& state) {
     const size_t gny = grid_.get_global_points_y();
     const size_t gnz = grid_.get_global_points_z();
 
+    // Define coordinate variables (these do not change over time)
     io_.DefineVariable<double>("x", {gnx}, {0}, {rank_ == 0 ? gnx : 0});
     io_.DefineVariable<double>("y", {gny}, {0}, {rank_ == 0 ? gny : 0});
     io_.DefineVariable<double>("z_mid", {gnz}, {0}, {rank_ == 0 ? gnz : 0});
+
+    // Create and add the vtk.xml attribute to describe the mesh for ParaView
+    std::string vtk_xml = "<?xml version=\"1.0\"?>\n";
+    vtk_xml += "<VTKFile type=\"RectilinearGrid\" version=\"1.0\" byte_order=\"LittleEndian\">\n";
+    vtk_xml += "  <RectilinearGrid WholeExtent=\"0 " + std::to_string(gnx - 1) +
+               " 0 " + std::to_string(gny - 1) +
+               " 0 " + std::to_string(gnz - 1) + "\">\n";
+    vtk_xml += "    <Piece Extent=\"0 " + std::to_string(gnx - 1) +
+               " 0 " + std::to_string(gny - 1) +
+               " 0 " + std::to_string(gnz - 1) + "\">\n";
+    vtk_xml += "      <PointData>\n";
+
+    // Add DataArray tags for all 3D fields that will be written
+    for (const auto& field_name : fields_to_output_) {
+        auto it = state.begin();
+        while (it != state.end() && it->first != field_name) ++it;
+
+        if (it != state.end()) {
+            std::visit([&](const auto& field) {
+                using T = std::decay_t<decltype(field)>;
+                if constexpr (!std::is_same_v<T, std::monostate>) {
+                    if constexpr (T::DimValue == 3) {
+                        vtk_xml += "        <DataArray Name=\"" + field_name + "\" type=\"Float64\" format=\"binary\"/>\n";
+                    }
+                }
+            }, it->second);
+        }
+    }
+
+    vtk_xml += "      </PointData>\n";
+    vtk_xml += "      <Coordinates>\n";
+    vtk_xml += "        <DataArray Name=\"x\" type=\"Float64\" format=\"binary\"/>\n";
+    vtk_xml += "        <DataArray Name=\"y\" type=\"Float64\" format=\"binary\"/>\n";
+    vtk_xml += "        <DataArray Name=\"z_mid\" type=\"Float64\" format=\"binary\"/>\n";
+    vtk_xml += "      </Coordinates>\n";
+    vtk_xml += "    </Piece>\n";
+    vtk_xml += "  </RectilinearGrid>\n";
+    vtk_xml += "</VTKFile>\n";
+
+    io_.DefineAttribute<std::string>("vtk.xml", vtk_xml);
 
     // Local physical points and offsets for current rank
     const size_t rank_lnx = grid_.get_local_physical_points_x();
@@ -80,11 +121,6 @@ void OutputManager::define_variables(const VVM::Core::State& state) {
             std::visit([&](const auto& field) {
                 using T = std::decay_t<decltype(field)>;
                 if constexpr (!std::is_same_v<T, std::monostate>) {
-                    // Calculate intersection of rank's physical domain and requested output region
-                    // For each dimension: actual_start = max(rank_physical_start, output_region_start)
-                    // actual_end = min(rank_physical_end, output_region_end)
-                    // count = (actual_end >= actual_start) ? (actual_end - actual_start + 1) : 0
-
                     size_t actual_output_x_start = std::max(rank_offset_x, output_x_start_);
                     size_t actual_output_x_end = std::min(rank_offset_x + rank_lnx - 1, output_x_end_);
                     size_t local_output_nx = (actual_output_x_end >= actual_output_x_start) ? (actual_output_x_end - actual_output_x_start + 1) : 0;
@@ -97,22 +133,6 @@ void OutputManager::define_variables(const VVM::Core::State& state) {
                     size_t actual_output_z_end = std::min(rank_offset_z + rank_lnz - 1, output_z_end_);
                     size_t local_output_nz = (actual_output_z_end >= actual_output_z_start) ? (actual_output_z_end - actual_output_z_start + 1) : 0;
                     
-                    // if constexpr (T::DimValue == 1) { // 1D fields are Z-dependent only
-                    //     // For 1D fields, the local_physical_size in Z (lnz) is equal to global_size (gnz)
-                    //     // So, the actual_output_z_start/end already covers the global range.
-                    //     field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gnz}, {actual_output_z_start}, {local_output_nz});
-                    // }
-                    // else if constexpr (T::DimValue == 2) {
-                    //     field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gny, gnx}, {actual_output_y_start, actual_output_x_start}, {local_output_ny, local_output_nx});
-                    // }
-                    // else if constexpr (T::DimValue == 3) {
-                    //     field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gnz, gny, gnx}, {actual_output_z_start, actual_output_y_start, actual_output_x_start}, {local_output_nz, local_output_ny, local_output_nx});
-                    // }
-                    // else if constexpr (T::DimValue == 4) {
-                    //     const size_t dim4 = field.get_device_data().extent(0); // 4th dimension is typically not decomposed
-                    //     field_variables_[field_name] = io_.DefineVariable<double>(field_name, {dim4, gnz, gny, gnx}, {0, actual_output_z_start, actual_output_y_start, actual_output_x_start}, {dim4, local_output_nz, local_output_ny, local_output_nx});
-                    // }
-
                     if constexpr (T::DimValue == 1) {
                         field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gnz}, {actual_output_z_start}, {local_output_nz});
                     }

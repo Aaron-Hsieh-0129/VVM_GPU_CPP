@@ -121,7 +121,7 @@ void AdvectionTerm::compute_tendency(
 
         Kokkos::parallel_for("calculate_rhow_for_zeta",
             // The original code adopts Tackas 3rd order difference for boundary zeta, so it needs two w.
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({nz-h-2,h,h}, {nz-h, ny-h, nx-h}),
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({nz-h-3,h,h}, {nz-h-1, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
                 w_mean_data(k,j,i) = 0.25*rhobar_up(k)*(w(k,j,i)   + w(k,j,i+1) 
                                                       + w(k,j+1,i) + w(k,j+1,i+1));

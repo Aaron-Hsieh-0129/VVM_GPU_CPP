@@ -147,12 +147,11 @@ void DynamicalCore::step(Core::State& state, double dt) {
                 else halo_exchanger.exchange_halos(state.get_field<3>(var_name));
                 
                 bc_manager.apply_z_bcs_to_field(state.get_field<3>(var_name));
-
-                if (var_name == "zeta") compute_zeta_vertical_structure(state);
             }
         }
     }
 
+    compute_zeta_vertical_structure(state);
     compute_wind_fields();
     time_step_count_++;
 }
@@ -183,7 +182,7 @@ void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
 
     Core::Field<3> rhs_field("rhs_zeta_diag", {nz, ny, nx});
     scheme->calculate_vorticity_divergence(state, grid_, params_, rhs_field);
-    auto rhs_data = rhs_field.get_device_data();
+    const auto& rhs_data = rhs_field.get_device_data();
     const auto& flex_height_coef_up = params_.flex_height_coef_up.get_device_data();
 
     Kokkos::parallel_for("zeta_downward_integration",

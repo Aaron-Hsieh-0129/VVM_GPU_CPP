@@ -39,21 +39,43 @@ void TimeIntegrator::step(
         auto tendency_prev_view = Kokkos::subview(tendency_history.get_device_data(), prev_idx, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
 
         if (time_step_count_ == 0) {
-            Kokkos::parallel_for("AB2_Forward_Step", 
-                Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz - h, ny - h, nx - h}),
-                KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                    field_new_view(k, j, i) = field_old_view(k, j, i) + dt * tendency_now_view(k, j, i);
-                }
-            );
+            if (variable_name_ == "zeta") {
+                Kokkos::parallel_for("AB2_Forward_Step", 
+                    Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h, h}, {ny-h, nx-h}),
+                    KOKKOS_LAMBDA(const int j, const int i) {
+                        field_new_view(nz-h-1, j, i) = field_old_view(nz-h-1, j, i) + dt * tendency_now_view(nz-h-1, j, i);
+                    }
+                );
+            }
+            else {
+                Kokkos::parallel_for("AB2_Forward_Step", 
+                    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz - h, ny - h, nx - h}),
+                    KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                        field_new_view(k, j, i) = field_old_view(k, j, i) + dt * tendency_now_view(k, j, i);
+                    }
+                );
+            }
+
         } 
         else {
-            Kokkos::parallel_for("AdamsBashforth2_Step", 
-                Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz - h, ny - h, nx - h}),
-                KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                    field_new_view(k, j, i) = field_old_view(k, j, i) 
-                                            + dt * (1.5 * tendency_now_view(k, j, i) - 0.5 * tendency_prev_view(k, j, i));
-                }
-            );
+            if (variable_name_ == "zeta") {
+                Kokkos::parallel_for("AdamsBashforth2_Step", 
+                    Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h, h}, {ny - h, nx - h}),
+                    KOKKOS_LAMBDA(const int j, const int i) {
+                        field_new_view(nz-h-1, j, i) = field_old_view(nz-h-1, j, i) 
+                                                + dt * (1.5 * tendency_now_view(nz-h-1, j, i) - 0.5 * tendency_prev_view(nz-h-1, j, i));
+                    }
+                );
+            }
+            else {
+                Kokkos::parallel_for("AdamsBashforth2_Step", 
+                    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz - h, ny - h, nx - h}),
+                    KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                        field_new_view(k, j, i) = field_old_view(k, j, i) 
+                                                + dt * (1.5 * tendency_now_view(k, j, i) - 0.5 * tendency_prev_view(k, j, i));
+                    }
+                );
+            }
         }
     } 
     else if (has_fe_terms_) {

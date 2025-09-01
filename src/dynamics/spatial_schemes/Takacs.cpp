@@ -173,13 +173,13 @@ void Takacs::calculate_flux_convergence_z(
     if (var_name == "zeta") k_start = nz-h-1;
 
     if (var_name == "zeta") {
-        Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end,ny-h,nx-h}),
-            KOKKOS_LAMBDA(int k, int j, int i) {
+        Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
+            KOKKOS_LAMBDA(int j, int i) {
                 // It's supposed to be rho*w*q, the w here is rho*w from the input
-                flux(k,j,i) = w(k,j,i)*(q(k+1,j,i)+q(k,j,i));
-                if (w(k,j,i) >= 0.) {
-                    flux(k,j,i) += -1./3.*(
-                            wplus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(wplus(k,j,i))*Kokkos::sqrt(wplus(k-1,j,i))*(q(k,j,i)-q(k-1,j,i))
+                flux(nz-h-2,j,i) = w(nz-h-2,j,i)*(q(nz-h-1,j,i)+q(nz-h-2,j,i));
+                if (w(nz-h-2,j,i) >= 0.) {
+                    flux(nz-h-2,j,i) += -1./3.*(
+                            wplus(nz-h-2,j,i)*(q(nz-h-1,j,i)-q(nz-h-2,j,i)) - Kokkos::sqrt(wplus(nz-h-2,j,i))*Kokkos::sqrt(wplus(nz-h-3,j,i))*(q(nz-h-2,j,i)-q(nz-h-3,j,i))
                         );
                 }
             }
@@ -263,10 +263,10 @@ void Takacs::calculate_flux_convergence_z(
 
     if (var_name == "zeta") {
         Kokkos::parallel_for("flux_convergence_tendency", 
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end, ny-h, nx-h}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
+            KOKKOS_LAMBDA(const int j, const int i) {
                 // w(nz-h) = 0, top b.c.
-                tendency(k,j,i) += 0.5*flux(k,j,i) * rdz_view() * flex_height_coef_mid(k);
+                tendency(nz-h-1,j,i) += 0.5*flux(nz-h-2,j,i) * rdz_view() * flex_height_coef_mid(nz-h-1);
             }
         );
     }
@@ -665,6 +665,7 @@ void Takacs::calculate_vorticity_divergence(
             out_data(k, j, i) = -(d_xi_dx - d_eta_dy);
         }
     );
+    halo_exchanger_.exchange_halos(out_field);
 }
 
 void Takacs::calculate_buoyancy_tendency_x(

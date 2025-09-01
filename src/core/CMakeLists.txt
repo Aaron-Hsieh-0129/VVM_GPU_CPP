@@ -25,7 +25,7 @@ find_library(NVTOOLSEXT_LIBRARY nvToolsExt
     HINTS /work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/cuda/lib64
 )
 find_library(NVCPUMATH_LIBRARY nvcpumath
-    HINTS /work/aaron900129/nvhpc_23_9/Linux_x86_64/23.9/compilers/lib
+    HINTS /work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/compilers/lib
 )
 
 if(NOT NVCPUMATH_LIBRARY)
