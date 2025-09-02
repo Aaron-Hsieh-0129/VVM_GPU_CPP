@@ -15,6 +15,7 @@ public:
     // Physical constants
     Kokkos::View<double> gravity;
     Kokkos::View<double> Rd;
+    int solver_iteration;
 
     // Grid-derived parameters
     Kokkos::View<double> nx;
