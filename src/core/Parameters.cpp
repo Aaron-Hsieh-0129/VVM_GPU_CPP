@@ -53,7 +53,10 @@ Parameters::Parameters(const Utils::ConfigurationManager& config, const Grid& gr
     Kokkos::deep_copy(rdy2, 1.0 / (dy_val * dy_val));
     Kokkos::deep_copy(rdz2, 1.0 / (dz_val * dz_val));
 
-    Kokkos::deep_copy(WRXMU, 2.5e-7);
+    double WRXMU_val = config.get_value<double>("dynamics.solver.WRXMU");
+    Kokkos::deep_copy(WRXMU, WRXMU_val);
+
+    solver_iteration = config.get_value<int>("dynamics.solver.iteration");
 
     Kokkos::fence();
 

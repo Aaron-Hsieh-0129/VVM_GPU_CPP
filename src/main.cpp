@@ -164,8 +164,8 @@ int main(int argc, char* argv[]) {
                 */
 
                 double radius_norm = std::sqrt(
-                             std::pow(((global_i+1)-32./2.)*dx()/2000., 2) + std::pow((z_mid(k)-3000.)/2000., 2) 
-                           + std::pow(((global_j+1)-32./2.)*dy()/2000., 2)
+                             std::pow(((global_i+1)-32./2.)*dx()/500., 2) + std::pow((z_mid(k)-3000.)/1000., 2) 
+                           + std::pow(((global_j+1)-32./2.)*dy()/500., 2)
                           );
                 if (radius_norm <= 1) {
                     th(k,j,i) = th(k,j,i) + 5.*(std::cos(3.14159265*0.5*radius_norm));

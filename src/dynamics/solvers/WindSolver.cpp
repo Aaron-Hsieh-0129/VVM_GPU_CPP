@@ -36,6 +36,7 @@ void WindSolver::solve_w(Core::State& state) {
     const int nx = grid_.get_local_total_points_x();
     const int h = grid_.get_halo_cells();
 
+    const auto& iter_num = params_.solver_iteration;
     const auto& rdx = params_.rdx;
     const auto& rdy = params_.rdy;
     const auto& rdx2 = params_.rdx2;
@@ -92,7 +93,7 @@ void WindSolver::solve_w(Core::State& state) {
 
     VVM::Core::BoundaryConditionManager bc_manager(grid_, config_, "w");
     if (w_solver_method_ == WSolverMethod::TRIDIAGONAL) {
-        for (int iter = 0; iter < 200; iter++) {
+        for (int iter = 0; iter < iter_num; iter++) {
             // Copy w to w3dn
             Kokkos::deep_copy(W3DN, w);
 
@@ -133,7 +134,7 @@ void WindSolver::solve_w(Core::State& state) {
         }
     }
     else {
-        for (int iter = 0; iter < 200; iter++) {
+        for (int iter = 0; iter < iter_num; iter++) {
             Kokkos::deep_copy(W3DN, w);
 
             Kokkos::parallel_for("jacobi_w_solver", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1,ny-h,nx-h}),
@@ -275,6 +276,7 @@ void WindSolver::relax_2d(Core::Field<2>& A_field, Core::Field<2>& ANM1_field, C
     auto& RHSV = RHSV_field.get_mutable_device_data();
     auto& AOUT = AOUT_field.get_mutable_device_data();
 
+    const auto& iter_num = params_.solver_iteration;
     const auto& rdx2 = params_.rdx2;
     const auto& rdy2 = params_.rdy2;
     // const auto C0 = WRXMU() + 2.*rdx2() + 2.*rdy2();
@@ -285,7 +287,7 @@ void WindSolver::relax_2d(Core::Field<2>& A_field, Core::Field<2>& ANM1_field, C
         }
     );
 
-    for (int iter = 0; iter < 200; iter++) {
+    for (int iter = 0; iter < iter_num; iter++) {
         Kokkos::deep_copy(ATEMP, AOUT);
 
         Kokkos::parallel_for("AOUT", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
