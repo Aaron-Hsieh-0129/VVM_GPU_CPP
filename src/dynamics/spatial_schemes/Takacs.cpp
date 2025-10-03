@@ -141,17 +141,6 @@ void Takacs::calculate_flux_convergence_z(
     const int h = grid.get_halo_cells();
     const auto& rhobar_divide = rhobar_divide_field.get_device_data();
 
-
-    int k_start = h;
-    int k_end = nz-h;
-
-    // zeta only needs to do the top prediction
-    // It has two layer of w.
-    if (var_name == "zeta") {
-        k_start = nz-h-2;
-        k_end = nz-h;
-    }
-
     const auto& w = w_field.get_device_data();
     const auto& q = scalar.get_device_data();
     Core::Field<3> flux_field("flux", {nz, ny, nx});
@@ -169,19 +158,19 @@ void Takacs::calculate_flux_convergence_z(
             wminus(k,j,i) = 0.5*(w(k,j,i)-Kokkos::abs(w(k,j,i)));
         }
     );
-    // Only 1 layer is needed to calculate flux
-    if (var_name == "zeta") k_start = nz-h-1;
 
+    // zeta only needs to do the top prediction
+    // It has two layer of w.
     if (var_name == "zeta") {
         Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
             KOKKOS_LAMBDA(int j, int i) {
                 // It's supposed to be rho*w*q, the w here is rho*w from the input
                 flux(nz-h-2,j,i) = w(nz-h-2,j,i)*(q(nz-h-1,j,i)+q(nz-h-2,j,i));
-                if (w(nz-h-2,j,i) >= 0.) {
-                    flux(nz-h-2,j,i) += -1./3.*(
-                            wplus(nz-h-2,j,i)*(q(nz-h-1,j,i)-q(nz-h-2,j,i)) - Kokkos::sqrt(wplus(nz-h-2,j,i))*Kokkos::sqrt(wplus(nz-h-3,j,i))*(q(nz-h-2,j,i)-q(nz-h-3,j,i))
-                        );
-                }
+                // if (w(nz-h-2,j,i) >= 0.) {
+                //     flux(nz-h-2,j,i) += -1./3.*(
+                //             wplus(nz-h-2,j,i)*(q(nz-h-1,j,i)-q(nz-h-2,j,i)) - Kokkos::sqrt(wplus(nz-h-2,j,i))*Kokkos::sqrt(wplus(nz-h-3,j,i))*(q(nz-h-2,j,i)-q(nz-h-3,j,i))
+                //         );
+                // }
             }
         );
     }
@@ -213,7 +202,7 @@ void Takacs::calculate_flux_convergence_z(
         );
     }
     else {
-        Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end,ny-h,nx-h}),
+        Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1,ny-h,nx-h}),
             KOKKOS_LAMBDA(int k, int j, int i) {
                 flux(k,j,i) = w(k,j,i)*(q(k+1,j,i)+q(k,j,i));
                 if (k == h) {
@@ -223,7 +212,7 @@ void Takacs::calculate_flux_convergence_z(
                               );
                     }
                 }
-                else if (k == nz-h-1) {
+                else if (k == nz-h-2) {
                     if (w(k,j,i) >= 0.) {
                         flux(k,j,i) += -1./3.*( 
                                  wplus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(wplus(k,j,i))*Kokkos::sqrt(wplus(k-1,j,i))*(q(k,j,i)-q(k-1,j,i)) 
@@ -238,7 +227,22 @@ void Takacs::calculate_flux_convergence_z(
                 }
             }
         );
+        // This is for vertical periodic boundary
+        Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1,h,h}, {nz-h,ny-h,nx-h}),
+            KOKKOS_LAMBDA(int k, int j, int i) {
+                if (k == h-1) {
+                    // flux(h-1,j,i) = flux(nz-h-2,j,i);
+                    flux(h-1,j,i) = 0.;
+                }
+                if (k == nz-h-1) {
+                    // flux(nz-h-1,j,i) = flux(2,j,i);
+                    flux(nz-h-1,j,i) = 0.;
+                }
+            }
+        );
     }
+    // VVM::Core::BoundaryConditionManager bc_manager(grid);
+    // bc_manager.apply_z_bcs_to_field(flux_field);
     // No need of x-y halo exchanges because this is z direction tendency
     // No need of vertical boundary process because it's supposed to be 0 in ghost points and it's been processed during initialization
 

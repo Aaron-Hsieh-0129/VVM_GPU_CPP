@@ -189,7 +189,7 @@ void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h, h}, {ny-h, nx-h}),
         KOKKOS_LAMBDA(const int j, const int i) {
             // The for-loop inside is to prevent racing condition because lower layers depend on upper layers.
-            for (int k = nz-h-2; k >= h; --k) {
+            for (int k = nz-h-2; k >= h-1; --k) {
                 zeta_data(k,j,i) = zeta_data(k+1,j,i) + rhs_data(k,j,i) * -dz / flex_height_coef_up(k);
             }
             // WARNING: NK3 has a upward integration in original VVM code.
@@ -198,8 +198,8 @@ void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
     );
     Core::HaloExchanger halo_exchanger(grid_);
     halo_exchanger.exchange_halos(zeta_field);
-    VVM::Core::BoundaryConditionManager bc_manager(grid_, config_, "zeta");
-    bc_manager.apply_z_bcs_to_field(zeta_field);
+    // VVM::Core::BoundaryConditionManager bc_manager(grid_, config_, "zeta");
+    // bc_manager.apply_z_bcs_to_field(zeta_field);
 }
 
 void DynamicalCore::compute_wind_fields() {

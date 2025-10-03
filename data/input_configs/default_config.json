@@ -4,13 +4,13 @@
         "ny": 32,
         "nz": 33,
         "n_halo_cells": 2,
-        "dx": 100.0,
-        "dy": 100.0,
+        "dx": 500.0,
+        "dy": 500.0,
         "dz": 500.0,
         "dz1": 100.0
     },
     "simulation": {
-        "total_time_s": 500.0,
+        "total_time_s": 2000.0,
         "dt_s": 1.0,
         "output_interval_s": 50.0
     },
@@ -71,8 +71,8 @@
         "solver": {
             "w_solver_method": "tridiagonal",
             "_w_solver_method_options": "Choose 'tridiagonal' (original) or 'jacobi' (3D parallel)",
-            "iteration": 200,
-            "WRXMU": 1e-4
+            "iteration": 50,
+            "WRXMU": 2.5e-7
         },
         "prognostic_variables": {
             "th": {
@@ -83,24 +83,18 @@
             "xi": {
                 "tendency_terms": {
                     "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "stretching": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "twisting": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
                     "buoyancy": { "temporal_scheme": "ForwardEuler", "spatial_scheme": "Takacs" } 
                 }
             },
             "eta": {
                 "tendency_terms": {
                     "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "stretching": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "twisting": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
                     "buoyancy": { "temporal_scheme": "ForwardEuler", "spatial_scheme": "Takacs" } 
                 }
             },
             "zeta": {
                 "tendency_terms": {
-                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "stretching": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "twisting": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
                 }
             }
         },
