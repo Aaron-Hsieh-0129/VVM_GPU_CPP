@@ -26,7 +26,7 @@
 # # Compile and run
 # cd build/ && /work/aaron900129/local/bin/cmake .. && make -j 4 && mpirun -np 4 --bind-to core ./vvm
 
-cd build/ && mpirun -np 4 --bind-to core ./vvm
+cd build
 
 # Find output path and convert files
 CONFIG_FILE="../data/input_configs/default_config.json"

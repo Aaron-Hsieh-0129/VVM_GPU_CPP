@@ -122,7 +122,7 @@ int main(int argc, char* argv[]) {
 
         
         Kokkos::parallel_for("th_init_with_perturbation", 
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, ny, nx}),
             KOKKOS_LAMBDA(int k, int j, int i) {
                 const int local_j = j - h;
                 const int local_i = i - h;
@@ -133,6 +133,7 @@ int main(int argc, char* argv[]) {
                 double base_th = thbar(k);
                 
                 th(k,j,i) = 300;
+                // w(k,j,i) = 10;
                 // if (k == 3 && j == ny/2 && i == nx/2 && (rank == 0 || rank == 1)) th(k,j,i) += 50;
 
                 /*
@@ -164,11 +165,14 @@ int main(int argc, char* argv[]) {
                 */
 
                 double radius_norm = std::sqrt(
-                             std::pow(((global_i+1)-32./2.)*dx()/500., 2) + std::pow((z_mid(k)-3000.)/1000., 2) 
-                           + std::pow(((global_j+1)-32./2.)*dy()/500., 2)
+                             std::pow(((global_i+1)-32./2.)*dx()/2000., 2) + std::pow((z_mid(k)-10000.)/2000., 2) 
+                           + std::pow(((global_j+1)-32./2.)*dy()/2000., 2)
                           );
                 if (radius_norm <= 1) {
                     th(k,j,i) = th(k,j,i) + 5.*(std::cos(3.14159265*0.5*radius_norm));
+                    // th(k,j,i) = 5.*(std::cos(3.14159265*0.5*radius_norm));
+                    // xi(k,j,i) = th(k,j,i);
+                    // eta(k,j,i) = th(k,j,i);
                 }
             }
         );
@@ -182,6 +186,7 @@ int main(int argc, char* argv[]) {
         halo_exchanger.exchange_halos(state.get_field<3>("zeta"));
         halo_exchanger.exchange_halos(state.get_field<3>("u"));
         halo_exchanger.exchange_halos(state.get_field<3>("v"));
+        halo_exchanger.exchange_halos(state.get_field<3>("w"));
 
         // if (rank == 0) {
         //     std::cout << "\n--- Field State AFTER Halo Exchange ---" << std::endl;
