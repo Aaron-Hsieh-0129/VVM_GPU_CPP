@@ -122,12 +122,15 @@ void Initializer::initialize_poisson() const {
     auto& AGAU = parameters_.AGAU.get_mutable_device_data();
     auto& BGAU = parameters_.BGAU.get_mutable_device_data();
     auto& CGAU = parameters_.CGAU.get_mutable_device_data();
-    Kokkos::parallel_for("Init_Poisson_Coef", Kokkos::RangePolicy<>(h, nz-h),
+    Kokkos::parallel_for("Init_Poisson_Coef", Kokkos::RangePolicy<>(0, nz),
         KOKKOS_LAMBDA(const int k) {
-            AGAU(k) = -flex_height_coef_up(k) * flex_height_coef_mid(k) * rdz2() / rhobar(k);
-            BGAU(k) = (WRXMU() + 2.*rdx2() + 2.*rdy2()) / rhobar_up(k) + 
-                      flex_height_coef_up(k) * (flex_height_coef_mid(k+1)/rhobar(k+1)+flex_height_coef_mid(k)/rhobar(k))*rdz2();
-            CGAU(k) = -flex_height_coef_up(k) * flex_height_coef_mid(k+1) * rdz2() / rhobar(k+1);
+            if (k >= h && k <= nz-h-2) {
+                AGAU(k) = -flex_height_coef_up(k) * flex_height_coef_mid(k) * rdz2() / rhobar(k);
+                BGAU(k) = (WRXMU() + 2.*rdx2() + 2.*rdy2()) / rhobar_up(k) + 
+                          flex_height_coef_up(k) * (flex_height_coef_mid(k+1)/rhobar(k+1)+flex_height_coef_mid(k)/rhobar(k))*rdz2();
+                CGAU(k) = -flex_height_coef_up(k) * flex_height_coef_mid(k+1) * rdz2() / rhobar(k+1);
+            }
+            else AGAU(k) = BGAU(k) = CGAU(k) = -9e16;
         }
     );
 
@@ -140,13 +143,14 @@ void Initializer::initialize_poisson() const {
     auto h_bn_new = parameters_.bn_new.get_host_data();
     auto h_cn_new = parameters_.cn_new.get_host_data();
 
-    h_cn_new(h) = h_CGAU(h) / h_BGAU(h);
-    for (int k = h+1; k <= nz-h-1; k++) {
-        h_bn_new(k) = h_BGAU(k) - h_AGAU(k) * h_cn_new(k-1);
-        h_cn_new(k) = h_CGAU(k) / h_bn_new(k);
+    for (int k = 0; k <= nz; k++) {
+        if (k == h) h_cn_new(h) = h_CGAU(h) / h_BGAU(h);
+        else if (k >= h+1 && k <= nz-h-2) {
+            h_bn_new(k) = h_BGAU(k) - h_AGAU(k) * h_cn_new(k-1);
+            h_cn_new(k) = h_CGAU(k) / h_bn_new(k);
+        }
+        else h_bn_new(k) = h_cn_new(k) = -9e16;
     }
-    Kokkos::deep_copy(bn_new, h_bn_new);
-    Kokkos::deep_copy(cn_new, h_cn_new);
     return;
 }
 

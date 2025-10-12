@@ -55,7 +55,6 @@ int main(int argc, char* argv[]) {
         VVM::Core::Grid grid(config);
         VVM::Core::Parameters parameters(config, grid);
         grid.print_info();
-        VVM::IO::OutputManager output_manager(config, grid, parameters, MPI_COMM_WORLD);
         VVM::Core::State state(config, parameters, grid);
         VVM::Core::HaloExchanger halo_exchanger(grid);
         VVM::Core::BoundaryConditionManager bc_manager(grid);
@@ -165,7 +164,7 @@ int main(int argc, char* argv[]) {
                 */
 
                 double radius_norm = std::sqrt(
-                             std::pow(((global_i+1)-32./2.)*dx()/2000., 2) + std::pow((z_mid(k)-10000.)/2000., 2) 
+                             std::pow(((global_i+1)-32./2.)*dx()/2000., 2) + std::pow((z_mid(k)-18000.)/2000., 2) 
                            + std::pow(((global_j+1)-32./2.)*dy()/2000., 2)
                           );
                 if (radius_norm <= 1) {
@@ -200,9 +199,10 @@ int main(int argc, char* argv[]) {
         if (rank == 0) state.get_field<1>("thbar").print_profile(grid, 0, 0, 0);
         // if (rank == 0) parameters.dz_mid.print_profile(grid, 0, 0, 0);
         // if (rank == 0) parameters.flex_height_coef_mid.print_profile(grid, 0, 0, 0);
-        output_manager.write(state, 0.0);
 
         VVM::Dynamics::DynamicalCore dynamical_core(config, grid, parameters, state);
+        VVM::IO::OutputManager output_manager(config, grid, parameters, MPI_COMM_WORLD);
+        output_manager.write(state, 0, 0.0);
 
         // Simulation loop parameters
         double total_time = config.get_value<double>("simulation.total_time_s");
@@ -222,7 +222,7 @@ int main(int argc, char* argv[]) {
 
             // Output data at specified intervals
             if (current_time >= next_output_time) {
-                output_manager.write(state, current_time);
+                output_manager.write(state, dynamical_core.time_step_count, current_time);
                 next_output_time += output_interval;
             }
         }

@@ -19,4 +19,5 @@ target_link_libraries(vvm_io
         vvm_core
         Kokkos::kokkos
         adios2::adios2
+        HDF5::HDF5
 )

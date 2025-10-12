@@ -70,11 +70,29 @@ if(TARGET adios2::cxx11_mpi)
     message(STATUS "Manually linking MPI::MPI_CXX to adios2::cxx11_mpi target.")
 endif()
 
-find_package(HDF5 REQUIRED)
-if (HDF5_FOUND)
-    message(STATUS "HDF5 found at: ${HDF5_DIR}")
+find_path(HDF5_INCLUDE_DIR hdf5.h
+          HINTS /work/aaron900129/hdf5_install/include
+          NO_DEFAULT_PATH)
+
+find_library(HDF5_LIBRARY NAMES hdf5
+             HINTS /work/aaron900129/hdf5_install/lib
+             NO_DEFAULT_PATH)
+
+if (HDF5_INCLUDE_DIR AND HDF5_LIBRARY)
+    add_library(HDF5::HDF5 UNKNOWN IMPORTED)
+    set_target_properties(HDF5::HDF5 PROPERTIES
+                          IMPORTED_LOCATION "${HDF5_LIBRARY}"
+                          INTERFACE_INCLUDE_DIRECTORIES "${HDF5_INCLUDE_DIR}")
+    # Add dependencies that parallel HDF5 needs. This is crucial.
+    # The names (z, dl, m) come from your h5pcc output.
+    find_library(Z_LIBRARY z)
+    find_library(DL_LIBRARY dl)
+    find_library(M_LIBRARY m)
+    target_link_libraries(HDF5::HDF5 INTERFACE ${Z_LIBRARY} ${DL_LIBRARY} ${M_LIBRARY} MPI::MPI_CXX)
+    set(HDF5_FOUND TRUE)
+    message(STATUS "HDF5 found manually at: ${HDF5_LIBRARY}")
 else()
-    message(FATAL_ERROR "HDF5 not found at the specified path.")
+    message(FATAL_ERROR "HDF5 library or includes not found at the specified path.")
 endif()
 
 include_directories(${CMAKE_SOURCE_DIR}/src)

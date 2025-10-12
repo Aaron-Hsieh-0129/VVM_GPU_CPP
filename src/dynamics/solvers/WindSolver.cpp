@@ -63,7 +63,7 @@ void WindSolver::solve_w(Core::State& state) {
     auto& pm_temp = pm_temp_field_.get_mutable_device_data();
     auto& pm = pm_field_.get_mutable_device_data();
 
-    Kokkos::parallel_for("Poisson", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h,ny-h,nx-h}),
+    Kokkos::parallel_for("Poisson", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1,ny-h,nx-h}),
         KOKKOS_LAMBDA(int k, int j, int i) {
              YTEM(k,j,i)=-(eta(k,j,i) - eta(k,j,i-1))*rdx()
                          -( xi(k,j,i) -  xi(k,j-1,i))*rdy();
@@ -132,9 +132,11 @@ void WindSolver::solve_w(Core::State& state) {
             );
 
             // Get w
-            Kokkos::parallel_for("copy_w_to_w3dn", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1,ny-h,nx-h}),
+            Kokkos::parallel_for("copy_w_to_w3dn", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({1,h,h}, {nz-h,ny-h,nx-h}),
                 KOKKOS_LAMBDA(int k, int j, int i) {
-                    w(k,j,i) = pm(k,j,i) / rhobar_up(k);
+                    if (k == h-1) w(k,j,i) = 0.;
+                    else if (k == nz-h-1) w(k,j,i) = 0.;
+                    else w(k,j,i) = pm(k,j,i) / rhobar_up(k);
                 }
             );
             halo_exchanger_.exchange_halos(state.get_field<3>("w"));
@@ -162,7 +164,7 @@ void WindSolver::solve_w(Core::State& state) {
             halo_exchanger_.exchange_halos(state.get_field<3>("w"));
         }
     }
-    bc_manager.apply_z_bcs_to_field(state.get_field<3>("w"));
+    // bc_manager.apply_z_bcs_to_field(state.get_field<3>("w"));
     return;
 }
 
@@ -174,42 +176,42 @@ void WindSolver::solve_uv(Core::State& state) {
     const int ny = grid_.get_local_total_points_y();
     const int nx = grid_.get_local_total_points_x();
     const int h = grid_.get_halo_cells();
-
-    const auto& zeta = state.get_field<3>("zeta").get_device_data();
-    const auto& zeta_slice = Kokkos::subview(zeta, nz-h-1, Kokkos::ALL(), Kokkos::ALL());
-    auto& RIP1 = RIP1_field_.get_mutable_device_data();
-    Kokkos::deep_copy(RIP1, zeta_slice);
-
-    // Solve psi
-    auto& psi_field = state.get_field<2>("psi");
-    auto& psinm1_field = state.get_field<2>("psinm1");
-    auto& psi = psi_field.get_mutable_device_data();
-    Kokkos::deep_copy(psi, zeta_slice);
-    halo_exchanger_.exchange_halos(RIP1_field_);
-    relax_2d(psi_field, psinm1_field, RIP1_field_, ROP1_field_);
-    Kokkos::deep_copy(psinm1_field.get_mutable_device_data(), psi);
-    Kokkos::deep_copy(psi, ROP1_field_.get_mutable_device_data());
-
-    // Solve chi
-    auto& RIP2 = RIP2_field_.get_mutable_device_data();
     const auto& flex_height_coef_mid = params_.flex_height_coef_mid.get_device_data();
     const auto& flex_height_coef_up = params_.flex_height_coef_up.get_device_data();
     const auto& rhobar = state.get_field<1>("rhobar").get_device_data();
     const auto& rhobar_up = state.get_field<1>("rhobar_up").get_device_data();
-    auto& w = state.get_field<3>("w").get_mutable_device_data();
     const auto& rdz = params_.rdz;
+
+    auto& psi_field = state.get_field<2>("psi");
+    auto& psinm1_field = state.get_field<2>("psinm1");
+    auto& psi = psi_field.get_mutable_device_data();
+    const auto& zeta = state.get_field<3>("zeta").get_device_data();
+    const auto& zeta_slice = Kokkos::subview(zeta, nz-h-1, Kokkos::ALL(), Kokkos::ALL());
+    auto& RIP1 = RIP1_field_.get_mutable_device_data();
+
+    auto& w = state.get_field<3>("w").get_mutable_device_data();
     auto& chi_field = state.get_field<2>("chi");
     auto& chi = chi_field.get_mutable_device_data();
     auto& chinm1_field = state.get_field<2>("chinm1");
-    Kokkos::parallel_for("interpolation", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {ny,nx}),
+    auto& RIP2 = RIP2_field_.get_mutable_device_data();
+
+    // Solve psi
+    Kokkos::deep_copy(RIP1, zeta_slice);
+    relax_2d(psi_field, psinm1_field, RIP1_field_, ROP1_field_);
+
+    // Copy psi data to previous step and step
+    Kokkos::deep_copy(psinm1_field.get_mutable_device_data(), psi);
+    Kokkos::deep_copy(psi, ROP1_field_.get_mutable_device_data());
+
+    // Solve chi
+    Kokkos::parallel_for("interpolation", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
         KOKKOS_LAMBDA(int j, int i) {
             RIP2(j,i) = flex_height_coef_mid(nz-h-1)*rhobar_up(nz-h-2)*w(nz-h-2,j,i)*rdz() / rhobar(nz-h-1);
         }
     );
-    halo_exchanger_.exchange_halos(RIP2_field_);
     relax_2d(chi_field, chinm1_field, RIP2_field_, ROP2_field_);
 
-    // Copy data to previous step
+    // Copy psi data to previous step and step
     Kokkos::deep_copy(chinm1_field.get_mutable_device_data(), chi);
     Kokkos::deep_copy(chi, ROP2_field_.get_mutable_device_data());
 
@@ -251,7 +253,7 @@ void WindSolver::solve_uv(Core::State& state) {
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h, h}, {ny-h, nx-h}),
         KOKKOS_LAMBDA(const int j, const int i) {
             // The for-loop inside is to prevent racing condition because lower layers depend on upper layers.
-            for (int k = nz-h-2; k >= h; --k) {
+            for (int k = nz-h-2; k >= h-1; --k) {
                 // WARNING: The eta is with negative because of the eta definition in original VVM
                 // FIXME: Need to fix it if the definition is reversed.
                 u(k,j,i) = u(k+1,j,i) 
@@ -269,8 +271,8 @@ void WindSolver::solve_uv(Core::State& state) {
     VVM::Core::BoundaryConditionManager bc_manager(grid_);
     halo_exchanger_.exchange_halos(u_field);
     halo_exchanger_.exchange_halos(v_field);
-    bc_manager.apply_z_bcs_to_field(u_field);
-    bc_manager.apply_z_bcs_to_field(v_field);
+    // bc_manager.apply_z_bcs_to_field(u_field);
+    // bc_manager.apply_z_bcs_to_field(v_field);
     return;
 }
 
