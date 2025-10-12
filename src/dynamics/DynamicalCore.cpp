@@ -134,7 +134,7 @@ void DynamicalCore::step(Core::State& state, double dt) {
     for (const auto& procedure_step : integration_procedure_) {
         for (const auto& var_name : procedure_step.vars_to_calculate_tendency) {
             if (tendency_calculators_.count(var_name)) {
-                tendency_calculators_.at(var_name)->calculate_tendencies(state, grid_, params_, time_step_count_);
+                tendency_calculators_.at(var_name)->calculate_tendencies(state, grid_, params_, time_step_count);
             }
         }
 
@@ -146,14 +146,14 @@ void DynamicalCore::step(Core::State& state, double dt) {
                 if (var_name == "zeta") halo_exchanger.exchange_halos_top_slice(state.get_field<3>(var_name));
                 else halo_exchanger.exchange_halos(state.get_field<3>(var_name));
                 
-                bc_manager.apply_z_bcs_to_field(state.get_field<3>(var_name));
+                if (var_name != "zeta") bc_manager.apply_z_bcs_to_field(state.get_field<3>(var_name));
             }
         }
     }
 
     compute_zeta_vertical_structure(state);
     compute_wind_fields();
-    time_step_count_++;
+    time_step_count++;
 }
 
 void DynamicalCore::compute_diagnostic_fields() const {
@@ -172,6 +172,8 @@ void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
     auto scheme = std::make_unique<Takacs>(grid_);
     auto& zeta_field = state.get_field<3>("zeta");
     auto zeta_data = zeta_field.get_mutable_device_data();
+    const auto& xi = state.get_field<3>("xi").get_device_data();
+    const auto& eta = state.get_field<3>("eta").get_device_data();
 
     const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
@@ -179,10 +181,12 @@ void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
     const int h = grid_.get_halo_cells();
     
     const double dz = grid_.get_dz();
+    const double dy = grid_.get_dy();
+    const double dx = grid_.get_dx();
 
     Core::Field<3> rhs_field("rhs_zeta_diag", {nz, ny, nx});
     scheme->calculate_vorticity_divergence(state, grid_, params_, rhs_field);
-    const auto& rhs_data = rhs_field.get_device_data();
+    // const auto& rhs_data = rhs_field.get_device_data();
     const auto& flex_height_coef_up = params_.flex_height_coef_up.get_device_data();
 
     Kokkos::parallel_for("zeta_downward_integration",
@@ -190,10 +194,16 @@ void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
         KOKKOS_LAMBDA(const int j, const int i) {
             // The for-loop inside is to prevent racing condition because lower layers depend on upper layers.
             for (int k = nz-h-2; k >= h-1; --k) {
-                zeta_data(k,j,i) = zeta_data(k+1,j,i) + rhs_data(k,j,i) * -dz / flex_height_coef_up(k);
+                // zeta_data(k,j,i) = zeta_data(k+1,j,i) + rhs_data(k,j,i) * -dz / flex_height_coef_up(k);
+                zeta_data(k,j,i) = zeta_data(k+1,j,i) 
+                                 + ( xi(k,j,i+1) -  xi(k,j,i)) * dz / (dx * flex_height_coef_up(k))
+                                 - (eta(k,j+1,i) - eta(k,j,i)) * dz / (dy * flex_height_coef_up(k));
             }
             // WARNING: NK3 has a upward integration in original VVM code.
-            zeta_data(nz-h,j,i) = zeta_data(nz-h-1,j,i) + rhs_data(nz-h-1,j,i) * dz / flex_height_coef_up(nz-h-1);
+            // zeta_data(nz-h,j,i) = zeta_data(nz-h-1,j,i) + rhs_data(nz-h-1,j,i) * dz / flex_height_coef_up(nz-h-1);
+            zeta_data(nz-h,j,i) = zeta_data(nz-h-1,j,i) 
+                             - ( xi(nz-h-1,j,i+1) -  xi(nz-h-1,j,i)) * dz / (dx * flex_height_coef_up(nz-h-1))
+                             + (eta(nz-h-1,j+1,i) - eta(nz-h-1,j,i)) * dz / (dy * flex_height_coef_up(nz-h-1));
         }
     );
     Core::HaloExchanger halo_exchanger(grid_);

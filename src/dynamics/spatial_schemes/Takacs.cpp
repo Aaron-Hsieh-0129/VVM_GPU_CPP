@@ -165,7 +165,8 @@ void Takacs::calculate_flux_convergence_z(
         Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
             KOKKOS_LAMBDA(int j, int i) {
                 // It's supposed to be rho*w*q, the w here is rho*w from the input
-                flux(nz-h-2,j,i) = w(nz-h-2,j,i)*(q(nz-h-1,j,i)+q(nz-h-2,j,i));
+                // flux(nz-h-2,j,i) = w(nz-h-2,j,i)*(q(nz-h-1,j,i)+q(nz-h-2,j,i));
+                flux(nz-h-2,j,i) = w(nz-h-2,j,i)*(q(nz-h-2,j,i));
                 // if (w(nz-h-2,j,i) >= 0.) {
                 //     flux(nz-h-2,j,i) += -1./3.*(
                 //             wplus(nz-h-2,j,i)*(q(nz-h-1,j,i)-q(nz-h-2,j,i)) - Kokkos::sqrt(wplus(nz-h-2,j,i))*Kokkos::sqrt(wplus(nz-h-3,j,i))*(q(nz-h-2,j,i)-q(nz-h-3,j,i))
@@ -269,7 +270,7 @@ void Takacs::calculate_flux_convergence_z(
         Kokkos::parallel_for("flux_convergence_tendency", 
             Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
             KOKKOS_LAMBDA(const int j, const int i) {
-                // w(nz-h) = 0, top b.c.
+                // w(nz-h-1) = 0, top b.c.
                 tendency(nz-h-1,j,i) += 0.5*flux(nz-h-2,j,i) * rdz_view() * flex_height_coef_mid(nz-h-1);
             }
         );
@@ -427,7 +428,7 @@ void Takacs::calculate_R_xi(
     const int h = grid.get_halo_cells();
 
     Kokkos::parallel_for("compute_R_xi",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,h,h}, {nz-h, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             // R_xi at i, j+1/2, k+1/2
             R_xi(k, j, i) = (w(k, j+1, i) - w(k, j, i)) * rdy() +
@@ -457,7 +458,7 @@ void Takacs::calculate_R_eta(
     const int h = grid.get_halo_cells();
 
     Kokkos::parallel_for("compute_R_eta",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,h,h}, {nz-h, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             // R_eta at i+1/2, j, k+1/2
             R_eta(k, j, i) = (w(k, j, i+1) - w(k, j, i)) * rdx() +
@@ -486,7 +487,7 @@ void Takacs::calculate_R_zeta(
     const int h = grid.get_halo_cells();
 
     Kokkos::parallel_for("compute_R_zeta",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,h,h}, {nz, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             // R_zeta at i+1/2, j+1/2, k
             R_zeta(k, j, i) = (v(k, j, i+1) - v(k, j, i)) * rdx() +
@@ -688,7 +689,7 @@ void Takacs::calculate_buoyancy_tendency_x(
     const int h = grid.get_halo_cells();
 
     Kokkos::parallel_for("buoyancy_tendency_x",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h, ny-h, nx-h}),
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h-1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             const double dB_dy = (th(k  ,j+1,i)-th(k  ,j,i)) / thbar(k) +
                                  (th(k+1,j+1,i)-th(k+1,j,i)) / thbar(k+1);
@@ -714,7 +715,7 @@ void Takacs::calculate_buoyancy_tendency_y(
     const int h = grid.get_halo_cells();
 
     Kokkos::parallel_for("buoyancy_tendency_y",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h, ny-h, nx-h}),
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h-1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             const double dB_dx = (th(k  ,j,i+1)-th(k  ,j,i)) / thbar(k) +
                                  (th(k+1,j,i+1)-th(k+1,j,i)) / thbar(k+1);

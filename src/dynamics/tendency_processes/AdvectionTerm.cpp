@@ -129,6 +129,20 @@ void AdvectionTerm::compute_tendency(
         );
     }
     else {
+        Kokkos::parallel_for("calculate_rhou_for_scalar",
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, ny, nx}),
+            KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                u_mean_data(k,j,i) = rhobar(k) * u(k,j,i);
+            }
+        );
+
+        Kokkos::parallel_for("calculate_rhov_for_scalar",
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, ny, nx}),
+            KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                v_mean_data(k,j,i) = rhobar(k) * v(k,j,i);
+            }
+        );
+
         Kokkos::parallel_for("calculate_rhow_for_scalar",
             // Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, ny, nx}),
@@ -136,12 +150,9 @@ void AdvectionTerm::compute_tendency(
                 w_mean_data(k,j,i) = rhobar_up(k) * w(k,j,i);
             }
         );
-
         // u_mean_field.print_slice_z_at_k(grid, 0, 16);
-        
     }
 
-    // FIXME: The haloexchanger should be processed for zeta
     if (variable_name_ != "zeta") {
         haloexchanger.exchange_halos(u_mean_field);
         haloexchanger.exchange_halos(v_mean_field);
@@ -158,14 +169,8 @@ void AdvectionTerm::compute_tendency(
     }
     // No need of vertical boundary process
 
-    if (variable_name_ == "xi" || variable_name_ == "eta" || variable_name_ == "zeta") {
-        scheme_->calculate_flux_convergence_x(advected_field, u_mean_field, grid, params, out_tendency, variable_name_);
-        scheme_->calculate_flux_convergence_y(advected_field, v_mean_field, grid, params, out_tendency, variable_name_);
-    }
-    else {
-        scheme_->calculate_flux_convergence_x(advected_field, u_field, grid, params, out_tendency, variable_name_);
-        scheme_->calculate_flux_convergence_y(advected_field, v_field, grid, params, out_tendency, variable_name_);
-    }
+    scheme_->calculate_flux_convergence_x(advected_field, u_mean_field, grid, params, out_tendency, variable_name_);
+    scheme_->calculate_flux_convergence_y(advected_field, v_mean_field, grid, params, out_tendency, variable_name_);
     scheme_->calculate_flux_convergence_z(advected_field, rhobar_field, w_mean_field, grid, params, out_tendency, variable_name_);
 }
 

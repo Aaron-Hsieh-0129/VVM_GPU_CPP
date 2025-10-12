@@ -18,6 +18,8 @@ OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VV
     output_dir_ = config.get_value<std::string>("output.output_dir");
     filename_prefix_ = config.get_value<std::string>("output.output_filename_prefix");
     fields_to_output_ = config.get_value<std::vector<std::string>>("output.fields_to_output");
+    output_interval_s_ = config.get_value<double>("simulation.output_interval_s");
+    total_time_ = config.get_value<double>("simulation.total_time_s");
 
     output_x_start_  = config.get_value<size_t>("output.output_grid.x_start");
     output_y_start_  = config.get_value<size_t>("output.output_grid.y_start");
@@ -38,71 +40,51 @@ OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VV
         }
     }
     MPI_Barrier(comm_);
+    grads_ctl_file();
 
     io_ = adios_.DeclareIO("VVM_IO");
-    io_.SetEngine("BP5");
+    io_.SetEngine("HDF5");
+    io_.SetParameter("IdleH5Writer",
+                     "true"); // set this if not all ranks are writting
     io_.SetParameters({{"Threads", "4"}});
-
-    std::string filename = output_dir_ + "/" + filename_prefix_ + ".bp";
-    writer_ = io_.Open(filename, adios2::Mode::Write);
 }
 
 OutputManager::~OutputManager() {
-    if(writer_) {
+    if (writer_) {
       writer_.Close();
     }
 }
 
 void OutputManager::define_variables(const VVM::Core::State& state) {
-
     const size_t gnx = grid_.get_global_points_x();
     const size_t gny = grid_.get_global_points_y();
     const size_t gnz = grid_.get_global_points_z();
 
+    std::string x_var_name = "coordinates/x";
+    std::string y_var_name = "coordinates/y";
+    std::string z_var_name = "coordinates/z_mid";
+
     // Define coordinate variables (these do not change over time)
-    io_.DefineVariable<double>("x", {gnx}, {0}, {rank_ == 0 ? gnx : 0});
-    io_.DefineVariable<double>("y", {gny}, {0}, {rank_ == 0 ? gny : 0});
-    io_.DefineVariable<double>("z_mid", {gnz}, {0}, {rank_ == 0 ? gnz : 0});
+    io_.DefineVariable<double>("time");
+    io_.DefineVariable<double>(x_var_name, {gnx}, {0}, {rank_ == 0 ? gnx : 0});
+    io_.DefineVariable<double>(y_var_name, {gny}, {0}, {rank_ == 0 ? gny : 0});
+    io_.DefineVariable<double>(z_var_name, {gnz}, {0}, {rank_ == 0 ? gnz : 0});
 
-    // Create and add the vtk.xml attribute to describe the mesh for ParaView
-    std::string vtk_xml = "<?xml version=\"1.0\"?>\n";
-    vtk_xml += "<VTKFile type=\"RectilinearGrid\" version=\"1.0\" byte_order=\"LittleEndian\">\n";
-    vtk_xml += "  <RectilinearGrid WholeExtent=\"0 " + std::to_string(gnx - 1) +
-               " 0 " + std::to_string(gny - 1) +
-               " 0 " + std::to_string(gnz - 1) + "\">\n";
-    vtk_xml += "    <Piece Extent=\"0 " + std::to_string(gnx - 1) +
-               " 0 " + std::to_string(gny - 1) +
-               " 0 " + std::to_string(gnz - 1) + "\">\n";
-    vtk_xml += "      <PointData>\n";
+    io_.DefineAttribute<std::string>("units", "hours since 2025-10-07 00:00:00", "time");
+    io_.DefineAttribute<std::string>("long_name", "Time", "time");
+    io_.DefineAttribute<std::string>("axis", "T", "time");
 
-    // Add DataArray tags for all 3D fields that will be written
-    for (const auto& field_name : fields_to_output_) {
-        auto it = state.begin();
-        while (it != state.end() && it->first != field_name) ++it;
-
-        if (it != state.end()) {
-            std::visit([&](const auto& field) {
-                using T = std::decay_t<decltype(field)>;
-                if constexpr (!std::is_same_v<T, std::monostate>) {
-                    if constexpr (T::DimValue == 3) {
-                        vtk_xml += "        <DataArray Name=\"" + field_name + "\" type=\"Float64\" format=\"binary\"/>\n";
-                    }
-                }
-            }, it->second);
-        }
-    }
-
-    vtk_xml += "      </PointData>\n";
-    vtk_xml += "      <Coordinates>\n";
-    vtk_xml += "        <DataArray Name=\"x\" type=\"Float64\" format=\"binary\"/>\n";
-    vtk_xml += "        <DataArray Name=\"y\" type=\"Float64\" format=\"binary\"/>\n";
-    vtk_xml += "        <DataArray Name=\"z_mid\" type=\"Float64\" format=\"binary\"/>\n";
-    vtk_xml += "      </Coordinates>\n";
-    vtk_xml += "    </Piece>\n";
-    vtk_xml += "  </RectilinearGrid>\n";
-    vtk_xml += "</VTKFile>\n";
-
-    io_.DefineAttribute<std::string>("vtk.xml", vtk_xml);
+    io_.DefineAttribute<std::string>("units", "meter", z_var_name);
+    io_.DefineAttribute<std::string>("long_name", "Height (grid center)", z_var_name);
+    io_.DefineAttribute<std::string>("axis", "Z", z_var_name);
+    
+    io_.DefineAttribute<std::string>("units", "meter", y_var_name);
+    io_.DefineAttribute<std::string>("long_name", "Y Direction", y_var_name);
+    io_.DefineAttribute<std::string>("axis", "Y", y_var_name);
+    
+    io_.DefineAttribute<std::string>("units", "meter", x_var_name);
+    io_.DefineAttribute<std::string>("long_name", "X direction", x_var_name);
+    io_.DefineAttribute<std::string>("axis", "X", x_var_name);
 
     // Local physical points and offsets for current rank
     const size_t rank_lnx = grid_.get_local_physical_points_x();
@@ -152,52 +134,55 @@ void OutputManager::define_variables(const VVM::Core::State& state) {
     }
 }
 
-void OutputManager::write(const VVM::Core::State& state, double time) {
+void OutputManager::write_static_data() {
+    const size_t gnx = grid_.get_global_points_x();
+    const size_t gny = grid_.get_global_points_y();
+    const size_t gnz = grid_.get_global_points_z();
+    const size_t h = grid_.get_halo_cells();
+
+    auto var_x = io_.InquireVariable<double>("coordinates/x");
+    std::vector<double> x_coords(gnx);
+    for(size_t i = 0; i < gnx; ++i) { x_coords[i] = i * grid_.get_dx(); }
+    writer_.Put<double>(var_x, x_coords.data(), adios2::Mode::Sync);
+
+    auto var_y = io_.InquireVariable<double>("coordinates/y");
+    std::vector<double> y_coords(gny);
+    for(size_t i = 0; i < gny; ++i) { y_coords[i] = i * grid_.get_dy(); }
+    writer_.Put<double>(var_y, y_coords.data(), adios2::Mode::Sync);
+
+    auto var_z_mid = io_.InquireVariable<double>("coordinates/z_mid");
+    auto z_mid_host = params_.z_mid.get_host_data();
+    std::vector<double> z_mid_physical(gnz);
+    for (size_t i = 0; i < gnz; ++i) {
+        z_mid_physical[i] = z_mid_host(i + h);
+    }
+    writer_.Put<double>(var_z_mid, z_mid_physical.data(), adios2::Mode::Sync);
+}
+
+std::string format_to_six_digits(int number) {
+    std::stringstream ss;
+    ss << std::setfill('0') << std::setw(6) << number;
+    return ss.str();
+}
+
+void OutputManager::write(const VVM::Core::State& state, int step, double time) {
     VVM::Utils::Timer advection_x_timer("OUTPUT");
 
-    if (field_variables_.empty()) {
+    std::string filename = output_dir_ + "/" + filename_prefix_ + "_" + format_to_six_digits((int) (step/output_interval_s_)) + ".h5";
+    writer_ = io_.Open(filename, adios2::Mode::Write);
+
+    if (!variables_defined_) {
         define_variables(state);
+        variables_defined_ = true;
     }
 
     writer_.BeginStep();
     
     adios2::Variable<double> var_time = io_.InquireVariable<double>("time");
-    if (!var_time) {
-        var_time = io_.DefineVariable<double>("time");
-    }
     writer_.Put<double>(var_time, &time, adios2::Mode::Sync);
+    write_static_data();
 
     const size_t h = grid_.get_halo_cells();
-
-    if (rank_ == 0) {
-        const size_t gnx = grid_.get_global_points_x();
-        const size_t gny = grid_.get_global_points_y();
-        const size_t gnz = grid_.get_global_points_z();
-
-        auto var_x = io_.InquireVariable<double>("x");
-        if (var_x) {
-            std::vector<double> x_coords(gnx);
-            for(size_t i = 0; i < gnx; ++i) { x_coords[i] = i * grid_.get_dx(); }
-            writer_.Put<double>(var_x, x_coords.data(), adios2::Mode::Sync);
-        }
-
-        auto var_y = io_.InquireVariable<double>("y");
-        if (var_y) {
-            std::vector<double> y_coords(gny);
-            for(size_t i = 0; i < gny; ++i) { y_coords[i] = i * grid_.get_dy(); }
-            writer_.Put<double>(var_y, y_coords.data(), adios2::Mode::Sync);
-        }
-
-        auto var_z_mid = io_.InquireVariable<double>("z_mid");
-        if (var_z_mid) {
-            auto z_mid_host = params_.z_mid.get_host_data();
-            std::vector<double> z_mid_physical(gnz);
-            for (size_t i = 0; i < gnz; ++i) {
-                z_mid_physical[i] = z_mid_host(i + h);
-            }
-            writer_.Put<double>(var_z_mid, z_mid_physical.data(), adios2::Mode::Sync);
-        }
-    }
 
     // Local physical points and offsets for current rank
     const size_t rank_lnx = grid_.get_local_physical_points_x();
@@ -247,40 +232,46 @@ void OutputManager::write(const VVM::Core::State& state, double time) {
                             // Only rank 0 outputs 1D global variables
                             if (rank_ == 0) {
                                 // Create a host mirror for the subview data
-                                Kokkos::View<double*> phys_data_subview("phys_data_1d_sub", local_output_nz);
                                 auto subview_from_full = Kokkos::subview(full_data_view, 
                                                                          std::make_pair(kokkos_subview_start_z, kokkos_subview_start_z + local_output_nz));
-                                Kokkos::deep_copy(phys_data_subview, subview_from_full);
-                                writer_.Put<double>(adios_var, phys_data_subview.data());
+                                auto phys_data_subview_cpu = Kokkos::create_mirror_view(subview_from_full);
+                                Kokkos::deep_copy(phys_data_subview_cpu, subview_from_full);
+                                writer_.Put<double>(adios_var, phys_data_subview_cpu.data());
                             }
                         }
                         else if constexpr (T::DimValue == 2) {
-                            Kokkos::View<double**> phys_data_subview("phys_data_2d_sub", local_output_ny, local_output_nx);
+                            Kokkos::View<double**, Kokkos::LayoutRight> phys_data_subview("phys_data_2d_sub", local_output_ny, local_output_nx);
                             auto subview_from_full = Kokkos::subview(full_data_view, 
                                                            std::make_pair(kokkos_subview_start_y, kokkos_subview_start_y + local_output_ny), 
                                                            std::make_pair(kokkos_subview_start_x, kokkos_subview_start_x + local_output_nx));
                             Kokkos::deep_copy(phys_data_subview, subview_from_full);
-                            writer_.Put<double>(adios_var, phys_data_subview.data());
+                            auto phys_data_subview_host = Kokkos::create_mirror_view(phys_data_subview);
+                            Kokkos::deep_copy(phys_data_subview_host, phys_data_subview);
+                            writer_.Put<double>(adios_var, phys_data_subview_host.data());
                         } 
                         else if constexpr (T::DimValue == 3) {
-                            Kokkos::View<double***> phys_data_subview("phys_data_3d_sub", local_output_nz, local_output_ny, local_output_nx);
+                            Kokkos::View<double***, Kokkos::LayoutRight> phys_data_subview("phys_data_3d_sub", local_output_nz, local_output_ny, local_output_nx);
                             auto subview_from_full = Kokkos::subview(full_data_view,
                                                            std::make_pair(kokkos_subview_start_z, kokkos_subview_start_z + local_output_nz),
                                                            std::make_pair(kokkos_subview_start_y, kokkos_subview_start_y + local_output_ny),
                                                            std::make_pair(kokkos_subview_start_x, kokkos_subview_start_x + local_output_nx));
                             Kokkos::deep_copy(phys_data_subview, subview_from_full);
-                            writer_.Put<double>(adios_var, phys_data_subview.data());
+                            auto phys_data_subview_host = Kokkos::create_mirror_view(phys_data_subview);
+                            Kokkos::deep_copy(phys_data_subview_host, phys_data_subview);
+                            writer_.Put<double>(adios_var, phys_data_subview_host.data());
                         }
                         else if constexpr (T::DimValue == 4) {
                             const size_t dim4 = full_data_view.extent(0); // This dimension is not affected by spatial decomposition
-                            Kokkos::View<double****> phys_data_subview("phys_data_4d_sub", dim4, local_output_nz, local_output_ny, local_output_nx);
+                            Kokkos::View<double****, Kokkos::LayoutRight> phys_data_subview("phys_data_4d_sub", dim4, local_output_nz, local_output_ny, local_output_nx);
                             auto subview_from_full = Kokkos::subview(full_data_view,
                                                            Kokkos::ALL(), // All of the first dimension
                                                            std::make_pair(kokkos_subview_start_z, kokkos_subview_start_z + local_output_nz),
                                                            std::make_pair(kokkos_subview_start_y, kokkos_subview_start_y + local_output_ny),
                                                            std::make_pair(kokkos_subview_start_x, kokkos_subview_start_x + local_output_nx));
                             Kokkos::deep_copy(phys_data_subview, subview_from_full);
-                            writer_.Put<double>(adios_var, phys_data_subview.data());
+                            auto phys_data_subview_host = Kokkos::create_mirror_view(phys_data_subview);
+                            Kokkos::deep_copy(phys_data_subview_host, phys_data_subview);
+                            writer_.Put<double>(adios_var, phys_data_subview_host.data());
                         }
                     }
                 }, it->second);
@@ -289,6 +280,56 @@ void OutputManager::write(const VVM::Core::State& state, double time) {
     }
 
     writer_.EndStep();
+    writer_.Close();
+    return;
+}
+
+void OutputManager::grads_ctl_file() {
+    // Open output file
+    std::ofstream outFile(output_dir_ + "/vvm.ctl");
+    if (!outFile.is_open()) {
+        std::cerr << "Error opening ctl file!" << std::endl;
+        return;
+    }
+
+    auto z_mid_host = params_.z_mid.get_host_data();
+    auto h = grid_.get_halo_cells();
+    auto nz_phy = grid_.get_global_points_z();
+    double dt = params_.get_value_host(params_.dt);
+
+    // Write the .ctl file content
+    outFile << "DSET ^" << filename_prefix_ << "_%tm6.h5\n";
+    outFile << "DTYPE hdf5_grid\n";
+    outFile << "OPTIONS template\n";
+    outFile << "TITLE VVM_GPU_CPP\n";
+    outFile << "UNDEF -9999.0\n";
+    outFile << "XDEF " << grid_.get_global_points_x() << " LINEAR 0 1\n";
+    outFile << "YDEF " << grid_.get_global_points_y() << " LINEAR 0 1\n";
+    outFile << "ZDEF " << grid_.get_global_points_z() << " LEVELS ";
+    for (int k = h; k < h+nz_phy; k++) {
+        outFile << static_cast<int> (z_mid_host(k));
+        if (k < nz_phy+h-1) outFile << ", ";
+    }
+    outFile << "\n";
+
+    int outnum = 7; // xi,eta,zeta,u,v,w,th
+
+    outFile << "TDEF " << (int) (total_time_ / (dt*output_interval_s_)+1) << " LINEAR 00:00Z01JAN2000 " << "1hr\n";
+    outFile << "\n";
+    outFile << "VARS " << outnum << "\n";
+    outFile << "/Step0/th=>th " << nz_phy << " z,y,x theta\n";
+    outFile << "/Step0/u=>u " << nz_phy << " z,y,x u\n";
+    outFile << "/Step0/v=>v " << nz_phy << " z,y,x v\n";
+    outFile << "/Step0/w=>w " << nz_phy << " z,y,x w\n";
+    outFile << "/Step0/eta=>eta " << nz_phy << " z,y,x eta\n";
+    outFile << "/Step0/xi=>xi " << nz_phy << " z,y,x xi\n";
+    outFile << "/Step0/zeta=>zeta " << nz_phy << " z,y,x zeta\n";
+    // outFile << "ubarTop=>ubarTop 1 t ubarTop\n";
+    outFile << "ENDVARS\n";
+
+    // Close the file
+    outFile.close();
+    return;
 }
 
 } // namespace IO

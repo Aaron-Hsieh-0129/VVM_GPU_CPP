@@ -35,6 +35,8 @@ public:
     void compute_zeta_vertical_structure(Core::State& state) const;
     void step(Core::State& state, double dt);
 
+    mutable size_t time_step_count = 0;
+
 private:
     const Utils::ConfigurationManager& config_;
     Core::State& state_;
@@ -44,7 +46,6 @@ private:
     std::map<std::string, std::unique_ptr<TendencyCalculator>> tendency_calculators_;
     std::map<std::string, std::unique_ptr<TemporalScheme>> time_integrators_;
     std::vector<IntegrationStep> integration_procedure_;
-    mutable size_t time_step_count_ = 0;
 
     std::unique_ptr<WindSolver> wind_solver_;
     void compute_wind_fields();

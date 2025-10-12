@@ -25,6 +25,12 @@ void TimeIntegrator::step(
     const int nx = grid.get_local_total_points_x();
     const int h = grid.get_halo_cells();
 
+    int k_start = h;
+    int k_end = nz-h;
+    if (variable_name_ == "xi" || variable_name_ == "eta") {
+        k_end = nz-h-1;
+    }
+
     if (has_ab2_terms_) {
         // --- Case 1: Variable uses Adams-Bashforth (and possibly also Forward Euler) ---
         auto& field_prev_step = state.get_field<3>(variable_name_ + "_m");
@@ -49,7 +55,7 @@ void TimeIntegrator::step(
             }
             else {
                 Kokkos::parallel_for("AB2_Forward_Step", 
-                    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz - h, ny - h, nx - h}),
+                    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start, h, h}, {k_end, ny - h, nx - h}),
                     KOKKOS_LAMBDA(const int k, const int j, const int i) {
                         field_new_view(k, j, i) = field_old_view(k, j, i) + dt * tendency_now_view(k, j, i);
                     }
@@ -69,7 +75,7 @@ void TimeIntegrator::step(
             }
             else {
                 Kokkos::parallel_for("AdamsBashforth2_Step", 
-                    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz - h, ny - h, nx - h}),
+                    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start, h, h}, {k_end, ny-h, nx-h}),
                     KOKKOS_LAMBDA(const int k, const int j, const int i) {
                         field_new_view(k, j, i) = field_old_view(k, j, i) 
                                                 + dt * (1.5 * tendency_now_view(k, j, i) - 0.5 * tendency_prev_view(k, j, i));
@@ -89,7 +95,7 @@ void TimeIntegrator::step(
         auto fe_tendency_data = fe_tendency_field.get_device_data();
         
         Kokkos::parallel_for("Pure_Forward_Euler_Step",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz - h, ny - h, nx - h}),
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start, h, h}, {k_end, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
                 field_new_view(k, j, i) = field_old_view(k, j, i) + dt * fe_tendency_data(k, j, i);
             }
@@ -102,7 +108,7 @@ void TimeIntegrator::step(
         auto fe_tendency_data = fe_tendency_field.get_device_data();
 
         Kokkos::parallel_for("Forward_Euler_FE_Terms_Additive",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start, h, h}, {k_end, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
                 field_new_view(k, j, i) += dt * fe_tendency_data(k, j, i);
             }

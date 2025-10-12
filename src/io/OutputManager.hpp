@@ -27,7 +27,8 @@ public:
     OutputManager(OutputManager&&) = delete;
     OutputManager& operator=(OutputManager&&) = delete;
 
-    void write(const VVM::Core::State& state, double time);
+    void write(const VVM::Core::State& state, int step, double time);
+    void write_static_data();
 
 private:
     const VVM::Core::Grid& grid_;
@@ -35,6 +36,8 @@ private:
     std::string output_dir_;
     std::string filename_prefix_;
     std::vector<std::string> fields_to_output_;
+    double output_interval_s_;
+    double total_time_;
 
     int rank_;
     int mpi_size_;
@@ -48,7 +51,14 @@ private:
     size_t output_x_end_, output_y_end_, output_z_end_;
     size_t output_x_stride_, output_y_stride_, output_z_stride_;
 
+    bool variables_defined_ = false;
+    adios2::Variable<double> var_time_;
+    adios2::Variable<double> var_x_;
+    adios2::Variable<double> var_y_;
+    adios2::Variable<double> var_z_mid_;
+
     void define_variables(const VVM::Core::State& state);
+    void grads_ctl_file();
 };
 
 } // namespace IO
