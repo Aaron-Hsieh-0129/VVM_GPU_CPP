@@ -151,6 +151,17 @@ void Initializer::initialize_poisson() const {
         }
         else h_bn_new(k) = h_cn_new(k) = -9e16;
     }
+    Kokkos::deep_copy(bn_new, h_bn_new);
+    Kokkos::deep_copy(cn_new, h_cn_new);
+
+    // int rank;
+    // MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    // if (rank == 0) {
+    //     for (int k = 0; k <= nz; k++) {
+    //         std::cout << "K = " << k << ", AGAU: " << h_AGAU(k) << ", BGAU: " << h_BGAU(k) << ", CGAU: " << h_CGAU(k) << ", bn_new: " << h_bn_new(k) << ", cn_new: " << h_cn_new(k) << std::endl; 
+    //     }
+    // }
+
     return;
 }
 

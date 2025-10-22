@@ -33,6 +33,7 @@ public:
 
     void compute_diagnostic_fields() const;
     void compute_zeta_vertical_structure(Core::State& state) const;
+    void compute_uvtopmn();
     void step(Core::State& state, double dt);
 
     mutable size_t time_step_count = 0;

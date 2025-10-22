@@ -37,13 +37,18 @@ void Takacs::calculate_flux_convergence_x(
         k_start = nz-h-1;
         k_end = nz-h;
     }
+    else if (var_name == "eta" || var_name == "xi") {
+        k_end = nz-h-1;
+    }
 
-    Kokkos::parallel_for("uplus_minus_cal", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,0,0}, {k_end,ny,nx}),
+    Kokkos::parallel_for("uplus_minus_cal", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end,ny-h,nx-h}),
         KOKKOS_LAMBDA(int k, int j, int i) {
             uplus(k,j,i)  = 0.5*(u(k,j,i)+Kokkos::abs(u(k,j,i)));
             uminus(k,j,i) = 0.5*(u(k,j,i)-Kokkos::abs(u(k,j,i)));
         }
     );
+    halo_exchanger_.exchange_halos(uplus_field);
+    halo_exchanger_.exchange_halos(uminus_field);
 
     Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end,ny-h,nx-h}),
         KOKKOS_LAMBDA(int k, int j, int i) {
@@ -52,11 +57,13 @@ void Takacs::calculate_flux_convergence_x(
                          uplus(k,j,i)*(q(k,j,i+1)-q(k,j,i)) - Kokkos::sqrt(uplus(k,j,i))*Kokkos::sqrt(uplus(k,j,i-1))*(q(k,j,i)-q(k,j,i-1)) - 
                         uminus(k,j,i)*(q(k,j,i+1)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(uminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(uminus(k,j,i+1)))*(q(k,j,i+2)-q(k,j,i+1)) 
                       );
+            // flux(k,j,i) = u(k,j,i)*(q(k,j,i+1)+q(k,j,i)); 
         }
     );
 
-    if (var_name == "zeta") halo_exchanger_.exchange_halos_top_slice(flux_field);
-    else halo_exchanger_.exchange_halos(flux_field);
+    // if (var_name == "zeta") halo_exchanger_.exchange_halos_top_slice(flux_field);
+    // else halo_exchanger_.exchange_halos(flux_field);
+    halo_exchanger_.exchange_halos(flux_field);
 
     auto rdx_view = params.rdx;
     Kokkos::parallel_for("flux_convergence_tendency", 
@@ -98,13 +105,18 @@ void Takacs::calculate_flux_convergence_y(
         k_start = nz-h-1;
         k_end = nz-h;
     }
+    else if (var_name == "xi" || var_name == "eta") {
+        k_end = nz-h-1;
+    }
 
-    Kokkos::parallel_for("vplus_minus_cal", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,0,0}, {k_end,ny,nx}),
+    Kokkos::parallel_for("vplus_minus_cal", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end,ny-h,nx-h}),
         KOKKOS_LAMBDA(int k, int j, int i) {
             vplus(k,j,i)  = 0.5*(v(k,j,i)+Kokkos::abs(v(k,j,i)));
             vminus(k,j,i) = 0.5*(v(k,j,i)-Kokkos::abs(v(k,j,i)));
         }
     );
+    halo_exchanger_.exchange_halos(vplus_field);
+    halo_exchanger_.exchange_halos(vminus_field);
 
     Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end,ny-h,nx-h}),
         KOKKOS_LAMBDA(int k, int j, int i) {
@@ -113,11 +125,13 @@ void Takacs::calculate_flux_convergence_y(
                              vplus(k,j,i)*(q(k,j+1,i)-q(k,j,i)) - Kokkos::sqrt(vplus(k,j,i))*Kokkos::sqrt(vplus(k,j-1,i))*(q(k,j,i)-q(k,j-1,i)) - 
                             vminus(k,j,i)*(q(k,j+1,i)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(vminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(vminus(k,j+1,i)))*(q(k,j+2,i)-q(k,j+1,i)) 
                           );
+            // flux(k,j,i) = v(k,j,i)*(q(k,j+1,i)+q(k,j,i)); 
         }
     );
 
-    if (var_name == "zeta") halo_exchanger_.exchange_halos_top_slice(flux_field);
-    else halo_exchanger_.exchange_halos(flux_field);
+    // if (var_name == "zeta") halo_exchanger_.exchange_halos_top_slice(flux_field);
+    // else halo_exchanger_.exchange_halos(flux_field);
+    halo_exchanger_.exchange_halos(flux_field);
 
     auto rdy_view = params.rdy;
     Kokkos::parallel_for("flux_convergence_tendency", 
@@ -152,12 +166,14 @@ void Takacs::calculate_flux_convergence_z(
     auto& wplus  = wplus_field.get_mutable_device_data();
     auto& wminus = wminus_field.get_mutable_device_data();
 
-    Kokkos::parallel_for("wplus_minus_cal", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz,ny,nx}),
+    Kokkos::parallel_for("wplus_minus_cal", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,h,h}, {nz,ny-h,nx-h}),
         KOKKOS_LAMBDA(int k, int j, int i) {
             wplus(k,j,i)  = 0.5*(w(k,j,i)+Kokkos::abs(w(k,j,i)));
             wminus(k,j,i) = 0.5*(w(k,j,i)-Kokkos::abs(w(k,j,i)));
         }
     );
+    halo_exchanger_.exchange_halos(wplus_field);
+    halo_exchanger_.exchange_halos(wminus_field);
 
     // zeta only needs to do the top prediction
     // It has two layer of w.
@@ -165,13 +181,14 @@ void Takacs::calculate_flux_convergence_z(
         Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
             KOKKOS_LAMBDA(int j, int i) {
                 // It's supposed to be rho*w*q, the w here is rho*w from the input
-                // flux(nz-h-2,j,i) = w(nz-h-2,j,i)*(q(nz-h-1,j,i)+q(nz-h-2,j,i));
-                flux(nz-h-2,j,i) = w(nz-h-2,j,i)*(q(nz-h-2,j,i));
-                // if (w(nz-h-2,j,i) >= 0.) {
-                //     flux(nz-h-2,j,i) += -1./3.*(
-                //             wplus(nz-h-2,j,i)*(q(nz-h-1,j,i)-q(nz-h-2,j,i)) - Kokkos::sqrt(wplus(nz-h-2,j,i))*Kokkos::sqrt(wplus(nz-h-3,j,i))*(q(nz-h-2,j,i)-q(nz-h-3,j,i))
-                //         );
-                // }
+                flux(nz-h-2,j,i) = w(nz-h-2,j,i)*(q(nz-h-1,j,i)+q(nz-h-2,j,i));
+                // flux(nz-h-2,j,i) = w(nz-h-2,j,i);
+                // flux(nz-h-2,j,i) = q(nz-h-1,j,i)+q(nz-h-2,j,i);
+                if (w(nz-h-2,j,i) >= 0.) {
+                    flux(nz-h-2,j,i) += -1./3.*(
+                            wplus(nz-h-2,j,i)*(q(nz-h-1,j,i)-q(nz-h-2,j,i)) - Kokkos::sqrt(wplus(nz-h-2,j,i))*Kokkos::sqrt(wplus(nz-h-3,j,i))*(q(nz-h-2,j,i)-q(nz-h-3,j,i))
+                        );
+                }
             }
         );
     }
@@ -272,6 +289,7 @@ void Takacs::calculate_flux_convergence_z(
             KOKKOS_LAMBDA(const int j, const int i) {
                 // w(nz-h-1) = 0, top b.c.
                 tendency(nz-h-1,j,i) += 0.5*flux(nz-h-2,j,i) * rdz_view() * flex_height_coef_mid(nz-h-1);
+                // tendency(nz-h-1,j,i) = 0.5*flux(nz-h-2,j,i) * rdz_view() * flex_height_coef_mid(nz-h-1);
             }
         );
     }
@@ -315,7 +333,7 @@ void Takacs::calculate_stretching_tendency_x(
     
     // Implements Eq. (3.25) for [ρ₀ξ(∂u/∂x)] at (i, j+1/2, k+1/2)
     Kokkos::parallel_for("stretching_term_xi",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h, ny-h, nx-h}),
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h-1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             const double term_at_j_plus_1 = 
                 (xi(k,j,i)+xi(k,j+1,i)) * 
@@ -354,7 +372,7 @@ void Takacs::calculate_stretching_tendency_y(
 
     // Implements Eq. (3.26) for [ρ₀η(∂v/∂y)] at (i+1/2, j, k+1/2)
     Kokkos::parallel_for("stretching_term_eta",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h, ny-h, nx-h}),
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h-1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             const double term_at_i_plus_1 = 
                 (eta(k,j,i)+eta(k,j,i+1)) * 

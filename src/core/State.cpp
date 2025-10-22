@@ -13,6 +13,9 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     int nx_total = grid.get_local_total_points_x();
     int ny_total = grid.get_local_total_points_y();
     int nz_total = grid.get_local_total_points_z();
+    // 0D field
+    add_field<1>("utopmn", {1});
+    add_field<1>("vtopmn", {1});
 
     // 1D field
     add_field<1>("thbar", {nz_total});
@@ -30,6 +33,8 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<2>("chinm1", {ny_total, nx_total});
     add_field<2>("utop", {ny_total, nx_total});
     add_field<2>("vtop", {ny_total, nx_total});
+    add_field<2>("tempu", {ny_total, nx_total});
+    add_field<2>("tempv", {ny_total, nx_total});
 
     // 3D field
     add_field<3>("th", {nz_total, ny_total, nx_total});
