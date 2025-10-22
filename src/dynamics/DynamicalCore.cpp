@@ -88,6 +88,12 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
         if (has_fe) {
              state_.add_field<3>("fe_tendency_" + var_name, {nz, ny, nx});
         }
+
+        // This is for predict utopmn and vtopmn
+        state_.add_field<1>("d_utopmn", {2});
+        state_.add_field<1>("d_vtopmn", {2});
+        state_.add_field<1>("utopmn_m", {1});
+        state_.add_field<1>("vtopmn_m", {1});
     }
 
     auto integration_config = config_.get_value<nlohmann::json>("dynamics.time_integration.procedure");
@@ -143,15 +149,17 @@ void DynamicalCore::step(Core::State& state, double dt) {
                 time_integrators_.at(var_name)->step(state, grid_, params_, dt);
                 
                 VVM::Core::BoundaryConditionManager bc_manager(grid_, config_, var_name);
-                if (var_name == "zeta") halo_exchanger.exchange_halos_top_slice(state.get_field<3>(var_name));
-                else halo_exchanger.exchange_halos(state.get_field<3>(var_name));
+                // if (var_name == "zeta") halo_exchanger.exchange_halos_top_slice(state.get_field<3>(var_name));
+                // else halo_exchanger.exchange_halos(state.get_field<3>(var_name));
+                halo_exchanger.exchange_halos(state.get_field<3>(var_name));
                 
-                if (var_name != "zeta") bc_manager.apply_z_bcs_to_field(state.get_field<3>(var_name));
+                // if (var_name != "zeta") bc_manager.apply_z_bcs_to_field(state.get_field<3>(var_name));
             }
         }
     }
 
     compute_zeta_vertical_structure(state);
+    compute_uvtopmn();
     compute_wind_fields();
     time_step_count++;
 }
@@ -183,6 +191,8 @@ void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
     const double dz = grid_.get_dz();
     const double dy = grid_.get_dy();
     const double dx = grid_.get_dx();
+    const auto& rdx = params_.rdx;
+    const auto& rdy = params_.rdy;
 
     Core::Field<3> rhs_field("rhs_zeta_diag", {nz, ny, nx});
     scheme->calculate_vorticity_divergence(state, grid_, params_, rhs_field);
@@ -196,14 +206,18 @@ void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
             for (int k = nz-h-2; k >= h-1; --k) {
                 // zeta_data(k,j,i) = zeta_data(k+1,j,i) + rhs_data(k,j,i) * -dz / flex_height_coef_up(k);
                 zeta_data(k,j,i) = zeta_data(k+1,j,i) 
-                                 + ( xi(k,j,i+1) -  xi(k,j,i)) * dz / (dx * flex_height_coef_up(k))
-                                 - (eta(k,j+1,i) - eta(k,j,i)) * dz / (dy * flex_height_coef_up(k));
+                                 + ( xi(k,j,i+1) -  xi(k,j,i)) * rdx() * dz / (flex_height_coef_up(k))
+                                 - (eta(k,j+1,i) - eta(k,j,i)) * rdy() * dz / (flex_height_coef_up(k));
             }
             // WARNING: NK3 has a upward integration in original VVM code.
             // zeta_data(nz-h,j,i) = zeta_data(nz-h-1,j,i) + rhs_data(nz-h-1,j,i) * dz / flex_height_coef_up(nz-h-1);
             zeta_data(nz-h,j,i) = zeta_data(nz-h-1,j,i) 
-                             - ( xi(nz-h-1,j,i+1) -  xi(nz-h-1,j,i)) * dz / (dx * flex_height_coef_up(nz-h-1))
-                             + (eta(nz-h-1,j+1,i) - eta(nz-h-1,j,i)) * dz / (dy * flex_height_coef_up(nz-h-1));
+                             - ( xi(nz-h-1,j,i+1) -  xi(nz-h-1,j,i)) * dz * rdx() / (flex_height_coef_up(nz-h-1))
+                             + (eta(nz-h-1,j+1,i) - eta(nz-h-1,j,i)) * dz * rdy() / (flex_height_coef_up(nz-h-1));
+
+            // for (int k = 0; k < nz; k++) {
+            //     if (k != nz-h-1) zeta_data(k,j,i) = 0;
+            // }
         }
     );
     Core::HaloExchanger halo_exchanger(grid_);
@@ -215,6 +229,74 @@ void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
 void DynamicalCore::compute_wind_fields() {
     wind_solver_->solve_w(state_);
     wind_solver_->solve_uv(state_);
+}
+
+void DynamicalCore::compute_uvtopmn() {
+    const int nz = grid_.get_local_total_points_z();
+    const int ny = grid_.get_local_total_points_y();
+    const int nx = grid_.get_local_total_points_x();
+    const int h = grid_.get_halo_cells();
+    const auto& dt = params_.dt;
+
+    const auto& u = state_.get_field<3>("u").get_device_data();
+    const auto& v = state_.get_field<3>("v").get_device_data();
+    const auto& w = state_.get_field<3>("w").get_device_data();
+    const auto& flex_height_coef_mid = params_.flex_height_coef_mid.get_device_data();
+    const auto& rhobar = state_.get_field<1>("rhobar").get_device_data();
+    const auto& rdz = params_.rdz;
+
+    auto& tempu_field = state_.get_field<2>("tempu");
+    auto& tempv_field = state_.get_field<2>("tempv");
+    auto& tempu = tempu_field.get_mutable_device_data();
+    auto& tempv = tempv_field.get_mutable_device_data();
+
+    auto &utopmn = state_.get_field<1>("utopmn");
+    auto &vtopmn = state_.get_field<1>("vtopmn");
+
+    Kokkos::parallel_for("calculate_utopmn",
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h, nx-h}),
+        KOKKOS_LAMBDA(const int j, const int i) {
+            tempu(j,i) = (rhobar(nz-h-2)*u(nz-h-2,j,i) + rhobar(nz-h-1)*u(nz-h-1,j,i)) 
+                       * (w(nz-h-2,j,i)+w(nz-h-2,j,i+1));
+            tempv(j,i) = (rhobar(nz-h-2)*v(nz-h-2,j,i) + rhobar(nz-h-1)*v(nz-h-1,j,i)) 
+                       * (w(nz-h-2,j,i)+w(nz-h-2,j+1,i));
+        }
+    );
+    double tempumn = state_.calculate_horizontal_mean(tempu_field);
+    double tempvmn = state_.calculate_horizontal_mean(tempv_field);
+
+
+    auto& utopmn_to_update = state_.get_field<1>("utopmn");
+    auto& utopmn_new_view = utopmn_to_update.get_mutable_device_data();
+    auto& utopmn_prev_step = state_.get_field<1>("utopmn_m");
+    auto& vtopmn_to_update = state_.get_field<1>("vtopmn");
+    auto& vtopmn_new_view = vtopmn_to_update.get_mutable_device_data();
+    auto& vtopmn_prev_step = state_.get_field<1>("vtopmn_m");
+
+    // update utopmn, vtopmn
+    Kokkos::deep_copy(utopmn_prev_step.get_mutable_device_data(), utopmn_to_update.get_device_data());
+    auto& utopmn_old_view = utopmn_prev_step.get_device_data();
+    Kokkos::deep_copy(vtopmn_prev_step.get_mutable_device_data(), vtopmn_to_update.get_device_data());
+    auto& vtopmn_old_view = vtopmn_prev_step.get_device_data();
+
+    auto& d_utopmn = state_.get_field<1>("d_utopmn").get_mutable_device_data();
+    auto& d_vtopmn = state_.get_field<1>("d_vtopmn").get_mutable_device_data();
+
+    size_t now_idx = time_step_count % 2;
+    size_t prev_idx = (time_step_count + 1) % 2;
+    Kokkos::parallel_for("Cauculate_uvtopmn", 
+        1, 
+        KOKKOS_LAMBDA(const int i) {
+            d_utopmn(now_idx) = 0.25 * flex_height_coef_mid(nz-h-1) * tempumn * rdz() / rhobar(nz-h-1);
+            d_vtopmn(now_idx) = 0.25 * flex_height_coef_mid(nz-h-1) * tempvmn * rdz() / rhobar(nz-h-1);
+
+            utopmn_new_view(0) = utopmn_old_view(0) 
+                    + dt() * (1.5 * d_utopmn(now_idx) - 0.5 * d_utopmn(prev_idx));
+            vtopmn_new_view(0) = vtopmn_old_view(0) 
+                    + dt() * (1.5 * d_vtopmn(now_idx) - 0.5 * d_vtopmn(prev_idx));
+        }
+    );
+    return;
 }
 
 } // namespace Dynamics

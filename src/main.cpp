@@ -76,11 +76,14 @@ int main(int argc, char* argv[]) {
         );
         // if (rank == 0) zeta_field.print_slice_z_at_k(grid, 0, nz-h-1);
         // Kokkos::fence();
-        // halo_exchanger.exchange_halos_top_slice(state.get_field<3>("zeta"));
-        // if (rank == 0) zeta_field.print_slice_z_at_k(grid, 0, nz-h-1);
-        // Kokkos::fence();
         // exit(1);
 
+        Kokkos::parallel_for("InitHeatFluxField",
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
+            KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                w(k,j,i) = 0.;
+            }
+        );
         double heat_flux_mean = state.calculate_horizontal_mean(htflx_sfc);
         if (rank == 0) {
             std::cout << "Average of heat flux is: " << heat_flux_mean << std::endl;
@@ -109,8 +112,8 @@ int main(int argc, char* argv[]) {
         auto& eta = state.get_field<3>("eta").get_mutable_device_data();
         auto& u = state.get_field<3>("u").get_mutable_device_data();
         auto& v = state.get_field<3>("v").get_mutable_device_data();
-        auto& w = state.get_field<3>("w").get_mutable_device_data();
-        auto& w_field = state.get_field<3>("w");
+        // auto& w = state.get_field<3>("w").get_mutable_device_data();
+        // auto& w_field = state.get_field<3>("w");
 
         const int global_start_j = grid.get_local_physical_start_y();
         const int global_start_i = grid.get_local_physical_start_x();
@@ -164,8 +167,9 @@ int main(int argc, char* argv[]) {
                 */
 
                 double radius_norm = std::sqrt(
-                             std::pow(((global_i+1)-32./2.)*dx()/2000., 2) + std::pow((z_mid(k)-18000.)/2000., 2) 
+                             std::pow(((global_i+1)-32./2.)*dx()/2000., 2) 
                            + std::pow(((global_j+1)-32./2.)*dy()/2000., 2)
+                           + std::pow((z_mid(k)-12000.)/2000., 2) 
                           );
                 if (radius_norm <= 1) {
                     th(k,j,i) = th(k,j,i) + 5.*(std::cos(3.14159265*0.5*radius_norm));
