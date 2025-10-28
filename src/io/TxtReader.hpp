@@ -3,6 +3,7 @@
 
 #include "Reader.hpp"
 #include "core/Parameters.hpp"
+#include "utils/ConfigurationManager.hpp"
 #include <vector>
 #include <string>
 #include <map>
@@ -13,12 +14,15 @@ namespace IO {
 
 class TxtReader : public Reader {
 public:
-    TxtReader(const std::string& filepath, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params);
+    TxtReader(const std::string& filepath, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params, const VVM::Utils::ConfigurationManager& config);
     void read_and_initialize(VVM::Core::State& state) override;
+    std::vector<double> zt_input;
 
 private:
     double linear_interpolate(const std::string& field_name, double target_z) const;
+    void calculate_input_z();
 
+    const VVM::Utils::ConfigurationManager& config_;
     const VVM::Core::Grid& grid_;
     const VVM::Core::Parameters& params_;
     std::string source_file_;

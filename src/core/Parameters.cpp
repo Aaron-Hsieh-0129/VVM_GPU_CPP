@@ -7,6 +7,10 @@ namespace Core {
 Parameters::Parameters(const Utils::ConfigurationManager& config, const Grid& grid) :
     gravity("gravity"),
     Rd("Rd"),
+    PSFC("PSFC"),
+    P0("P0"),
+    Cp("Cp"),
+    Lv("Lv"),
     dx("dx"),
     dy("dy"),
     dz("dz"),
@@ -34,6 +38,8 @@ Parameters::Parameters(const Utils::ConfigurationManager& config, const Grid& gr
 {
     Kokkos::deep_copy(gravity, config.get_value<double>("constants.gravity"));
     Kokkos::deep_copy(Rd, config.get_value<double>("constants.Rd"));
+    Kokkos::deep_copy(P0, config.get_value<double>("constants.P0"));
+    Kokkos::deep_copy(Cp, config.get_value<double>("constants.Cp"));
 
     double dx_val = config.get_value<double>("grid.dx");
     double dy_val = config.get_value<double>("grid.dy");

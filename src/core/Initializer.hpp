@@ -17,6 +17,7 @@ public:
     void initialize_state() const;
     void initialize_grid() const;
     void initialize_poisson() const;
+    void assign_vars() const;
 
 private:
     std::unique_ptr<VVM::IO::Reader> reader_;

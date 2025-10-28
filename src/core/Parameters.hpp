@@ -15,6 +15,10 @@ public:
     // Physical constants
     Kokkos::View<double> gravity;
     Kokkos::View<double> Rd;
+    Kokkos::View<double> PSFC;
+    Kokkos::View<double> P0;
+    Kokkos::View<double> Cp;
+    Kokkos::View<double> Lv;
     int solver_iteration;
 
     // Grid-derived parameters

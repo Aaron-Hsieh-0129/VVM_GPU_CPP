@@ -77,13 +77,6 @@ int main(int argc, char* argv[]) {
         // if (rank == 0) zeta_field.print_slice_z_at_k(grid, 0, nz-h-1);
         // Kokkos::fence();
         // exit(1);
-
-        Kokkos::parallel_for("InitHeatFluxField",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                w(k,j,i) = 0.;
-            }
-        );
         double heat_flux_mean = state.calculate_horizontal_mean(htflx_sfc);
         if (rank == 0) {
             std::cout << "Average of heat flux is: " << heat_flux_mean << std::endl;
@@ -91,20 +84,28 @@ int main(int argc, char* argv[]) {
 
         VVM::Core::Initializer init(config, grid, parameters, state);
         init.initialize_state();
+        // halo_exchanger.exchange_halos(state);
 
 
         // B.C. process
-        bc_manager.apply_z_bcs_to_field(state.get_field<1>("thbar"));
-        bc_manager.apply_z_bcs_to_field(state.get_field<1>("rhobar"));
-        bc_manager.apply_z_bcs_to_field(state.get_field<1>("rhobar_up"));
-        bc_manager.apply_z_bcs_to_field(state.get_field<1>("pbar"));
-        bc_manager.apply_z_bcs_to_field(state.get_field<1>("pibar"));
-        bc_manager.apply_z_bcs_to_field(state.get_field<1>("U"));
-
+        // bc_manager.apply_z_bcs_to_field(state.get_field<1>("thbar"));
+        // bc_manager.apply_z_bcs_to_field(state.get_field<1>("rhobar"));
+        // bc_manager.apply_z_bcs_to_field(state.get_field<1>("rhobar_up"));
+        // bc_manager.apply_z_bcs_to_field(state.get_field<1>("pbar"));
+        // bc_manager.apply_z_bcs_to_field(state.get_field<1>("pibar"));
+        // bc_manager.apply_z_bcs_to_field(state.get_field<1>("U"));
 
         if (rank == 0) state.get_field<1>("rhobar_up").print_profile(grid, 0, 0, 0);
+        if (rank == 0) state.get_field<1>("rhobar").print_profile(grid, 0, 0, 0);
+        if (rank == 0) state.get_field<1>("thbar").print_profile(grid, 0, 0, 0);
+        if (rank == 0) state.get_field<1>("Tbar").print_profile(grid, 0, 0, 0);
+        if (rank == 0) state.get_field<1>("Tvbar").print_profile(grid, 0, 0, 0);
+        if (rank == 0) state.get_field<1>("pibar").print_profile(grid, 0, 0, 0);
+        if (rank == 0) state.get_field<1>("pbar").print_profile(grid, 0, 0, 0);
         if (rank == 0) parameters.z_mid.print_profile(grid, 0, 0, 0);
         if (rank == 0) parameters.z_up.print_profile(grid, 0, 0, 0);
+        if (rank == 0) parameters.flex_height_coef_mid.print_profile(grid, 0, 0, 0);
+        if (rank == 0) parameters.flex_height_coef_up.print_profile(grid, 0, 0, 0);
 
         auto& th = state.get_field<3>("th").get_mutable_device_data();
         auto& thbar = state.get_field<1>("thbar").get_device_data();
@@ -112,8 +113,10 @@ int main(int argc, char* argv[]) {
         auto& eta = state.get_field<3>("eta").get_mutable_device_data();
         auto& u = state.get_field<3>("u").get_mutable_device_data();
         auto& v = state.get_field<3>("v").get_mutable_device_data();
-        // auto& w = state.get_field<3>("w").get_mutable_device_data();
-        // auto& w_field = state.get_field<3>("w");
+        auto& w = state.get_field<3>("w").get_mutable_device_data();
+        auto& w_field = state.get_field<3>("w");
+        // Kokkos::deep_copy(th, 300.);
+        Kokkos::deep_copy(w, 0.);
 
         const int global_start_j = grid.get_local_physical_start_y();
         const int global_start_i = grid.get_local_physical_start_x();
@@ -132,9 +135,11 @@ int main(int argc, char* argv[]) {
                 const int global_j = global_start_j + local_j;
                 const int global_i = global_start_i + local_i;
 
-                double base_th = thbar(k);
+                th(k,j,i) = thbar(k);
+
+                // double base_th = thbar(k);
                 
-                th(k,j,i) = 300;
+                // th(k,j,i) = 300;
                 // w(k,j,i) = 10;
                 // if (k == 3 && j == ny/2 && i == nx/2 && (rank == 0 || rank == 1)) th(k,j,i) += 50;
 
@@ -169,10 +174,10 @@ int main(int argc, char* argv[]) {
                 double radius_norm = std::sqrt(
                              std::pow(((global_i+1)-32./2.)*dx()/2000., 2) 
                            + std::pow(((global_j+1)-32./2.)*dy()/2000., 2)
-                           + std::pow((z_mid(k)-12000.)/2000., 2) 
+                           + std::pow((z_mid(k)-5000.)/2000., 2) 
                           );
                 if (radius_norm <= 1) {
-                    th(k,j,i) = th(k,j,i) + 5.*(std::cos(3.14159265*0.5*radius_norm));
+                    th(k,j,i) += 20.*(std::cos(3.14159265*0.5*radius_norm));
                     // th(k,j,i) = 5.*(std::cos(3.14159265*0.5*radius_norm));
                     // xi(k,j,i) = th(k,j,i);
                     // eta(k,j,i) = th(k,j,i);
@@ -200,7 +205,7 @@ int main(int argc, char* argv[]) {
         // if (rank == 0) w_field.print_xz_cross_at_j(grid, 0, 3);
 
         // 1D field
-        if (rank == 0) state.get_field<1>("thbar").print_profile(grid, 0, 0, 0);
+        // if (rank == 0) state.get_field<1>("thbar").print_profile(grid, 0, 0, 0);
         // if (rank == 0) parameters.dz_mid.print_profile(grid, 0, 0, 0);
         // if (rank == 0) parameters.flex_height_coef_mid.print_profile(grid, 0, 0, 0);
 

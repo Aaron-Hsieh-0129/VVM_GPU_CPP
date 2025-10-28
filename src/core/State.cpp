@@ -18,12 +18,16 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<1>("vtopmn", {1});
 
     // 1D field
+    add_field<1>("Tbar", {nz_total});
+    add_field<1>("Tvbar", {nz_total});
     add_field<1>("thbar", {nz_total});
     add_field<1>("rhobar", {nz_total});
     add_field<1>("rhobar_up", {nz_total});
     add_field<1>("pbar", {nz_total});
     add_field<1>("pibar", {nz_total});
+    add_field<1>("qvbar", {nz_total});
     add_field<1>("U", {nz_total});
+    add_field<1>("V", {nz_total});
 
     // 2D field
     add_field<2>("htflx_sfc", {ny_total, nx_total});
