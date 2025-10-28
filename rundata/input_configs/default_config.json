@@ -47,7 +47,7 @@
     },
     "initial_conditions": {
         "format": "txt",
-        "source_file": "/work/aaron900129/VVM_GPU_CPP/data/initial_conditions/profile.txt"
+        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/initial_conditions/profile.txt"
     },
     "output": {
         "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/test_uv5_sq",

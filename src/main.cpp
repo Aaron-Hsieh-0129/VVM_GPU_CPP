@@ -41,7 +41,7 @@ int main(int argc, char* argv[]) {
         }
 
         // Load configuration file
-        std::string config_file_path = "../data/input_configs/default_config.json";
+        std::string config_file_path = "../rundata/input_configs/default_config.json";
         if (argc > 1) {
             config_file_path = argv[1]; // Allow command line override
         }

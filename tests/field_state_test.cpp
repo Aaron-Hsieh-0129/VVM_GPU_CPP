@@ -17,7 +17,7 @@ protected:
 // --- Field Class Tests ---
 
 TEST_F(FieldStateTest, FieldConstructor) {
-    VVM::Utils::ConfigurationManager config("../../data/input_configs/default_config.json");
+    VVM::Utils::ConfigurationManager config("../../rundata/input_configs/default_config.json");
     VVM::Core::Grid grid(config);
 
     // --- Test 2D Field ---
@@ -86,7 +86,7 @@ TEST_F(FieldStateTest, GetHostData) {
 // --- State Class Tests ---
 
 TEST_F(FieldStateTest, StateOperations) {
-    VVM::Utils::ConfigurationManager config("../../data/input_configs/default_config.json");
+    VVM::Utils::ConfigurationManager config("../../rundata/input_configs/default_config.json");
     VVM::Core::Grid grid(config);
     VVM::Core::ModelParameters params(grid, config);
     VVM::Core::State state(config, params);
