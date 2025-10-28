@@ -19,28 +19,29 @@ void TendencyCalculator::calculate_tendencies(Core::State& state, const Core::Gr
     const int& nz = grid.get_local_total_points_z();
     const int& ny = grid.get_local_total_points_y();
     const int& nx = grid.get_local_total_points_x();
+    const int h = grid.get_halo_cells();
     const auto& rhobar_up = state.get_field<1>("rhobar_up").get_device_data();
     const auto& rhobar = state.get_field<1>("rhobar").get_device_data();
 
     auto& field_to_update = state.get_field<3>(variable_name_);
     auto& field_current_view = field_to_update.get_mutable_device_data();
 
-    if (variable_name_ == "xi" || variable_name_ == "eta") {
-        Kokkos::parallel_for("divide_by_density",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                field_current_view(k, j, i) /= rhobar_up(k);
-            }
-        );
-    }
-    else if (variable_name_ == "zeta") {
-        Kokkos::parallel_for("divide_by_density",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                field_current_view(k, j, i) /= rhobar(k);
-            }
-        );
-    }
+    // if (variable_name_ == "xi" || variable_name_ == "eta") {
+    //     Kokkos::parallel_for("divide_by_density",
+    //         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz-h, ny, nx}),
+    //         KOKKOS_LAMBDA(const int k, const int j, const int i) {
+    //             field_current_view(k, j, i) /= rhobar_up(k);
+    //         }
+    //     );
+    // }
+    // else if (variable_name_ == "zeta") {
+    //     Kokkos::parallel_for("divide_by_density",
+    //         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz, ny, nx}),
+    //         KOKKOS_LAMBDA(const int k, const int j, const int i) {
+    //             field_current_view(k, j, i) /= rhobar(k);
+    //         }
+    //     );
+    // }
 
     // Calculate AB2 tendencies
     if (!ab2_tendency_terms_.empty()) {
@@ -66,22 +67,22 @@ void TendencyCalculator::calculate_tendencies(Core::State& state, const Core::Gr
     }
 
      // Divide rho for xi, eta, zeta
-    if (variable_name_ == "xi" || variable_name_ == "eta") {
-        Kokkos::parallel_for("divide_by_density",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                field_current_view(k, j, i) *= rhobar_up(k);
-            }
-        );
-    }
-    else if (variable_name_ == "zeta") {
-        Kokkos::parallel_for("divide_by_density",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                field_current_view(k, j, i) *= rhobar(k);
-            }
-        );
-    }
+    // if (variable_name_ == "xi" || variable_name_ == "eta") {
+    //     Kokkos::parallel_for("divide_by_density",
+    //         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz-h, ny, nx}),
+    //         KOKKOS_LAMBDA(const int k, const int j, const int i) {
+    //             field_current_view(k, j, i) *= rhobar_up(k);
+    //         }
+    //     );
+    // }
+    // else if (variable_name_ == "zeta") {
+    //     Kokkos::parallel_for("divide_by_density",
+    //         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz, ny, nx}),
+    //         KOKKOS_LAMBDA(const int k, const int j, const int i) {
+    //             field_current_view(k, j, i) *= rhobar(k);
+    //         }
+    //     );
+    // }
 
 }
 

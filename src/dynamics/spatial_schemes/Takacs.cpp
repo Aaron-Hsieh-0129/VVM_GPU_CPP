@@ -246,16 +246,13 @@ void Takacs::calculate_flux_convergence_z(
             }
         );
         // This is for vertical periodic boundary
-        Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1,h,h}, {nz-h,ny-h,nx-h}),
-            KOKKOS_LAMBDA(int k, int j, int i) {
-                if (k == h-1) {
-                    // flux(h-1,j,i) = flux(nz-h-2,j,i);
-                    flux(h-1,j,i) = 0.;
-                }
-                if (k == nz-h-1) {
-                    // flux(nz-h-1,j,i) = flux(2,j,i);
-                    flux(nz-h-1,j,i) = 0.;
-                }
+        Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
+            KOKKOS_LAMBDA(int j, int i) {
+                // flux(h-1,j,i) = flux(nz-h-2,j,i);
+                flux(h-1,j,i) = 0.;
+
+                // flux(nz-h-1,j,i) = flux(h,j,i);
+                flux(nz-h-1,j,i) = 0.;
             }
         );
     }
@@ -305,7 +302,13 @@ void Takacs::calculate_flux_convergence_z(
         Kokkos::parallel_for("flux_convergence_tendency", 
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                tendency(k,j,i) += -0.5*(flux(k,j,i) - flux(k-1,j,i)) * rdz_view() * flex_height_coef_mid(k) / rhobar_divide(k);
+                tendency(k,j,i) += -0.5*(flux(k,j,i) - flux(k-1,j,i)) * rdz_view() * flex_height_coef_mid(k);
+            }
+        );
+        Kokkos::parallel_for("flux_convergence_tendency", 
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
+            KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                tendency(k,j,i) /= rhobar_divide(k);
             }
         );
     }

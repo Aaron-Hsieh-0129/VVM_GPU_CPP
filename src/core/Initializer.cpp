@@ -18,7 +18,7 @@ Initializer::Initializer(const Utils::ConfigurationManager& config, const Grid& 
     std::string source_file = config.get_value<std::string>("initial_conditions.source_file");
 
     if (format == "txt") {
-        reader_ = std::make_unique<VVM::IO::TxtReader>(source_file, grid, parameters_);
+        reader_ = std::make_unique<VVM::IO::TxtReader>(source_file, grid, parameters_, config_);
     } 
     // else if (format == "netcdf") {
     //     // TODO: Netcdf input
@@ -38,6 +38,7 @@ void Initializer::initialize_state() const {
         reader_->read_and_initialize(state_);
     }
     initialize_poisson();
+    assign_vars();
 }
 
 void Initializer::initialize_grid() const {
@@ -54,11 +55,24 @@ void Initializer::initialize_grid() const {
     auto& z_up_mutable = parameters_.z_up.get_mutable_device_data();
     auto& flex_height_coef_mid_mutable = parameters_.flex_height_coef_mid.get_mutable_device_data();
     auto& flex_height_coef_up_mutable = parameters_.flex_height_coef_up.get_mutable_device_data();
+    auto z_mid_mutable_h = parameters_.z_mid.get_host_data();
+    auto z_up_mutable_h = parameters_.z_up.get_host_data();
+
+    double ZB = 0.;
+    z_up_mutable_h(h-1) = ZB;
+    for (int k = h; k < nz; k++) {
+        z_up_mutable_h(k) = z_up_mutable_h(k-1) + dz;
+    }
+    z_mid_mutable_h(h-1) = z_up_mutable_h(h-1);
+    z_mid_mutable_h(h) = z_up_mutable_h(h-1) + 0.5 * dz;
+    for (int k = h+1; k < nz; k++) {
+        z_mid_mutable_h(k) = z_mid_mutable_h(k-1) + dz;
+    }
+    Kokkos::deep_copy(z_up_mutable, z_up_mutable_h);
+    Kokkos::deep_copy(z_mid_mutable, z_mid_mutable_h);
 
     Kokkos::parallel_for("Init_Z_flexZCoef", Kokkos::RangePolicy<>(h-1, nz),
         KOKKOS_LAMBDA(const int k) {
-            z_mid_mutable(k) = (k-h+0.5) * dz;
-            z_up_mutable(k) = (k-h+1) * dz;
             flex_height_coef_mid_mutable(k) = 1. / (CZ1 + 2 * CZ2 * z_mid_mutable(k));
             flex_height_coef_up_mutable(k) = 1. / (CZ1 + 2 * CZ2 * z_up_mutable(k));
             z_mid_mutable(k) = z_mid_mutable(k) * (CZ1 + CZ2 * z_mid_mutable(k));
@@ -77,7 +91,7 @@ void Initializer::initialize_grid() const {
 
     auto& fact1_xi_eta_mutable = parameters_.fact1_xi_eta.get_mutable_device_data();
     auto& fact2_xi_eta_mutable = parameters_.fact2_xi_eta.get_mutable_device_data();
-    Kokkos::parallel_for("Init_zflex_fact", Kokkos::RangePolicy<>(h-1, nz-h),
+    Kokkos::parallel_for("Init_zflex_fact", Kokkos::RangePolicy<>(h, nz-h-1),
         KOKKOS_LAMBDA(const int k) {
             fact1_xi_eta_mutable(k) = flex_height_coef_up_mutable(k) / flex_height_coef_mid_mutable(k+1);
             fact2_xi_eta_mutable(k) = flex_height_coef_up_mutable(k) / flex_height_coef_mid_mutable(k);
@@ -111,12 +125,15 @@ void Initializer::initialize_poisson() const {
     const auto& rdy2 = parameters_.rdy2;
     const auto& rdz2 = parameters_.rdz2;
     const auto& WRXMU = parameters_.WRXMU;
-    const auto& rhobar = state_.get_field<1>("rhobar").get_device_data();
-    const auto& rhobar_up = state_.get_field<1>("rhobar_up").get_device_data();
     const auto& flex_height_coef_mid = parameters_.flex_height_coef_mid.get_device_data();
     const auto& flex_height_coef_up = parameters_.flex_height_coef_up.get_device_data();
     const int h = grid_.get_halo_cells();
     const int nz = grid_.get_local_total_points_z();
+    // Kokkos::deep_copy(state_.get_field<1>("rhobar_up").get_mutable_device_data(), 1.);
+    // Kokkos::deep_copy(state_.get_field<1>("rhobar").get_mutable_device_data(), 1.);
+    // Kokkos::deep_copy(state_.get_field<1>("thbar").get_mutable_device_data(), 300.);
+    const auto& rhobar = state_.get_field<1>("rhobar").get_device_data();
+    const auto& rhobar_up = state_.get_field<1>("rhobar_up").get_device_data();
 
     // Poisson iteration coefficient
     auto& AGAU = parameters_.AGAU.get_mutable_device_data();
@@ -161,6 +178,42 @@ void Initializer::initialize_poisson() const {
     //         std::cout << "K = " << k << ", AGAU: " << h_AGAU(k) << ", BGAU: " << h_BGAU(k) << ", CGAU: " << h_CGAU(k) << ", bn_new: " << h_bn_new(k) << ", cn_new: " << h_cn_new(k) << std::endl; 
     //     }
     // }
+
+    return;
+}
+
+void Initializer::assign_vars() const {
+    const int h = grid_.get_halo_cells();
+    const int nz = grid_.get_local_total_points_z();
+    const int ny = grid_.get_local_total_points_y();
+    const int nx = grid_.get_local_total_points_x();
+
+    const auto& rdx = parameters_.rdx;
+    const auto& rdy = parameters_.rdy;
+    const auto& rdz = parameters_.rdz;
+    const auto& flex_height_coef_mid = parameters_.flex_height_coef_mid.get_device_data();
+    const auto& flex_height_coef_up = parameters_.flex_height_coef_up.get_device_data();
+
+    auto& u = state_.get_field<3>("u").get_mutable_device_data();
+    auto& v = state_.get_field<3>("v").get_mutable_device_data();
+    const auto& w = state_.get_field<3>("w").get_device_data();
+    const auto& U = state_.get_field<1>("U").get_device_data();
+    const auto& V = state_.get_field<1>("V").get_device_data();
+    Kokkos::parallel_for("assign_initial_velocity", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz,ny,nx}),
+        KOKKOS_LAMBDA(int k, int j, int i) {
+            u(k,j,i) = U(k);
+            v(k,j,i) = V(k);
+        }
+    );
+
+    auto& eta = state_.get_field<3>("eta").get_mutable_device_data();
+    auto& xi = state_.get_field<3>("xi").get_mutable_device_data();
+    Kokkos::parallel_for("assign_vorticity", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1,ny-h,nx-h}),
+        KOKKOS_LAMBDA(int k, int j, int i) {
+            eta(k,j,i) = (w(k,j,i+1)-w(k,j,i))*rdx() - (u(k+1,j,i)-u(k,j,i))*rdz()*flex_height_coef_up(k);
+            xi(k,j,i)  = (w(k,j+1,i)-w(k,j,i))*rdy() - (v(k+1,j,i)-v(k,j,i))*rdz()*flex_height_coef_up(k);
+        }
+    );
 
     return;
 }

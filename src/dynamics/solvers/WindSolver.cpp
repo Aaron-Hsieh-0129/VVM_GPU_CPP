@@ -131,7 +131,7 @@ void WindSolver::solve_w(Core::State& state) {
             );
 
             // Get w
-            Kokkos::parallel_for("copy_w_to_w3dn", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({1,h,h}, {nz-h,ny-h,nx-h}),
+            Kokkos::parallel_for("copy_w_to_w3dn", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1,h,h}, {nz-h,ny-h,nx-h}),
                 KOKKOS_LAMBDA(int k, int j, int i) {
                     if (k == h-1 || k == nz-h-1) w(k,j,i) = 0.;
                     else w(k,j,i) = pm(k,j,i) / rhobar_up(k);

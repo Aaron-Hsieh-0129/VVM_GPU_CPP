@@ -137,6 +137,31 @@ void DynamicalCore::step(Core::State& state, double dt) {
     Core::HaloExchanger halo_exchanger(grid_);
     compute_diagnostic_fields();
 
+    const int nz = grid_.get_local_total_points_z();
+    const int ny = grid_.get_local_total_points_y();
+    const int nx = grid_.get_local_total_points_x();
+    const int h = grid_.get_halo_cells();
+    const auto& rhobar = state_.get_field<1>("rhobar").get_device_data();
+    const auto& rhobar_up = state_.get_field<1>("rhobar_up").get_device_data();
+
+    auto& xi = state.get_field<3>("xi").get_mutable_device_data();
+    auto& eta = state.get_field<3>("eta").get_mutable_device_data();
+    auto& zeta = state.get_field<3>("zeta").get_mutable_device_data();
+    Kokkos::parallel_for("divide_by_density",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz-h, ny, nx}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            xi(k, j, i) /= rhobar_up(k);
+            eta(k, j, i) /= rhobar_up(k);
+        }
+    );
+    Kokkos::parallel_for("divide_by_density",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz, ny, nx}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            zeta(k, j, i) /= rhobar(k);
+        }
+    );
+
+
     for (const auto& procedure_step : integration_procedure_) {
         for (const auto& var_name : procedure_step.vars_to_calculate_tendency) {
             if (tendency_calculators_.count(var_name)) {
@@ -145,6 +170,32 @@ void DynamicalCore::step(Core::State& state, double dt) {
         }
 
         for (const auto& var_name : procedure_step.vars_to_update) {
+            if (var_name == "xi") {
+                Kokkos::parallel_for("divide_by_density",
+                    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz-h, ny, nx}),
+                    KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                        xi(k, j, i) *= rhobar_up(k);
+                    }
+                );
+            }
+            else if (var_name == "eta") {
+                Kokkos::parallel_for("divide_by_density",
+                    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz-h, ny, nx}),
+                    KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                        eta(k, j, i) *= rhobar_up(k);
+                    }
+                );
+            }
+            else if (var_name == "zeta") {
+                Kokkos::parallel_for("divide_by_density",
+                    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz, ny, nx}),
+                    KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                        zeta(k, j, i) *= rhobar(k);
+                    }
+                );
+            }
+
+
             if (time_integrators_.count(var_name)) {
                 time_integrators_.at(var_name)->step(state, grid_, params_, dt);
                 
