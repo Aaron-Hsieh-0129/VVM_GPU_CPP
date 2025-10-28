@@ -93,7 +93,7 @@ TEST_F(HaloExchangerTest, Periodic4DField) {
         GTEST_SKIP() << "Skipping 4D test, requires exactly 4 MPI ranks for a 2x2 grid.";
     }
 
-    VVM::Utils::ConfigurationManager config("../../data/input_configs/default_config.json");
+    VVM::Utils::ConfigurationManager config("../../rundata/input_configs/default_config.json");
     VVM::Core::Grid grid(config);
     const int num_species = 2;
     VVM::Core::Field<4> field("TestField4D", {
@@ -145,7 +145,7 @@ TEST_F(HaloExchangerTest, Periodic3DField) {
         GTEST_SKIP() << "Skipping 3D test, requires exactly 4 MPI ranks for a 2x2 grid.";
     }
 
-    VVM::Utils::ConfigurationManager config("../../data/input_configs/default_config.json");
+    VVM::Utils::ConfigurationManager config("../../rundata/input_configs/default_config.json");
     VVM::Core::Grid grid(config);
     VVM::Core::Field<3> field("TestField3D", {
         grid.get_local_total_points_z(),
@@ -192,7 +192,7 @@ TEST_F(HaloExchangerTest, Periodic2DField) {
         GTEST_SKIP() << "Skipping 2D test, requires exactly 4 MPI ranks for a 2x2 grid.";
     }
 
-    VVM::Utils::ConfigurationManager config("../../data/input_configs/default_config.json");
+    VVM::Utils::ConfigurationManager config("../../rundata/input_configs/default_config.json");
     VVM::Core::Grid grid(config);
     VVM::Core::Field<2> field("TestField2D", {
         grid.get_local_total_points_y(),
