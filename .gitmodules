@@ -1,6 +1,3 @@
 [submodule "externals/ekat"]
 	path = externals/ekat
 	url = https://github.com/E3SM-Project/ekat.git
-[submodule "externals/yaml-cpp"]
-	path = externals/yaml-cpp
-	url = https://github.com/jbeder/yaml-cpp.git
