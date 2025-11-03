@@ -53,9 +53,18 @@ else()
     FetchContent_MakeAvailable(Kokkos)
 endif()
 
-set(PNETCDF_INSTALL_DIR "/work/aaron900129/Pnetcdf_install")
-set(PNETCDF_INCLUDE_DIR "${PNETCDF_INSTALL_DIR}/include")
-set(PNETCDF_LIBRARIES "-L${PNETCDF_INSTALL_DIR}/lib -lpnetcdf -lm")
+set(EKAT_ENABLE_TESTS OFF CACHE BOOL "")
+set(EKAT_ENABLE_EXAMPLES OFF CACHE BOOL "")
+set(EKAT_ENABLE_NETCDF OFF CACHE BOOL "")
+set(EKAT_ENABLE_PNETCDF OFF CACHE BOOL "")
+set(EKAT_ENABLE_YAML ON CACHE BOOL "")
+
+set(EKAT_TPL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/externals CACHE PATH "")
+add_subdirectory(externals/ekat)
+
+# set(PNETCDF_INSTALL_DIR "/work/aaron900129/Pnetcdf_install")
+# set(PNETCDF_INCLUDE_DIR "${PNETCDF_INSTALL_DIR}/include")
+# set(PNETCDF_LIBRARIES "-L${PNETCDF_INSTALL_DIR}/lib -lpnetcdf -lm")
 
 
 # Find ADIOS2
