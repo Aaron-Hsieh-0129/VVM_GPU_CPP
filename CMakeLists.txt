@@ -1,46 +1,77 @@
 cmake_minimum_required(VERSION 3.16)
-project(VVM LANGUAGES CXX C)
+
+project(VVM LANGUAGES CXX C Fortran)
 
 cmake_policy(SET CMP0135 NEW)
 
+# ------------------------------
+# Compiler-specific settings
+# ------------------------------
+if(CMAKE_CXX_COMPILER_ID STREQUAL "NVHPC")
+    message(STATUS "Applying NVHPC dependency flag workaround.")
+    # Disable automatic dependency generation flags that NVHPC might set
+    set(CMAKE_CXX_DEPENDS "")
+    set(CMAKE_C_DEPENDS "")
+    set(CMAKE_DEPFILE_FLAGS_CXX "")
+    set(CMAKE_DEPFILE_FLAGS_C "")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -mp" CACHE STRING "CUDA OpenMP flags" FORCE)
+endif()
+
+# ------------------------------
+# Standard C++ settings
+# ------------------------------
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF) # Prefer standard C++ for portability
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
 
+# ------------------------------
+# HDF5
+# ------------------------------
 set(HDF5_DIR "/work/aaron900129/hdf5_install/lib/cmake/hdf5")
 
+# ------------------------------
+# Kokkos
+# ------------------------------
 set(Kokkos_ENABLE_CUDA ON CACHE BOOL "Enable CUDA backend for Kokkos" FORCE)
+set(Kokkos_ENABLE_CUDA_RELOCATABLE_DEVICE_CODE ON CACHE BOOL "Enable Kokkos RDC")
 set(Kokkos_ENABLE_OPENMP ON CACHE BOOL "Enable OpenMP backend for Kokkos" FORCE)
-option(BUILD_TESTS "Build the unit and integration tests" OFF)
+set(EAMXX_ENABLE_GPU ON CACHE BOOL "Enable P3 GPU" FORCE)
 
+# NVHPC + Kokkos CUDA arch
+if(CMAKE_CXX_COMPILER_ID STREQUAL "NVHPC")
+    set(Kokkos_CUDA_OPTIONS "enable_lambda;enable_ldg;cuda_arch=70" CACHE STRING "Kokkos CUDA options" FORCE)
+endif()
+
+set(SCREAM_DOUBLE_PRECISIION ON CACHE BOOL "Enable scream double precision" FORCE)
+option(BUILD_TESTS "Build the unit and integration tests" OFF)
 message(STATUS "Build tests: ${BUILD_TESTS}")
 
+# ------------------------------
+# Fortran flags
+# ------------------------------
+if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -ffree-line-length-none -fdefault-real-8 -fdefault-double-8 -Wno-line-truncation -Wno-argument-mismatch")
+elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -Mallocatable=03 -Mdclchk -Mfreeform -Mextend")
+endif()
 
-# Find MPI
-find_package(MPI REQUIRED COMPONENTS CXX C)
+# ------------------------------
+# MPI
+# ------------------------------
+set(MPI_Fortran_FOUND TRUE)
+set(MPI_Fortran_WORKS TRUE)
+find_package(MPI REQUIRED COMPONENTS CXX C Fortran)
 if (MPI_FOUND)
-
     message(STATUS "MPI found: ${MPI_CXX_COMPILER}")
-    message(STATUS "MPI CXX include path: ${MPI_CXX_INCLUDE_PATH}")
-    message(STATUS "MPI CXX libraries: ${MPI_CXX_LIBRARIES}")
-    
-    if(TARGET MPI::MPI_C AND NOT TARGET MPI::MPI_C)
-        add_library(MPI::MPI_C ALIAS MPI::MPI_C)
-    endif()
 else()
-    message(FATAL_ERROR "MPI not found. Please ensure MPI is installed and discoverable by CMake.")
+    message(FATAL_ERROR "MPI not found.")
 endif()
 
-# Find OpenMP
-find_package(OpenMP)
-if (OpenMP_FOUND)
-    message(STATUS "OpenMP found and configured for CXX.")
-else()
-    message(FATAL_ERROR "OpenMP not found. Please ensure OpenMP is installed and discoverable by CMake.")
-endif()
-
-# Find Kokkos
-find_package(Kokkos CONFIG) # Try to find Kokkos externally
+# ------------------------------
+# Kokkos
+# ------------------------------
+find_package(Kokkos CONFIG)
 if(Kokkos_FOUND)
     message(STATUS "Found Kokkos: ${Kokkos_DIR} (version \"${Kokkos_VERSION}\")")
 else()
@@ -53,62 +84,103 @@ else()
     FetchContent_MakeAvailable(Kokkos)
 endif()
 
+# ------------------------------
+# NetCDF
+# ------------------------------
+find_path(NETCDF_C_INCLUDE_DIR NAMES netcdf.h HINTS "/work/aaron900129/netcdf-c_install/include" NO_DEFAULT_PATH)
+find_library(NETCDF_C_LIBRARY NAMES netcdf HINTS "/work/aaron900129/netcdf-c_install/lib" NO_DEFAULT_PATH)
+find_path(NETCDF_FORTRAN_INCLUDE_DIR NAMES netcdf.mod HINTS "/work/aaron900129/netcdf-fortran_install/include" NO_DEFAULT_PATH)
+find_library(NETCDF_FORTRAN_LIBRARY NAMES netcdff HINTS "/work/aaron900129/netcdf-fortran_install/lib" NO_DEFAULT_PATH)
+
+if(NOT NETCDF_C_INCLUDE_DIR OR NOT NETCDF_C_LIBRARY OR NOT NETCDF_FORTRAN_INCLUDE_DIR OR NOT NETCDF_FORTRAN_LIBRARY)
+    message(FATAL_ERROR "Can't find NetCDF")
+endif()
+
+# Create imported targets
+if (NOT TARGET NetCDF::NetCDF_C)
+    add_library(NetCDF::NetCDF_C UNKNOWN IMPORTED)
+    set_property(TARGET NetCDF::NetCDF_C PROPERTY
+        INTERFACE_INCLUDE_DIRECTORIES "${NETCDF_C_INCLUDE_DIR}"
+        IMPORTED_LOCATION "${NETCDF_C_LIBRARY}")
+endif()
+
+if (NOT TARGET NetCDF::NetCDF_Fortran)
+    add_library(NetCDF::NetCDF_Fortran UNKNOWN IMPORTED)
+    set_property(TARGET NetCDF::NetCDF_Fortran PROPERTY
+        INTERFACE_INCLUDE_DIRECTORIES "${NETCDF_FORTRAN_INCLUDE_DIR}"
+        IMPORTED_LOCATION "${NETCDF_FORTRAN_LIBRARY}"
+        INTERFACE_LINK_LIBRARIES NetCDF::NetCDF_C)
+endif()
+
+# ------------------------------
+# EKAT
+# ------------------------------
 set(EKAT_ENABLE_TESTS OFF CACHE BOOL "")
 set(EKAT_ENABLE_EXAMPLES OFF CACHE BOOL "")
-set(EKAT_ENABLE_NETCDF OFF CACHE BOOL "")
+set(EKAT_ENABLE_NETCDF ON CACHE BOOL "")
 set(EKAT_ENABLE_PNETCDF OFF CACHE BOOL "")
 set(EKAT_ENABLE_YAML ON CACHE BOOL "")
-
 set(EKAT_TPL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/externals CACHE PATH "")
 add_subdirectory(externals/ekat)
 
-# set(PNETCDF_INSTALL_DIR "/work/aaron900129/Pnetcdf_install")
-# set(PNETCDF_INCLUDE_DIR "${PNETCDF_INSTALL_DIR}/include")
-# set(PNETCDF_LIBRARIES "-L${PNETCDF_INSTALL_DIR}/lib -lpnetcdf -lm")
+message(STATUS "Aggressively cleaning global OpenMP flags set by subdirectories (e.g., EKAT)...")
+# 1. Use REGEX to remove '-mp' as a standalone word (handles spaces correctly)
+string(REGEX REPLACE " -mp( |$)" " " CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+string(REGEX REPLACE " -mp( |$)" " " CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+string(REGEX REPLACE " -mp( |$)" " " CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}")
+# 2. Handle if '-mp' is the *first* flag
+string(REGEX REPLACE "^-mp( |$)" " " CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+string(REGEX REPLACE "^-mp( |$)" " " CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+string(REGEX REPLACE "^-mp( |$)" " " CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}")
+# 3. Force-reset the OpenMP cache variables that ekat might have set
+set(OpenMP_CXX_FLAGS "" CACHE STRING "Reset OpenMP CXX flags" FORCE)
+set(OpenMP_C_FLAGS "" CACHE STRING "Reset OpenMP C flags" FORCE)
+set(OpenMP_Fortran_FLAGS "" CACHE STRING "Reset OpenMP Fortran flags" FORCE)
+
+function(CLEAN_FLAG_VAR var_name flag_to_remove)
+    string(REPLACE " " ";" flag_list "${${var_name}}")
+    list(REMOVE_ITEM flag_list "${flag_to_remove}")
+    string(REPLACE ";" " " flag_string "${flag_list}")
+    set(${var_name} "${flag_string}" PARENT_SCOPE)
+endfunction()
+
+clean_flag_var(CMAKE_CXX_FLAGS "-Wext-lambda-captures-this")
 
 
-# Find ADIOS2
+# ------------------------------
+# ADIOS2
+# ------------------------------
 find_package(ADIOS2 REQUIRED CXX MPI)
-if (ADIOS2_FOUND)
-    message(STATUS "ADIOS2 found.")
-else()
-    message(FATAL_ERROR "ADIOS2 not found.")
-endif()
 if(TARGET adios2::cxx11_mpi)
     target_link_libraries(adios2::cxx11_mpi INTERFACE MPI::MPI_CXX)
-    message(STATUS "Manually linking MPI::MPI_CXX to adios2::cxx11_mpi target.")
 endif()
 
-find_path(HDF5_INCLUDE_DIR hdf5.h
-          HINTS /work/aaron900129/hdf5_install/include
-          NO_DEFAULT_PATH)
+# ------------------------------
+# HDF5
+# ------------------------------
+find_path(HDF5_INCLUDE_DIR hdf5.h HINTS /work/aaron900129/hdf5_install/include NO_DEFAULT_PATH)
+find_library(HDF5_LIBRARY NAMES hdf5 HINTS /work/aaron900129/hdf5_install/lib NO_DEFAULT_PATH)
 
-find_library(HDF5_LIBRARY NAMES hdf5
-             HINTS /work/aaron900129/hdf5_install/lib
-             NO_DEFAULT_PATH)
-
-if (HDF5_INCLUDE_DIR AND HDF5_LIBRARY)
+if(HDF5_INCLUDE_DIR AND HDF5_LIBRARY)
     add_library(HDF5::HDF5 UNKNOWN IMPORTED)
     set_target_properties(HDF5::HDF5 PROPERTIES
                           IMPORTED_LOCATION "${HDF5_LIBRARY}"
                           INTERFACE_INCLUDE_DIRECTORIES "${HDF5_INCLUDE_DIR}")
-    # Add dependencies that parallel HDF5 needs. This is crucial.
-    # The names (z, dl, m) come from your h5pcc output.
     find_library(Z_LIBRARY z)
     find_library(DL_LIBRARY dl)
     find_library(M_LIBRARY m)
     target_link_libraries(HDF5::HDF5 INTERFACE ${Z_LIBRARY} ${DL_LIBRARY} ${M_LIBRARY} MPI::MPI_CXX)
-    set(HDF5_FOUND TRUE)
-    message(STATUS "HDF5 found manually at: ${HDF5_LIBRARY}")
-else()
-    message(FATAL_ERROR "HDF5 library or includes not found at the specified path.")
 endif()
 
+# ------------------------------
+# Project sources
+# ------------------------------
 include_directories(${CMAKE_SOURCE_DIR}/src)
 add_subdirectory(src)
 
-
-# Build tests if requested
+# ------------------------------
+# Optional tests
+# ------------------------------
 if(BUILD_TESTS)
     enable_testing()
     include(FetchContent)
@@ -116,9 +188,19 @@ if(BUILD_TESTS)
         googletest
         URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz
     )
-    # This makes the GTest::gtest_main target available
     FetchContent_MakeAvailable(googletest)
-
-    # Add the tests subdirectory, which will now find GTest
     add_subdirectory(tests)
 endif()
+
+# ------------------------------
+# Debug: Print final compiler flags
+# ------------------------------
+message(STATUS "=== Compiler flags summary ===")
+message(STATUS "CXX Compiler: ${CMAKE_CXX_COMPILER}")
+message(STATUS "CXX Flags: ${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+message(STATUS "C Compiler: ${CMAKE_C_COMPILER}")
+message(STATUS "C Flags: ${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+message(STATUS "Fortran Compiler: ${CMAKE_Fortran_COMPILER}")
+message(STATUS "Fortran Flags: ${CMAKE_Fortran_FLAGS} ${OpenMP_Fortran_FLAGS}")
+message(STATUS "CUDA Flags: ${CMAKE_CUDA_FLAGS}")
+message(STATUS "==============================")
