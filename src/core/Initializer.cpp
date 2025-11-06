@@ -1,6 +1,7 @@
 #include "Initializer.hpp"
 #include "BoundaryConditionManager.hpp"
 #include "io/TxtReader.hpp"
+#include "io/PnetcdfReader.hpp"
 #include <Kokkos_Core.hpp>
 
 namespace VVM {
@@ -10,16 +11,18 @@ Initializer::Initializer(const Utils::ConfigurationManager& config, const Grid& 
     : config_(config), grid_(grid), parameters_(parameters), state_(state) {
     initialize_grid();
 
-    if (!config.has_key("initial_conditions")) {
+    if (!config.has_key("initial_conditions") && !config.has_key("netcdf_reader")) {
         return;
     }
 
     std::string format = config.get_value<std::string>("initial_conditions.format");
     std::string source_file = config.get_value<std::string>("initial_conditions.source_file");
+    std::string pnetcdf_source_file = config.get_value<std::string>("netcdf_reader.source_file");
 
     if (format == "txt") {
         reader_ = std::make_unique<VVM::IO::TxtReader>(source_file, grid, parameters_, config_);
     } 
+    pnetcdf_reader_ = std::make_unique<VVM::IO::PnetcdfReader>(pnetcdf_source_file, grid, parameters_, config_);
     // else if (format == "netcdf") {
     //     // TODO: Netcdf input
     //     // reader_ = std::make_unique<Initializers::NetCDFReader>(source_file, grid);
@@ -37,6 +40,10 @@ void Initializer::initialize_state() const {
     if (reader_) {
         reader_->read_and_initialize(state_);
     }
+    if (pnetcdf_reader_) {
+        pnetcdf_reader_->read_and_initialize(state_);
+    }
+    initialize_topo();
     initialize_poisson();
     assign_vars();
 }
@@ -117,6 +124,71 @@ void Initializer::initialize_grid() const {
     //     }
     // }
     // std::cout << std::endl;
+    return;
+}
+
+void Initializer::initialize_topo() const {
+    const auto& topo = state_.get_field<2>("topo").get_device_data();
+    auto& ITYPEU = state_.get_field<3>("ITYPEU").get_mutable_device_data();
+    auto& ITYPEV = state_.get_field<3>("ITYPEV").get_mutable_device_data();
+    auto& ITYPEW = state_.get_field<3>("ITYPEW").get_mutable_device_data();
+    auto topo_h = state_.get_field<2>("topo").get_host_data();
+
+    const int h = grid_.get_halo_cells();
+    const int nz = grid_.get_local_total_points_z();
+    const int ny = grid_.get_local_total_points_y();
+    const int nx = grid_.get_local_total_points_x();
+
+    double local_maxtopo_h, maxtopo_h;
+    Kokkos::parallel_reduce("FindMax", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
+        KOKKOS_LAMBDA(const int j, const int i, double& local_max) {
+            if (topo(j, i) > local_max) {
+                local_max = topo(i, j);
+            }
+        },
+        Kokkos::Max<double>(local_maxtopo_h)
+    );
+
+    MPI_Allreduce(
+        &local_maxtopo_h,
+        &maxtopo_h,
+        1,
+        MPI_DOUBLE,
+        MPI_MAX,
+        MPI_COMM_WORLD
+    );
+    maxtopo_h += h;
+    parameters_.max_topo_idx = maxtopo_h;
+
+    // Assign ITYPE
+    Kokkos::deep_copy(ITYPEU, 1.);
+    Kokkos::deep_copy(ITYPEV, 1.);
+    Kokkos::deep_copy(ITYPEW, 1.);
+    Kokkos::parallel_for("assign_ITYPE", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
+        KOKKOS_LAMBDA(const int j, const int i) {
+            if (topo(j, i) != 0) {
+                for (int k = 0; k <= topo(j,i); k++) {
+                    ITYPEU(k,j,i) = 0;
+                    ITYPEV(k,j,i) = 0;
+                    ITYPEW(k,j,i) = 0;
+                } 
+            }
+        }
+    );
+    VVM::Core::HaloExchanger halo_exchanger(grid_);
+    halo_exchanger.exchange_halos(state_.get_field<3>("ITYPEW"));
+
+    Kokkos::parallel_for("assign_ITYPE", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,h,h}, {nz-h,ny-h,nx-h}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            if (ITYPEW(k,j,i) == 0) {
+                ITYPEU(k,j,i-1) = 0;
+                ITYPEV(k,j-1,i) = 0;
+            }
+        }
+    );
+    halo_exchanger.exchange_halos(state_.get_field<3>("ITYPEU"));
+    halo_exchanger.exchange_halos(state_.get_field<3>("ITYPEU"));
+      
     return;
 }
 
@@ -205,6 +277,12 @@ void Initializer::assign_vars() const {
             v(k,j,i) = V(k);
         }
     );
+
+    // utop predict
+    double utopmn_h = state_.calculate_horizontal_mean(state_.get_field<3>("u"), nz-h-1);
+    double vtopmn_h = state_.calculate_horizontal_mean(state_.get_field<3>("v"), nz-h-1);
+    Kokkos::deep_copy(state_.get_field<1>("utopmn").get_mutable_device_data(), utopmn_h);
+    Kokkos::deep_copy(state_.get_field<1>("vtopmn").get_mutable_device_data(), vtopmn_h);
 
     auto& eta = state_.get_field<3>("eta").get_mutable_device_data();
     auto& xi = state_.get_field<3>("xi").get_mutable_device_data();

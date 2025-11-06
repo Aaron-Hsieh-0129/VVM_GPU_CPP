@@ -50,8 +50,8 @@ void WindSolver::solve_w(Core::State& state) {
     const auto& CGAU = params_.CGAU.get_device_data();
 
     const auto& rhobar_up = state.get_field<1>("rhobar_up").get_device_data();
-    const auto& xi = state.get_field<3>("xi").get_device_data();
-    const auto& eta = state.get_field<3>("eta").get_device_data();
+    const auto& xi = state.get_field<3>("xi_topo").get_device_data();
+    const auto& eta = state.get_field<3>("eta_topo").get_device_data();
 
     auto& w = state.get_field<3>("w").get_mutable_device_data();
 
@@ -254,8 +254,8 @@ void WindSolver::solve_uv(Core::State& state) {
         }
     );
 
-    const auto& xi = state.get_field<3>("xi").get_mutable_device_data();
-    const auto& eta = state.get_field<3>("eta").get_mutable_device_data();
+    const auto& xi = state.get_field<3>("xi_topo").get_mutable_device_data();
+    const auto& eta = state.get_field<3>("eta_topo").get_mutable_device_data();
     const auto& dz = params_.dz;
     Kokkos::parallel_for("u_downward_integration",
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h, h}, {ny-h, nx-h}),

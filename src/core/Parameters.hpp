@@ -36,6 +36,7 @@ public:
     Kokkos::View<double> rdy2;
     Kokkos::View<double> rdz2;
     Kokkos::View<double> WRXMU;
+    int max_topo_idx;
 
     // 1D Kokkos Views
     Field<1> z_mid;

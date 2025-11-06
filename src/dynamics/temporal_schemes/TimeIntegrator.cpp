@@ -44,6 +44,30 @@ void TimeIntegrator::step(
         auto tendency_now_view = Kokkos::subview(tendency_history.get_device_data(), now_idx, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
         auto tendency_prev_view = Kokkos::subview(tendency_history.get_device_data(), prev_idx, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
 
+        const auto& ITYPEU = state.get_field<3>("ITYPEU").get_device_data();
+        const auto& ITYPEV = state.get_field<3>("ITYPEV").get_device_data();
+        const auto& max_topo_idx = params.max_topo_idx;
+        if (variable_name_ == "xi") {
+            Kokkos::parallel_for("topo",
+                Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
+                KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                    // Set tendency to 0 if ITYPEV = 0
+                    tendency_now_view(k,j,i) *= ITYPEV(k,j,i);
+                    tendency_prev_view(k,j,i) *= ITYPEV(k,j,i);
+                }
+            );
+        }
+        else if (variable_name_ == "eta") {
+            Kokkos::parallel_for("topo",
+                Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
+                KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                    // Set tendency to 0 if ITYPEV = 0
+                    tendency_now_view(k,j,i) *= ITYPEU(k,j,i);
+                    tendency_prev_view(k,j,i) *= ITYPEU(k,j,i);
+                }
+            );
+        }
+
         if (time_step_count_ == 0) {
             if (variable_name_ == "zeta") {
                 Kokkos::parallel_for("AB2_Forward_Step", 

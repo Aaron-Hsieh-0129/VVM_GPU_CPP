@@ -198,6 +198,21 @@ void DynamicalCore::step(Core::State& state, double dt) {
 
             if (time_integrators_.count(var_name)) {
                 time_integrators_.at(var_name)->step(state, grid_, params_, dt);
+                if (var_name == "th") {
+                    const auto& ITYPEW = state.get_field<3>("ITYPEW").get_device_data();
+                    const auto& max_topo_idx = params_.max_topo_idx;
+                    auto& th = state_.get_field<3>("th").get_mutable_device_data();
+                    const auto& thbar = state_.get_field<1>("thbar").get_device_data();
+                    Kokkos::parallel_for("topo",
+                        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
+                        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                            // Set tendency to 0 if ITYPEV = 0
+                            if (ITYPEW(k,j,i) != 1) {
+                                th(k,j,i) = thbar(k);
+                            }
+                        }
+                    );
+                }
                 
                 VVM::Core::BoundaryConditionManager bc_manager(grid_, config_, var_name);
                 // if (var_name == "zeta") halo_exchanger.exchange_halos_top_slice(state.get_field<3>(var_name));
@@ -278,6 +293,71 @@ void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
 }
 
 void DynamicalCore::compute_wind_fields() {
+    // Assign wind for topography 
+    const auto& ITYPEU = state_.get_field<3>("ITYPEU").get_device_data();
+    const auto& ITYPEV = state_.get_field<3>("ITYPEV").get_device_data();
+    const auto& ITYPEW = state_.get_field<3>("ITYPEW").get_device_data();
+    const auto& max_topo_idx = params_.max_topo_idx;
+
+    auto& u_topo = state_.get_field<3>("u_topo").get_mutable_device_data();
+    const auto& u = state_.get_field<3>("u").get_device_data();
+    auto& v_topo = state_.get_field<3>("v_topo").get_mutable_device_data();
+    const auto& v = state_.get_field<3>("v").get_device_data();
+    auto& w_topo = state_.get_field<3>("w_topo").get_mutable_device_data();
+    const auto& w = state_.get_field<3>("w").get_device_data();
+
+    const int nz = grid_.get_local_total_points_z();
+    const int ny = grid_.get_local_total_points_y();
+    const int nx = grid_.get_local_total_points_x();
+    const int h = grid_.get_halo_cells();
+
+    Kokkos::parallel_for("wind_topo",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {max_topo_idx+2, ny, nx}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            if (ITYPEU(k,j,i) != 1) u_topo(k,j,i) = 0;
+            else u_topo(k,j,i) = u(k,j,i);
+
+            if (ITYPEV(k,j,i) != 1) v_topo(k,j,i) = 0;
+            else v_topo(k,j,i) = v(k,j,i);
+
+            if (ITYPEW(k,j,i) != 1) w_topo(k,j,i) = 0;
+            else w_topo(k,j,i) = w(k,j,i);
+        }
+    );
+
+    auto& xi_topo = state_.get_field<3>("xi_topo").get_mutable_device_data();
+    const auto& xi = state_.get_field<3>("xi").get_device_data();
+    auto& eta_topo = state_.get_field<3>("eta_topo").get_mutable_device_data();
+    const auto& eta = state_.get_field<3>("eta").get_device_data();
+    auto& zeta_topo = state_.get_field<3>("zeta_topo").get_mutable_device_data();
+    const auto& zeta = state_.get_field<3>("zeta").get_device_data();
+    const auto& rdx = params_.rdx;
+    const auto& rdy = params_.rdy;
+    const auto& rdz = params_.rdz;
+    const auto& flex_height_coef_up = params_.flex_height_coef_up.get_device_data();
+
+    Kokkos::deep_copy(xi_topo, xi);
+    Kokkos::deep_copy(eta_topo, eta);
+    // Assign vorticity for topography
+    Kokkos::parallel_for("vorticity_topo",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, h, h}, {nz-h, ny-h, nx-h}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            if (ITYPEV(k,j,i) != 1) {
+                xi_topo(k,j,i) = (w_topo(k,j+1,i) - w_topo(k,j,i)) * rdy()
+                               - (v_topo(k+1,j,i) - v_topo(k,j,i)) * rdz() * flex_height_coef_up(k);
+            }
+
+            if (ITYPEU(k,j,i) != 1) {
+                eta_topo(k,j,i) = (w_topo(k,j,i+1) - w_topo(k,j,i)) * rdx()
+                                - (u_topo(k+1,j,i) - u_topo(k,j,i)) * rdz() * flex_height_coef_up(k);
+            }
+        }
+    );
+    Core::HaloExchanger halo_exchanger(grid_);
+    halo_exchanger.exchange_halos(state_.get_field<3>("xi_topo"));
+    halo_exchanger.exchange_halos(state_.get_field<3>("eta_topo"));
+
+
     wind_solver_->solve_w(state_);
     wind_solver_->solve_uv(state_);
 }
