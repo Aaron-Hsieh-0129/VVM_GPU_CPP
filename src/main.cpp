@@ -177,7 +177,7 @@ int main(int argc, char* argv[]) {
                            + std::pow((z_mid(k)-5000.)/2000., 2) 
                           );
                 if (radius_norm <= 1) {
-                    th(k,j,i) += 20.*(std::cos(3.14159265*0.5*radius_norm));
+                    // th(k,j,i) += 20.*(std::cos(3.14159265*0.5*radius_norm));
                     // th(k,j,i) = 5.*(std::cos(3.14159265*0.5*radius_norm));
                     // xi(k,j,i) = th(k,j,i);
                     // eta(k,j,i) = th(k,j,i);
@@ -210,8 +210,9 @@ int main(int argc, char* argv[]) {
         // if (rank == 0) parameters.flex_height_coef_mid.print_profile(grid, 0, 0, 0);
 
         VVM::Dynamics::DynamicalCore dynamical_core(config, grid, parameters, state);
-        VVM::IO::OutputManager output_manager(config, grid, parameters, MPI_COMM_WORLD);
-        output_manager.write(state, 0, 0.0);
+        VVM::IO::OutputManager output_manager(config, grid, parameters, state, MPI_COMM_WORLD);
+        output_manager.write(0, 0.0);
+        output_manager.write_static_topo_file();
 
         // Simulation loop parameters
         double total_time = config.get_value<double>("simulation.total_time_s");
@@ -231,7 +232,7 @@ int main(int argc, char* argv[]) {
 
             // Output data at specified intervals
             if (current_time >= next_output_time) {
-                output_manager.write(state, dynamical_core.time_step_count, current_time);
+                output_manager.write(dynamical_core.time_step_count, current_time);
                 next_output_time += output_interval;
             }
         }

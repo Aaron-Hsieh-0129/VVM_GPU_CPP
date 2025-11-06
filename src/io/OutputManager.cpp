@@ -8,8 +8,8 @@
 namespace VVM {
 namespace IO {
 
-OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params, MPI_Comm comm)
-    : grid_(grid), params_(params), comm_(comm), adios_(comm) {
+OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params, VVM::Core::State& state, MPI_Comm comm)
+    : grid_(grid), params_(params), state_(state), comm_(comm), adios_(comm) {
     rank_ = 0;
     mpi_size_ = 1;
     MPI_Comm_rank(comm_, &rank_);
@@ -55,7 +55,7 @@ OutputManager::~OutputManager() {
     }
 }
 
-void OutputManager::define_variables(const VVM::Core::State& state) {
+void OutputManager::define_variables() {
     const size_t gnx = grid_.get_global_points_x();
     const size_t gny = grid_.get_global_points_y();
     const size_t gnz = grid_.get_global_points_z();
@@ -96,10 +96,10 @@ void OutputManager::define_variables(const VVM::Core::State& state) {
     const size_t rank_offset_z = grid_.get_local_physical_start_z();
 
     for (const auto& field_name : fields_to_output_) {
-        auto it = state.begin();
-        while (it != state.end() && it->first != field_name) ++it;
+        auto it = state_.begin();
+        while (it != state_.end() && it->first != field_name) ++it;
 
-        if (it != state.end()) {
+        if (it != state_.end()) {
             std::visit([&](const auto& field) {
                 using T = std::decay_t<decltype(field)>;
                 if constexpr (!std::is_same_v<T, std::monostate>) {
@@ -165,14 +165,14 @@ std::string format_to_six_digits(int number) {
     return ss.str();
 }
 
-void OutputManager::write(const VVM::Core::State& state, int step, double time) {
+void OutputManager::write(int step, double time) {
     VVM::Utils::Timer advection_x_timer("OUTPUT");
 
     std::string filename = output_dir_ + "/" + filename_prefix_ + "_" + format_to_six_digits((int) (step/output_interval_s_)) + ".h5";
     writer_ = io_.Open(filename, adios2::Mode::Write);
 
     if (!variables_defined_) {
-        define_variables(state);
+        define_variables();
         variables_defined_ = true;
     }
 
@@ -209,12 +209,12 @@ void OutputManager::write(const VVM::Core::State& state, int step, double time) 
 
     for (const auto& field_name : fields_to_output_) {
         if (field_variables_.count(field_name)) {
-            auto it = state.begin();
-            while (it != state.end() && it->first != field_name) {
+            auto it = state_.begin();
+            while (it != state_.end() && it->first != field_name) {
                 ++it;
             }
 
-            if (it != state.end()) {
+            if (it != state_.end()) {
                 auto& adios_var = field_variables_.at(field_name);
 
                 std::visit([&](const auto& field) {
@@ -329,8 +329,119 @@ void OutputManager::grads_ctl_file() {
 
     // Close the file
     outFile.close();
+
+
+    // Open topo output file
+    std::ofstream outtopoFile(output_dir_ + "/topo.ctl");
+    if (!outtopoFile.is_open()) {
+        std::cerr << "Error opening topo ctl file!" << std::endl;
+        return;
+    }
+
+    // Write the .ctl file content
+    outtopoFile << "DSET ^" << "topo.h5\n";
+    outtopoFile << "DTYPE hdf5_grid\n";
+    outtopoFile << "OPTIONS template\n";
+    outtopoFile << "TITLE VVM_GPU_CPP\n";
+    outtopoFile << "UNDEF -9999.0\n";
+    outtopoFile << "XDEF " << grid_.get_global_points_x() << " LINEAR 0 1\n";
+    outtopoFile << "YDEF " << grid_.get_global_points_y() << " LINEAR 0 1\n";
+    outtopoFile << "ZDEF " << grid_.get_global_points_z() << " LEVELS ";
+    for (int k = h; k < h+nz_phy; k++) {
+        outtopoFile << static_cast<int> (z_mid_host(k));
+        if (k < nz_phy+h-1) outtopoFile << ", ";
+    }
+    outtopoFile << "\n";
+    outtopoFile << "TDEF 1 LINEAR 00:00Z01JAN2000 1hr\n";
+
+    outtopoFile << "VARS " << 1 << "\n";
+    outtopoFile << "/Step0/topo=>topo 0 y,x topo\n";
+    outtopoFile << "ENDVARS\n";
+
+    // Close the file
+    outtopoFile.close();
     return;
 }
+
+void OutputManager::write_static_topo_file() {
+    if (rank_ == 0) {
+        std::cout << "Writing static topography file..." << std::endl;
+    }
+
+    adios2::IO topo_io = adios_.DeclareIO("TOPO_IO");
+    topo_io.SetEngine("HDF5");
+    topo_io.SetParameter("IdleH5Writer", "true");
+
+    std::string filename = output_dir_ + "/topo.h5";
+    adios2::Engine topo_writer = topo_io.Open(filename, adios2::Mode::Write);
+
+    const size_t gnx = grid_.get_global_points_x();
+    const size_t gny = grid_.get_global_points_y();
+    const size_t gnz = grid_.get_global_points_z();
+    const size_t h = grid_.get_halo_cells();
+
+    const size_t rank_lnx = grid_.get_local_physical_points_x();
+    const size_t rank_lny = grid_.get_local_physical_points_y();
+    const size_t rank_offset_x = grid_.get_local_physical_start_x();
+    const size_t rank_offset_y = grid_.get_local_physical_start_y();
+
+    auto var_x = topo_io.DefineVariable<double>("coordinates/x", {gnx}, {0}, {rank_ == 0 ? gnx : 0});
+    auto var_y = topo_io.DefineVariable<double>("coordinates/y", {gny}, {0}, {rank_ == 0 ? gny : 0});
+    auto var_z = topo_io.DefineVariable<double>("coordinates/z_mid", {gnz}, {0}, {rank_ == 0 ? gnz : 0});
+
+    auto var_topo = topo_io.DefineVariable<double>("topo", {gny, gnx},
+                                                 {rank_offset_y, rank_offset_x},
+                                                 {rank_lny, rank_lnx});
+    topo_io.DefineAttribute<std::string>("units", "meter", var_topo.Name());
+    topo_io.DefineAttribute<std::string>("long_name", "Topography Height", var_topo.Name());
+
+    topo_writer.BeginStep();
+
+    if (rank_ == 0) {
+        std::vector<double> x_coords(gnx);
+        for(size_t i = 0; i < gnx; ++i) { x_coords[i] = i * grid_.get_dx(); }
+        topo_writer.Put<double>(var_x, x_coords.data(), adios2::Mode::Sync);
+
+        std::vector<double> y_coords(gny);
+        for(size_t i = 0; i < gny; ++i) { y_coords[i] = i * grid_.get_dy(); }
+        topo_writer.Put<double>(var_y, y_coords.data(), adios2::Mode::Sync);
+
+        auto z_mid_host = params_.z_mid.get_host_data();
+        std::vector<double> z_mid_physical(gnz);
+        for (size_t i = 0; i < gnz; ++i) {
+            z_mid_physical[i] = z_mid_host(i + h);
+        }
+        topo_writer.Put<double>(var_z, z_mid_physical.data(), adios2::Mode::Sync);
+    }
+
+    try {
+        const auto& topo_field = state_.get_field<2>("topo");
+        auto topo_data_view = topo_field.get_device_data();
+
+        Kokkos::View<double**, Kokkos::LayoutRight> topo_phys_subview("topo_phys_subview", rank_lny, rank_lnx);
+        auto subview_from_full = Kokkos::subview(topo_data_view, 
+                                               std::make_pair(h, h + rank_lny), 
+                                               std::make_pair(h, h + rank_lnx));
+        Kokkos::deep_copy(topo_phys_subview, subview_from_full);
+        auto topo_phys_host = Kokkos::create_mirror_view(topo_phys_subview);
+        Kokkos::deep_copy(topo_phys_host, topo_phys_subview);
+        
+        topo_writer.Put<double>(var_topo, topo_phys_host.data());
+    } 
+    catch (const std::exception& e) {
+        if (rank_ == 0) {
+            std::cerr << "Warning: Could not write 'topo' variable to static file. Reason: " << e.what() << std::endl;
+        }
+    }
+
+    topo_writer.EndStep();
+    topo_writer.Close();
+
+    if (rank_ == 0) {
+        std::cout << "Static topography file '" << filename << "' written successfully." << std::endl;
+    }
+}
+
 
 } // namespace IO
 } // namespace VVM

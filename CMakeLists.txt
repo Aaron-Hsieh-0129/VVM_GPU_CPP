@@ -178,9 +178,49 @@ endif()
 include_directories(${CMAKE_SOURCE_DIR}/src)
 add_subdirectory(src)
 
-# ------------------------------
-# Optional tests
-# ------------------------------
+set(PNETCDF_INSTALL_DIR "/work/aaron900129/pnetcdf_install" CACHE PATH "Path to PnetCDF installation")
+find_path(PNETCDF_INCLUDE_DIR pnetcdf.h
+          HINTS ${PNETCDF_INSTALL_DIR}/include
+          NO_DEFAULT_PATH)
+find_library(PNETCDF_LIBRARY NAMES pnetcdf
+             HINTS ${PNETCDF_INSTALL_DIR}/lib
+             NO_DEFAULT_PATH)
+
+if (PNETCDF_INCLUDE_DIR AND PNETCDF_LIBRARY)
+    add_library(PnetCDF::pnetcdf UNKNOWN IMPORTED GLOBAL)
+    set_target_properties(PnetCDF::pnetcdf PROPERTIES
+                          IMPORTED_LOCATION "${PNETCDF_LIBRARY}"
+                          INTERFACE_INCLUDE_DIRECTORIES "${PNETCDF_INCLUDE_DIR}")
+    find_library(M_LIBRARY m)
+    target_link_libraries(PnetCDF::pnetcdf INTERFACE MPI::MPI_CXX ${M_LIBRARY})
+    set(PNETCDF_FOUND TRUE)
+    message(STATUS "PnetCDF found manually at: ${PNETCDF_LIBRARY}")
+else()
+    message(FATAL_ERROR "PnetCDF library or includes not found at the specified path: ${PNETCDF_INSTALL_DIR}")
+endif()
+
+# Find netcdf-c
+set(NETCDF_C_INSTALL_DIR "/work/aaron900129/netcdf-c_install" CACHE PATH "Path to NetCDF-C installation")
+find_path(NETCDF_C_INCLUDE_DIR netcdf.h
+          HINTS ${NETCDF_C_INSTALL_DIR}/include
+          NO_DEFAULT_PATH)
+find_library(NETCDF_C_LIBRARY NAMES netcdf
+             HINTS ${NETCDF_C_INSTALL_DIR}/lib
+             NO_DEFAULT_PATH)
+
+if (NETCDF_C_INCLUDE_DIR AND NETCDF_C_LIBRARY)
+    add_library(NetCDF::netcdf UNKNOWN IMPORTED GLOBAL)
+    set_target_properties(NetCDF::netcdf PROPERTIES
+                          IMPORTED_LOCATION "${NETCDF_C_LIBRARY}"
+                          INTERFACE_INCLUDE_DIRECTORIES "${NETCDF_C_INCLUDE_DIR}")
+    set(NETCDF_C_FOUND TRUE)
+    message(STATUS "NetCDF-C (for fallback) found manually at: ${NETCDF_C_LIBRARY}")
+else()
+    message(FATAL_ERROR "NetCDF-C library or includes not found at the specified path: ${NETCDF_C_INSTALL_DIR}")
+endif()
+
+
+# Build tests if requested
 if(BUILD_TESTS)
     enable_testing()
     include(FetchContent)
@@ -192,9 +232,6 @@ if(BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-# ------------------------------
-# Debug: Print final compiler flags
-# ------------------------------
 message(STATUS "=== Compiler flags summary ===")
 message(STATUS "CXX Compiler: ${CMAKE_CXX_COMPILER}")
 message(STATUS "CXX Flags: ${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
