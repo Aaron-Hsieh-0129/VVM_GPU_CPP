@@ -1,12 +1,14 @@
 set(VVM_IO_SOURCES
     TxtReader.cpp
     OutputManager.cpp
+    PnetcdfReader.cpp
 )
 
 set(VVM_IO_HEADERS
     Reader.hpp
     TxtReader.hpp
     OutputManager.hpp
+    PnetcdfReader.hpp
 )
 
 add_library(vvm_io STATIC
@@ -20,4 +22,7 @@ target_link_libraries(vvm_io
         Kokkos::kokkos
         adios2::adios2
         HDF5::HDF5
+        PnetCDF::pnetcdf
+        NetCDF::netcdf
+        MPI::MPI_CXX
 )

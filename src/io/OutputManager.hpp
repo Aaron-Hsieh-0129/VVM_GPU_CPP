@@ -19,7 +19,7 @@ namespace IO {
 
 class OutputManager {
 public:
-    OutputManager(const Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params, MPI_Comm comm);
+    OutputManager(const Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params, VVM::Core::State& state, MPI_Comm comm);
     ~OutputManager();
 
     OutputManager(const OutputManager&) = delete;
@@ -27,12 +27,14 @@ public:
     OutputManager(OutputManager&&) = delete;
     OutputManager& operator=(OutputManager&&) = delete;
 
-    void write(const VVM::Core::State& state, int step, double time);
+    void write(int step, double time);
     void write_static_data();
+    void write_static_topo_file();
 
 private:
     const VVM::Core::Grid& grid_;
     const VVM::Core::Parameters& params_;
+    VVM::Core::State& state_;
     std::string output_dir_;
     std::string filename_prefix_;
     std::vector<std::string> fields_to_output_;
@@ -53,11 +55,8 @@ private:
 
     bool variables_defined_ = false;
     adios2::Variable<double> var_time_;
-    adios2::Variable<double> var_x_;
-    adios2::Variable<double> var_y_;
-    adios2::Variable<double> var_z_mid_;
 
-    void define_variables(const VVM::Core::State& state);
+    void define_variables();
     void grads_ctl_file();
 };
 

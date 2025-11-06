@@ -200,7 +200,6 @@ void TxtReader::read_and_initialize(VVM::Core::State& state) {
     const auto& gravity = config_.get_value<double>("constants.gravity");
     const auto& dz = config_.get_value<double>("grid.dz");
 
-    const auto& rdz = params_.rdz;
     const auto& z_up = params_.z_up.get_device_data();
     const auto z_up_h = params_.z_up.get_host_data();
     const auto& z_mid = params_.z_mid.get_device_data();

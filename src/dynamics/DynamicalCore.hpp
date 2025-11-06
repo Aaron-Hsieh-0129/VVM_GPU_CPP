@@ -34,6 +34,7 @@ public:
     void compute_diagnostic_fields() const;
     void compute_zeta_vertical_structure(Core::State& state) const;
     void compute_uvtopmn();
+    void compute_wind_fields();
     void step(Core::State& state, double dt);
 
     mutable size_t time_step_count = 0;
@@ -49,7 +50,6 @@ private:
     std::vector<IntegrationStep> integration_procedure_;
 
     std::unique_ptr<WindSolver> wind_solver_;
-    void compute_wind_fields();
 };
 
 } // namespace Dynamics

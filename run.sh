@@ -14,8 +14,8 @@
 
 source ./scripts/env_twnia2_nano5.sh
 
-rm -rf build
-mkdir build
+# rm -rf build
+# mkdir build
 
 if [ -n "$SLURM_CPUS_PER_TASK" ]; then
     omp_threads=$SLURM_CPUS_PER_TASK

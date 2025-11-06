@@ -57,4 +57,5 @@ target_link_libraries(vvm_core
         Kokkos::kokkos
         ${OpenMP_LIBRARIES}
 	    ${NVTOOLSEXT_LIBRARY}
+        PnetCDF::pnetcdf
 )
