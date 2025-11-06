@@ -52,19 +52,24 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<3>("v_mean", {nz_total, ny_total, nx_total});
     add_field<3>("w_mean", {nz_total, ny_total, nx_total});
     add_field<3>("W3DNM1", {nz_total, ny_total, nx_total});
+    add_field<3>("u_topo", {nz_total, ny_total, nx_total});
+    add_field<3>("v_topo", {nz_total, ny_total, nx_total});
+    add_field<3>("w_topo", {nz_total, ny_total, nx_total});
+    add_field<3>("xi_topo", {nz_total, ny_total, nx_total});
+    add_field<3>("eta_topo", {nz_total, ny_total, nx_total});
+    add_field<3>("zeta_topo", {nz_total, ny_total, nx_total});
 
     // Rotation term
     add_field<3>("R_xi", {nz_total, ny_total, nx_total});
     add_field<3>("R_eta", {nz_total, ny_total, nx_total});
     add_field<3>("R_zeta", {nz_total, ny_total, nx_total});
 
-
-    auto& u_data = get_field<3>("u").get_mutable_device_data();
-    auto& v_data = get_field<3>("v").get_mutable_device_data();
-    auto& w_data = get_field<3>("w").get_mutable_device_data();
-    Kokkos::deep_copy(u_data, 0.0);
-    Kokkos::deep_copy(v_data, 0.0);
-    Kokkos::deep_copy(w_data, 0.0);
+    // Topography
+    add_field<1>("maxtopo", {1});
+    add_field<2>("topo", {ny_total, nx_total});
+    add_field<3>("ITYPEU", {nz_total, ny_total, nx_total});
+    add_field<3>("ITYPEV", {nz_total, ny_total, nx_total});
+    add_field<3>("ITYPEW", {nz_total, ny_total, nx_total});
 
     // TODO: Add tracer auto loading from configuration file
 }

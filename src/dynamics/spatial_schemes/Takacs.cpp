@@ -718,6 +718,16 @@ void Takacs::calculate_buoyancy_tendency_x(
             tendency(k, j, i) += gravity() * 0.5 * dB_dy * rdy();
         }
     );
+
+    const auto& ITYPEV = state.get_field<3>("ITYPEV").get_device_data();
+    const auto& max_topo_idx = params.max_topo_idx;
+    Kokkos::parallel_for("topo",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            // Set tendency to 0 if ITYPEV = 0
+            tendency(k,j,i) *= ITYPEV(k,j,i);
+        }
+    );
 }
 
 void Takacs::calculate_buoyancy_tendency_y(
@@ -744,6 +754,16 @@ void Takacs::calculate_buoyancy_tendency_y(
             // WARNING: dB_dy has a negative sign in original VVM because the definition of eta in that VVM is negative from this one.
             // FIXME: Fix the comparison negative sign
             tendency(k, j, i) += gravity() * 0.5 * dB_dx * rdx();
+        }
+    );
+
+    const auto& ITYPEU = state.get_field<3>("ITYPEU").get_device_data();
+    const auto& max_topo_idx = params.max_topo_idx;
+    Kokkos::parallel_for("buoyancy_tendency_y",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            // Set tendency to 0 if ITYPEV = 0
+            tendency(k,j,i) *= ITYPEU(k,j,i);
         }
     );
     // int rank;

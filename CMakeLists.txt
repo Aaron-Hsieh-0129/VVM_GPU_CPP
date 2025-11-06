@@ -62,11 +62,6 @@ set(EKAT_ENABLE_YAML ON CACHE BOOL "")
 set(EKAT_TPL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/externals CACHE PATH "")
 add_subdirectory(externals/ekat)
 
-# set(PNETCDF_INSTALL_DIR "/work/aaron900129/Pnetcdf_install")
-# set(PNETCDF_INCLUDE_DIR "${PNETCDF_INSTALL_DIR}/include")
-# set(PNETCDF_LIBRARIES "-L${PNETCDF_INSTALL_DIR}/lib -lpnetcdf -lm")
-
-
 # Find ADIOS2
 find_package(ADIOS2 REQUIRED CXX MPI)
 if (ADIOS2_FOUND)
@@ -92,8 +87,6 @@ if (HDF5_INCLUDE_DIR AND HDF5_LIBRARY)
     set_target_properties(HDF5::HDF5 PROPERTIES
                           IMPORTED_LOCATION "${HDF5_LIBRARY}"
                           INTERFACE_INCLUDE_DIRECTORIES "${HDF5_INCLUDE_DIR}")
-    # Add dependencies that parallel HDF5 needs. This is crucial.
-    # The names (z, dl, m) come from your h5pcc output.
     find_library(Z_LIBRARY z)
     find_library(DL_LIBRARY dl)
     find_library(M_LIBRARY m)
@@ -106,6 +99,47 @@ endif()
 
 include_directories(${CMAKE_SOURCE_DIR}/src)
 add_subdirectory(src)
+
+set(PNETCDF_INSTALL_DIR "/work/aaron900129/pnetcdf_install" CACHE PATH "Path to PnetCDF installation")
+find_path(PNETCDF_INCLUDE_DIR pnetcdf.h
+          HINTS ${PNETCDF_INSTALL_DIR}/include
+          NO_DEFAULT_PATH)
+find_library(PNETCDF_LIBRARY NAMES pnetcdf
+             HINTS ${PNETCDF_INSTALL_DIR}/lib
+             NO_DEFAULT_PATH)
+
+if (PNETCDF_INCLUDE_DIR AND PNETCDF_LIBRARY)
+    add_library(PnetCDF::pnetcdf UNKNOWN IMPORTED GLOBAL)
+    set_target_properties(PnetCDF::pnetcdf PROPERTIES
+                          IMPORTED_LOCATION "${PNETCDF_LIBRARY}"
+                          INTERFACE_INCLUDE_DIRECTORIES "${PNETCDF_INCLUDE_DIR}")
+    find_library(M_LIBRARY m)
+    target_link_libraries(PnetCDF::pnetcdf INTERFACE MPI::MPI_CXX ${M_LIBRARY})
+    set(PNETCDF_FOUND TRUE)
+    message(STATUS "PnetCDF found manually at: ${PNETCDF_LIBRARY}")
+else()
+    message(FATAL_ERROR "PnetCDF library or includes not found at the specified path: ${PNETCDF_INSTALL_DIR}")
+endif()
+
+# Find netcdf-c
+set(NETCDF_C_INSTALL_DIR "/work/aaron900129/netcdf-c_install" CACHE PATH "Path to NetCDF-C installation")
+find_path(NETCDF_C_INCLUDE_DIR netcdf.h
+          HINTS ${NETCDF_C_INSTALL_DIR}/include
+          NO_DEFAULT_PATH)
+find_library(NETCDF_C_LIBRARY NAMES netcdf
+             HINTS ${NETCDF_C_INSTALL_DIR}/lib
+             NO_DEFAULT_PATH)
+
+if (NETCDF_C_INCLUDE_DIR AND NETCDF_C_LIBRARY)
+    add_library(NetCDF::netcdf UNKNOWN IMPORTED GLOBAL)
+    set_target_properties(NetCDF::netcdf PROPERTIES
+                          IMPORTED_LOCATION "${NETCDF_C_LIBRARY}"
+                          INTERFACE_INCLUDE_DIRECTORIES "${NETCDF_C_INCLUDE_DIR}")
+    set(NETCDF_C_FOUND TRUE)
+    message(STATUS "NetCDF-C (for fallback) found manually at: ${NETCDF_C_LIBRARY}")
+else()
+    message(FATAL_ERROR "NetCDF-C library or includes not found at the specified path: ${NETCDF_C_INSTALL_DIR}")
+endif()
 
 
 # Build tests if requested
