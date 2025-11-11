@@ -23,6 +23,7 @@ add_subdirectory(utils)
 add_subdirectory(core)
 add_subdirectory(io)
 add_subdirectory(dynamics)
+add_subdirectory(share)
 add_subdirectory(physics)
 
 add_executable(vvm 
@@ -43,5 +44,7 @@ target_link_libraries(vvm
         vvm_core
         vvm_io
         vvm_dynamics
+        vvm_physics
+        scream_share
         p3
 )

@@ -57,7 +57,16 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<3>("w_topo", {nz_total, ny_total, nx_total});
     add_field<3>("xi_topo", {nz_total, ny_total, nx_total});
     add_field<3>("eta_topo", {nz_total, ny_total, nx_total});
-    add_field<3>("zeta_topo", {nz_total, ny_total, nx_total});
+    // P3
+    add_field<3>("qv", {nz_total, ny_total, nx_total});
+    add_field<3>("qc", {nz_total, ny_total, nx_total});
+    add_field<3>("qr", {nz_total, ny_total, nx_total});
+    add_field<3>("qi", {nz_total, ny_total, nx_total});
+    add_field<3>("qm", {nz_total, ny_total, nx_total});
+    add_field<3>("nc", {nz_total, ny_total, nx_total});
+    add_field<3>("nr", {nz_total, ny_total, nx_total});
+    add_field<3>("ni", {nz_total, ny_total, nx_total});
+    add_field<3>("bm", {nz_total, ny_total, nx_total});
 
     // Rotation term
     add_field<3>("R_xi", {nz_total, ny_total, nx_total});
@@ -65,7 +74,6 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<3>("R_zeta", {nz_total, ny_total, nx_total});
 
     // Topography
-    add_field<1>("maxtopo", {1});
     add_field<2>("topo", {ny_total, nx_total});
     add_field<3>("ITYPEU", {nz_total, ny_total, nx_total});
     add_field<3>("ITYPEV", {nz_total, ny_total, nx_total});

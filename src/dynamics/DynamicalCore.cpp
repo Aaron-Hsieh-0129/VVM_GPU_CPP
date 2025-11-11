@@ -329,8 +329,6 @@ void DynamicalCore::compute_wind_fields() {
     const auto& xi = state_.get_field<3>("xi").get_device_data();
     auto& eta_topo = state_.get_field<3>("eta_topo").get_mutable_device_data();
     const auto& eta = state_.get_field<3>("eta").get_device_data();
-    auto& zeta_topo = state_.get_field<3>("zeta_topo").get_mutable_device_data();
-    const auto& zeta = state_.get_field<3>("zeta").get_device_data();
     const auto& rdx = params_.rdx;
     const auto& rdy = params_.rdy;
     const auto& rdz = params_.rdz;

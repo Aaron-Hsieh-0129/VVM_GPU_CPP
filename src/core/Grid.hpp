@@ -40,9 +40,6 @@ public:
     // print grid info (for debugging)
     void print_info() const;
 
-    KOKKOS_INLINE_FUNCTION
-    MPI_Comm get_cart_comm() const { return cart_comm_; }
-
     // Getters for grid information.
     // These are now regular host functions that access dims_host_mirror_.
     int get_local_total_points_z() const { return dims_host_mirror_(0).local_physical_size + 2 * dims_host_mirror_(0).num_halo_cells; }
@@ -69,6 +66,11 @@ public:
     int get_local_physical_end_x() const { return dims_host_mirror_(2).local_physical_end_idx; }
 
     int get_halo_cells() const { return dims_host_mirror_(0).num_halo_cells; }
+
+    // MPI info
+    int get_mpi_rank() const { return mpi_rank_; }
+    KOKKOS_INLINE_FUNCTION
+    MPI_Comm get_cart_comm() const { return cart_comm_; }
 
 private:
     // Changed from std::vector to Kokkos::View to store grid dimensions.

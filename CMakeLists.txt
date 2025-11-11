@@ -36,7 +36,7 @@ set(HDF5_DIR "/work/aaron900129/hdf5_install/lib/cmake/hdf5")
 set(Kokkos_ENABLE_CUDA ON CACHE BOOL "Enable CUDA backend for Kokkos" FORCE)
 set(Kokkos_ENABLE_CUDA_RELOCATABLE_DEVICE_CODE ON CACHE BOOL "Enable Kokkos RDC")
 set(Kokkos_ENABLE_OPENMP ON CACHE BOOL "Enable OpenMP backend for Kokkos" FORCE)
-set(EAMXX_ENABLE_GPU ON CACHE BOOL "Enable P3 GPU" FORCE)
+# set(EAMXX_ENABLE_GPU ON CACHE BOOL "Enable P3 GPU" FORCE)
 
 # NVHPC + Kokkos CUDA arch
 if(CMAKE_CXX_COMPILER_ID STREQUAL "NVHPC")
@@ -115,13 +115,26 @@ endif()
 # ------------------------------
 # EKAT
 # ------------------------------
-set(EKAT_ENABLE_TESTS OFF CACHE BOOL "")
-set(EKAT_ENABLE_EXAMPLES OFF CACHE BOOL "")
-set(EKAT_ENABLE_NETCDF ON CACHE BOOL "")
-set(EKAT_ENABLE_PNETCDF OFF CACHE BOOL "")
-set(EKAT_ENABLE_YAML ON CACHE BOOL "")
-set(EKAT_TPL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/externals CACHE PATH "")
-add_subdirectory(externals/ekat)
+find_package(Ekat QUIET)
+
+if (Ekat_FOUND)
+    message(STATUS "Found pre-installed Ekat at: ${Ekat_DIR}")
+else()
+    set(EKAT_ENABLE_TESTS OFF CACHE BOOL "")
+    set(EKAT_ENABLE_EXAMPLES OFF CACHE BOOL "")
+    set(EKAT_ENABLE_NETCDF ON CACHE BOOL "")
+    set(EKAT_ENABLE_PNETCDF ON CACHE BOOL "")
+    set(EKAT_ENABLE_YAML ON CACHE BOOL "")
+    set(EKAT_TPL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/externals CACHE PATH "")
+    message(STATUS "Pre-installed Ekat not found. Building from source at 'extern/ekat'.")
+    
+    if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/externals/ekat)
+        add_subdirectory(externals/ekat)
+    else()
+        message(FATAL_ERROR "Could not find pre-installed Ekat, AND "
+                            "the fallback directory 'extern/ekat' does not exist.")
+    endif()
+endif()
 
 message(STATUS "Aggressively cleaning global OpenMP flags set by subdirectories (e.g., EKAT)...")
 # 1. Use REGEX to remove '-mp' as a standalone word (handles spaces correctly)
