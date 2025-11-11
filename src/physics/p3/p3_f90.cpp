@@ -104,7 +104,7 @@ void p3_init (const bool write_tables, const bool masterproc) {
   static bool is_init = false;
   if (!is_init) {
     micro_p3_utils_init(masterproc);
-    static const char* dir = SCREAM_DATA_DIR "/tables";
+    static const char* dir = "../rundata/p3";
     Int info;
     p3_init_c(&dir, &info, write_tables);
     EKAT_REQUIRE_MSG(info == 0, "p3_init_c returned info " << info);

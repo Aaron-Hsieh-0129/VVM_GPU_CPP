@@ -47,16 +47,16 @@
     },
     "initial_conditions": {
         "format": "txt",
-        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/initial_conditions/profile_karmen.txt"
+        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/initial_conditions/profile.txt"
     },
     "netcdf_reader": {
         "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/TOPO.nc",
         "variables_to_read": {
-            "2d": ["topo"]
+            "2d": []
         }
     },
     "output": {
-        "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/Karmen_4km_U10_square_small",
+        "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/p3",
         "enable_netcdf": true,
         "output_filename_prefix": "vvm_output",
         "fields_to_output": ["thbar", "rhobar", "rhobar_up", "htflx_sfc", "u", "v", "w", "th", "xi", "eta", "zeta"],
@@ -134,5 +134,13 @@
                 }
             ]
         }
+    },
+    "physics": {
+        "p3": {
+            "do_predict_nc": true,
+            "do_prescribed_ccn": true,
+            "max_total_ni": 740.0e3
+        }
     }
+
 }

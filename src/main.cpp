@@ -1,30 +1,31 @@
-#include <mpi.h>
 #include <Kokkos_Core.hpp>
-#include <iostream>
-#include <omp.h>
 #include <chrono>
 #include <cmath> // For std::exp
+#include <iostream>
+#include <mpi.h>
+#include <omp.h>
 
+#include "core/BoundaryConditionManager.hpp"
+#include "core/Field.hpp"
+#include "core/Grid.hpp"
+#include "core/HaloExchanger.hpp"
+#include "core/Initializer.hpp"
+#include "core/Parameters.hpp"
+#include "core/State.hpp"
+#include "dynamics/DynamicalCore.hpp"
+#include "io/OutputManager.hpp"
+#include "physics/p3/VVM_p3_process_interface.hpp"
 #include "utils/ConfigurationManager.hpp"
 #include "utils/Timer.hpp"
 #include "utils/TimingManager.hpp"
-#include "io/OutputManager.hpp"
-#include "core/Grid.hpp"
-#include "core/Field.hpp"
-#include "core/HaloExchanger.hpp"
-#include "core/BoundaryConditionManager.hpp"
-#include "core/State.hpp"
-#include "core/Parameters.hpp"
-#include "core/Initializer.hpp"
-#include "dynamics/DynamicalCore.hpp"
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     MPI_Init(&argc, &argv);
     int rank, size;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    omp_set_num_threads(72/size);
+    omp_set_num_threads(72 / size);
 
     if (rank == 0) {
         std::cout << "OpenMP Threads: " << omp_get_max_threads() << std::endl;
@@ -71,7 +72,7 @@ int main(int argc, char* argv[]) {
         Kokkos::parallel_for("InitHeatFluxField",
             Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, nx}),
             KOKKOS_LAMBDA(const int j, const int i) {
-                htflx_sfc_mutable(j, i) = static_cast<double>(100*rank + 10*j + i);
+                htflx_sfc_mutable(j, i) = static_cast<double>(100 * rank + 10 * j + i);
             }
         );
         // if (rank == 0) zeta_field.print_slice_z_at_k(grid, 0, nz-h-1);
@@ -84,8 +85,9 @@ int main(int argc, char* argv[]) {
 
         VVM::Core::Initializer init(config, grid, parameters, state);
         init.initialize_state();
+        VVM::Physics::VVM_P3_Interface p3_physics(config, grid, parameters);
+        p3_physics.initialize(state);
         // halo_exchanger.exchange_halos(state);
-
 
         // B.C. process
         // bc_manager.apply_z_bcs_to_field(state.get_field<1>("thbar"));
@@ -125,9 +127,7 @@ int main(int argc, char* argv[]) {
         const auto& dy = parameters.dy;
         const auto& z_mid = parameters.z_mid.get_device_data();
 
-        
-        Kokkos::parallel_for("th_init_with_perturbation", 
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, ny, nx}),
+        Kokkos::parallel_for("th_init_with_perturbation", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
             KOKKOS_LAMBDA(int k, int j, int i) {
                 const int local_j = j - h;
                 const int local_i = i - h;
@@ -135,17 +135,18 @@ int main(int argc, char* argv[]) {
                 const int global_j = global_start_j + local_j;
                 const int global_i = global_start_i + local_i;
 
-                th(k,j,i) = thbar(k);
+                th(k, j, i) = thbar(k);
 
                 // double base_th = thbar(k);
-                
+
                 // th(k,j,i) = 300;
                 // w(k,j,i) = 10;
-                // if (k == 3 && j == ny/2 && i == nx/2 && (rank == 0 || rank == 1)) th(k,j,i) += 50;
+                // if (k == 3 && j == ny/2 && i == nx/2 && (rank == 0 || rank == 1))
+                // th(k,j,i) += 50;
 
                 /*
-                if ((32/2-3-1 <= global_j && 32/2+3-1 >= global_j) && (32/2-3-1 <= global_i && 32/2+3-1 >= global_i)) {
-                    if (k == h+15) {
+                if ((32/2-3-1 <= global_j && 32/2+3-1 >= global_j) && (32/2-3-1 <= global_i && 32/2+3-1 >= global_i)) { 
+                    if (k == h+15) { 
                         xi(k,j,i) = 50;
                         eta(k,j,i) = 50;
                         th(k,j,i) += 50;
@@ -172,12 +173,12 @@ int main(int argc, char* argv[]) {
                 */
 
                 double radius_norm = std::sqrt(
-                             std::pow(((global_i+1)-32./2.)*dx()/2000., 2) 
-                           + std::pow(((global_j+1)-32./2.)*dy()/2000., 2)
-                           + std::pow((z_mid(k)-5000.)/2000., 2) 
-                          );
+                                      std::pow(((global_i + 1) - 32. / 2.) * dx() / 2000., 2) +
+                                      std::pow(((global_j + 1) - 32. / 2.) * dy() / 2000., 2) +
+                                      std::pow((z_mid(k) - 5000.) / 2000., 2)
+                                     );
                 if (radius_norm <= 1) {
-                    // th(k,j,i) += 20.*(std::cos(3.14159265*0.5*radius_norm));
+                    th(k, j, i) += 5. * (std::cos(3.14159265 * 0.5 * radius_norm));
                     // th(k,j,i) = 5.*(std::cos(3.14159265*0.5*radius_norm));
                     // xi(k,j,i) = th(k,j,i);
                     // eta(k,j,i) = th(k,j,i);
@@ -185,8 +186,7 @@ int main(int argc, char* argv[]) {
             }
         );
         // if (rank == 0) {
-        //     std::cout << "\n--- Field State BEFORE Halo Exchange ---" << std::endl;
-        //     state.get_field<3>("v").print_slice_z_at_k(grid, 0, 18);
+        //     std::cout << "\n--- Field State BEFORE Halo Exchange ---" << std::endl; state.get_field<3>("v").print_slice_z_at_k(grid, 0, 18);
         // }
         halo_exchanger.exchange_halos(state.get_field<3>("th"));
         halo_exchanger.exchange_halos(state.get_field<3>("xi"));
@@ -197,11 +197,8 @@ int main(int argc, char* argv[]) {
         halo_exchanger.exchange_halos(state.get_field<3>("w"));
 
         // if (rank == 0) {
-        //     std::cout << "\n--- Field State AFTER Halo Exchange ---" << std::endl;
-        //     state.get_field<3>("v").print_slice_z_at_k(grid, 0, 18);
+        //     std::cout << "\n--- Field State AFTER Halo Exchange ---" << std::endl; state.get_field<3>("v").print_slice_z_at_k(grid, 0, 18);
         // }
-
-        
         // if (rank == 0) w_field.print_xz_cross_at_j(grid, 0, 3);
 
         // 1D field
@@ -225,16 +222,18 @@ int main(int argc, char* argv[]) {
         // Simulation loop
         while (current_time < total_time) {
             dynamical_core.step(state, dt);
+            p3_physics.run(state, dt);
             halo_exchanger.exchange_halos(state);
             current_time += dt;
 
             std::cout << current_time << std::endl;
 
-            // Output data at specified intervals
+             // Output data at specified intervals
             if (current_time >= next_output_time) {
                 output_manager.write(dynamical_core.time_step_count, current_time);
                 next_output_time += output_interval;
             }
+            exit(1);
         }
     }
     VVM::Utils::TimingManager::get_instance().print_timings(MPI_COMM_WORLD);

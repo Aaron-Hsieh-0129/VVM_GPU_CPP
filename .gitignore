@@ -46,3 +46,6 @@ build
 .vscode
 output
 log
+compile_commands.json
+.clangd
+tags
