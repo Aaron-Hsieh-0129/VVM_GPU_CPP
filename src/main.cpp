@@ -222,7 +222,7 @@ int main(int argc, char *argv[]) {
         // Simulation loop
         while (current_time < total_time) {
             dynamical_core.step(state, dt);
-            p3_physics.run(state, dt);
+            // p3_physics.run(state, dt);
             halo_exchanger.exchange_halos(state);
             current_time += dt;
 
@@ -233,7 +233,6 @@ int main(int argc, char *argv[]) {
                 output_manager.write(dynamical_core.time_step_count, current_time);
                 next_output_time += output_interval;
             }
-            exit(1);
         }
     }
     VVM::Utils::TimingManager::get_instance().print_timings(MPI_COMM_WORLD);

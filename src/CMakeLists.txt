@@ -1,8 +1,8 @@
-set(SCREAM_PACK_SIZE 8 CACHE STRING "The number of scalars in a scream::pack::Pack")
-set(SCREAM_SMALL_PACK_SIZE 8 CACHE STRING "The number of scalars in a scream::pack::SmallPack")
+set(SCREAM_PACK_SIZE 1 CACHE STRING "The number of scalars in a scream::pack::Pack")
+set(SCREAM_SMALL_PACK_SIZE 1 CACHE STRING "The number of scalars in a scream::pack::SmallPack")
 set(SCREAM_POSSIBLY_NO_PACK_SIZE 1 CACHE STRING "The number of scalars in a possibly-no-pack")
 
-set(SCREAM_NUM_VERTICAL_LEV 72 CACHE STRING "Default number of vertical levels")
+set(SCREAM_NUM_VERTICAL_LEV 33 CACHE STRING "Default number of vertical levels")
 
 
 include_directories(BEFORE
@@ -44,7 +44,8 @@ target_link_libraries(vvm
         vvm_core
         vvm_io
         vvm_dynamics
-        vvm_physics
         scream_share
         p3
+        vvm_physics
+        ekat
 )
