@@ -10,6 +10,9 @@ set(P3_SRCS
     scream_abortutils.F90
     wv_sat_scream.F90
     debug_info.F90
+    scream_types.F90
+    physics_utils.F90
+    shr_kind_mod.F90
 )
 
 if (NOT SCREAM_LIB_ONLY)
@@ -114,16 +117,16 @@ foreach (P3_LIB IN LISTS P3_LIBS)
         ${CMAKE_CURRENT_SOURCE_DIR}/../../share/util
         ${CMAKE_CURRENT_SOURCE_DIR}/../../
     )
-    target_link_libraries(${P3_LIB} Kokkos::kokkos ekat)
+    target_link_libraries(${P3_LIB} PUBLIC Kokkos::kokkos ekat)
 endforeach()
 
 set(P3_TABLES
     ${PROJECT_SOURCE_DIR}/rundata/p3
-    ${PROJECT_SOURCE_DIR}/tables/p3_lookup_table_1.dat-v4.1.1
-    ${PROJECT_SOURCE_DIR}/tables/mu_r_table_vals.dat8
-    ${PROJECT_SOURCE_DIR}/tables/revap_table_vals.dat8
-    ${PROJECT_SOURCE_DIR}/tables/vm_table_vals.dat8
-    ${PROJECT_SOURCE_DIR}/tables/vn_table_vals.dat8
+    ${PROJECT_SOURCE_DIR}/rundata/p3/p3_lookup_table_1.dat-v4.1.1
+    ${PROJECT_SOURCE_DIR}/rundata/p3/mu_r_table_vals.dat8
+    ${PROJECT_SOURCE_DIR}/rundata/p3/revap_table_vals.dat8
+    ${PROJECT_SOURCE_DIR}/rundata/p3/vm_table_vals.dat8
+    ${PROJECT_SOURCE_DIR}/rundata/p3/vn_table_vals.dat8
 )
 
 

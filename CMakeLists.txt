@@ -115,25 +115,52 @@ endif()
 # ------------------------------
 # EKAT
 # ------------------------------
-find_package(Ekat QUIET)
+# find_package(Ekat QUIET)
 
-if (Ekat_FOUND)
-    message(STATUS "Found pre-installed Ekat at: ${Ekat_DIR}")
+# if (Ekat_FOUND)
+#     message(STATUS "Found pre-installed Ekat at: ${Ekat_DIR}")
+# else()
+# set(EKAT_ENABLE_TESTS OFF CACHE BOOL "")
+# set(EKAT_ENABLE_EXAMPLES OFF CACHE BOOL "")
+# set(EKAT_ENABLE_NETCDF ON CACHE BOOL "")
+# set(EKAT_ENABLE_PNETCDF ON CACHE BOOL "")
+# set(EKAT_ENABLE_YAML ON CACHE BOOL "")
+# set(EKAT_TPL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/externals CACHE PATH "")
+# message(STATUS "Pre-installed Ekat not found. Building from source at 'extern/ekat'.")
+# set(EKAT_ENABLE_CUDA ON CACHE BOOL "Pass VVM CUDA setting to Ekat" FORCE)
+# if (DEFINED Kokkos_DIR)
+#     set(Kokkos_DIR ${Kokkos_DIR} CACHE PATH "Point Ekat to VVM's Kokkos" FORCE)
+# endif()
+#
+# if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/externals/ekat)
+#     add_subdirectory(externals/ekat)
+# else()
+#     message(FATAL_ERROR "Could not find pre-installed Ekat, AND "
+#                         "the fallback directory 'extern/ekat' does not exist.")
+# endif()
+# endif()
+
+message(STATUS "[VVM] Forcing Ekat to build from source.")
+message(STATUS "[VVM] VVM (parent) found Kokkos at: ${Kokkos_DIR}")
+
+set(EKAT_ENABLE_TESTS OFF CACHE BOOL "")
+set(EKAT_ENABLE_EXAMPLES OFF CACHE BOOL "")
+set(EKAT_ENABLE_NETCDF ON CACHE BOOL "")
+set(EKAT_ENABLE_PNETCDF ON CACHE BOOL "")
+set(EKAT_ENABLE_YAML ON CACHE BOOL "")
+set(EKAT_TPL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/externals CACHE PATH "")
+
+set(EKAT_ENABLE_CUDA ${Kokkos_ENABLE_CUDA} CACHE BOOL "Pass VVM CUDA setting to Ekat" FORCE)
+
+set(Kokkos_DIR ${Kokkos_DIR} CACHE PATH "FORCE Ekat to use VVM's Kokkos" FORCE)
+
+message(STATUS "[VVM] Forcing Ekat's Kokkos_DIR to: ${Kokkos_DIR}")
+message(STATUS "[VVM] Forcing Ekat's EKAT_ENABLE_CUDA to: ${EKAT_ENABLE_CUDA}")
+
+if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/externals/ekat)
+    add_subdirectory(externals/ekat)
 else()
-    set(EKAT_ENABLE_TESTS OFF CACHE BOOL "")
-    set(EKAT_ENABLE_EXAMPLES OFF CACHE BOOL "")
-    set(EKAT_ENABLE_NETCDF ON CACHE BOOL "")
-    set(EKAT_ENABLE_PNETCDF ON CACHE BOOL "")
-    set(EKAT_ENABLE_YAML ON CACHE BOOL "")
-    set(EKAT_TPL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/externals CACHE PATH "")
-    message(STATUS "Pre-installed Ekat not found. Building from source at 'extern/ekat'.")
-    
-    if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/externals/ekat)
-        add_subdirectory(externals/ekat)
-    else()
-        message(FATAL_ERROR "Could not find pre-installed Ekat, AND "
-                            "the fallback directory 'extern/ekat' does not exist.")
-    endif()
+    message(FATAL_ERROR "Could not find 'externals/ekat' directory.")
 endif()
 
 message(STATUS "Aggressively cleaning global OpenMP flags set by subdirectories (e.g., EKAT)...")

@@ -42,6 +42,7 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
 
     // 3D field
     add_field<3>("th", {nz_total, ny_total, nx_total});
+    add_field<3>("T", {nz_total, ny_total, nx_total});
     add_field<3>("xi", {nz_total, ny_total, nx_total});
     add_field<3>("eta", {nz_total, ny_total, nx_total});
     add_field<3>("zeta", {nz_total, ny_total, nx_total});
@@ -67,6 +68,15 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<3>("nr", {nz_total, ny_total, nx_total});
     add_field<3>("ni", {nz_total, ny_total, nx_total});
     add_field<3>("bm", {nz_total, ny_total, nx_total});
+    // pack_3d_to_2d_packed(state.get_field<3>("nccn").get_device_data(), m_nccn_view);
+    // pack_3d_to_2d_packed(state.get_field<3>("ni_activated").get_device_data(), m_ni_activated_view);
+    // pack_3d_to_2d_packed(state.get_field<3>("inv_qc_relvar").get_device_data(), m_inv_qc_relvar_view);
+    // pack_3d_to_2d_packed(state.get_field<3>("p_dry_mid").get_device_data(), m_pres_view); // p_dry_mid -> m_pres_view
+    // pack_3d_to_2d_packed(state.get_field<3>("pseudo_density_dry").get_device_data(), m_dpres_view);
+    // pack_3d_to_2d_packed(state.get_field<3>("qv_prev_micro_step").get_device_data(), m_qv_prev_view);
+    // pack_3d_to_2d_packed(state.get_field<3>("T_prev_micro_step").get_device_data(), m_t_prev_view);
+    // pack_3d_to_2d_packed(state.get_field<3>("dz").get_device_data(), m_dz_view);
+    // pack_3d_to_2d_packed(state.get_field<3>("inv_exner").get_device_data(), m_inv_exner_view);
 
     // Rotation term
     add_field<3>("R_xi", {nz_total, ny_total, nx_total});
