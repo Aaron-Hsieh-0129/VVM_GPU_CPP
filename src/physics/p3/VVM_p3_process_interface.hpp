@@ -64,7 +64,7 @@ using view_1d  = typename P3F::view_1d<Real>;
 using view_1d_const  = typename P3F::view_1d<const Real>;
 using view_2d  = typename P3F::view_2d<Spack>;
 using view_2d_const  = typename P3F::view_2d<const Spack>;
-using sview_2d = typename KokkosTypes<DefaultDevice>::template view_2d<Real>;
+using sview_2d = typename ekat::KokkosTypes<DefaultDevice>::template view_2d<Real>;
 
 using uview_1d  = Unmanaged<view_1d>;
 using uview_2d  = Unmanaged<view_2d>;
@@ -325,6 +325,8 @@ public:
                      const VVM::Core::Parameters& params);
 
     void initialize(VVM::Core::State& state);
+    void finalize();
+
     void run(VVM::Core::State& state, const double dt);
 
     /**
@@ -420,8 +422,6 @@ protected:
     view_2d m_cld_frac_r_view;
     
     // Diagnostic (OUT)
-    view_1d m_precip_liq_surf_view;
-    view_1d m_precip_ice_surf_view;
     view_1d m_precip_liq_surf_mass_view; // accumulate
     view_1d m_precip_ice_surf_mass_view; // accumulate
     view_1d m_precip_liq_surf_flux_view;
@@ -440,6 +440,8 @@ protected:
     view_2d m_liq_ice_exchange_view;
     view_2d m_vap_liq_exchange_view;
     view_2d m_vap_ice_exchange_view;
+
+    // sview_2d col_location;
 
     using MemberType = typename P3F::KT::MemberType;
 };

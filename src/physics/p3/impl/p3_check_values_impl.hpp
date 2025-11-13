@@ -26,8 +26,8 @@ template <typename S, typename D>
 KOKKOS_FUNCTION
 void Functions<S,D>
 ::check_values(const uview_1d<const Spack>& qv, const uview_1d<const Spack>& temp, const Int& ktop, const Int& kbot,
-               const Int& timestepcount, const bool& force_abort, const Int& source_ind, const MemberType& team,
-               const uview_1d<const Scalar>& col_loc)
+               const Int& timestepcount, const bool& force_abort, const Int& source_ind, const MemberType& team)
+               // const uview_1d<const Scalar>& col_loc)
 {
   constexpr Scalar T_low  = 173.;
   constexpr Scalar T_high = 323.;

@@ -4,6 +4,7 @@
 #include <iostream>
 #include <mpi.h>
 #include <omp.h>
+#include <memory>
 
 #include "core/BoundaryConditionManager.hpp"
 #include "core/Field.hpp"
@@ -32,6 +33,7 @@ int main(int argc, char *argv[]) {
         std::cout << "OpenMP Proc Bind: " << omp_get_proc_bind() << std::endl;
     }
 
+    std::unique_ptr<VVM::Physics::VVM_P3_Interface> p3_interface;
     Kokkos::initialize(argc, argv);
     {
         VVM::Utils::Timer total_timer("total vvm");
@@ -85,8 +87,12 @@ int main(int argc, char *argv[]) {
 
         VVM::Core::Initializer init(config, grid, parameters, state);
         init.initialize_state();
-        VVM::Physics::VVM_P3_Interface p3_physics(config, grid, parameters);
-        p3_physics.initialize(state);
+        if (config.get_value<bool>("physics.p3.enable_p3")) {
+            p3_interface = std::make_unique<VVM::Physics::VVM_P3_Interface>(config, grid, parameters);
+            p3_interface->initialize(state);
+        }
+        // VVM::Physics::VVM_P3_Interface p3_physics(config, grid, parameters);
+        // p3_physics.initialize(state);
         // halo_exchanger.exchange_halos(state);
 
         // B.C. process
@@ -97,6 +103,7 @@ int main(int argc, char *argv[]) {
         // bc_manager.apply_z_bcs_to_field(state.get_field<1>("pibar"));
         // bc_manager.apply_z_bcs_to_field(state.get_field<1>("U"));
 
+        if (rank == 0) state.get_field<1>("qvbar").print_profile(grid, 0, 0, 0);
         if (rank == 0) state.get_field<1>("rhobar_up").print_profile(grid, 0, 0, 0);
         if (rank == 0) state.get_field<1>("rhobar").print_profile(grid, 0, 0, 0);
         if (rank == 0) state.get_field<1>("thbar").print_profile(grid, 0, 0, 0);
@@ -222,7 +229,7 @@ int main(int argc, char *argv[]) {
         // Simulation loop
         while (current_time < total_time) {
             dynamical_core.step(state, dt);
-            // p3_physics.run(state, dt);
+            // p3_interface->run(state, dt);
             halo_exchanger.exchange_halos(state);
             current_time += dt;
 
@@ -237,6 +244,10 @@ int main(int argc, char *argv[]) {
     }
     VVM::Utils::TimingManager::get_instance().print_timings(MPI_COMM_WORLD);
 
+    if (p3_interface) {
+        p3_interface->finalize();
+        p3_interface.reset();
+    }
     Kokkos::finalize();
     MPI_Finalize();
     return 0;
