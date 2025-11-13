@@ -1,7 +1,7 @@
 {
     "grid": {
-        "nx": 256,
-        "ny": 256,
+        "nx": 32,
+        "ny": 32,
         "nz": 33,
         "n_halo_cells": 2,
         "dx": 500.0,
@@ -10,9 +10,9 @@
         "dz1": 100.0
     },
     "simulation": {
-        "total_time_s": 86400.0,
+        "total_time_s": 10.0,
         "dt_s": 1.0,
-        "output_interval_s": 150.0
+        "output_interval_s": 1.0
     },
     "boundary_conditions": {
         "default": {
@@ -47,7 +47,7 @@
     },
     "initial_conditions": {
         "format": "txt",
-        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/initial_conditions/profile.txt"
+        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/initial_conditions/profile_p3.txt"
     },
     "netcdf_reader": {
         "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/TOPO.nc",
@@ -59,7 +59,7 @@
         "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/p3",
         "enable_netcdf": true,
         "output_filename_prefix": "vvm_output",
-        "fields_to_output": ["thbar", "rhobar", "rhobar_up", "htflx_sfc", "u", "v", "w", "th", "xi", "eta", "zeta"],
+        "fields_to_output": ["thbar", "rhobar", "rhobar_up", "htflx_sfc", "u", "v", "w", "th", "xi", "eta", "zeta", "qv", "qc", "qr","qi"],
         "output_grid": {
             "x_start": 0,
             "x_end": -1,
@@ -112,6 +112,51 @@
                     "stretching": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
                     "twisting": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
                 }
+            },
+            "qv": {
+                "tendency_terms": {
+                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                }
+            },
+            "qc": {
+                "tendency_terms": {
+                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                }
+            },
+            "qr": {
+                "tendency_terms": {
+                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                }
+            },
+            "qi": {
+                "tendency_terms": {
+                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                }
+            },
+            "qm": {
+                "tendency_terms": {
+                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                }
+            },
+            "nc": {
+                "tendency_terms": {
+                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                }
+            },
+            "nr": {
+                "tendency_terms": {
+                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                }
+            },
+            "ni": {
+                "tendency_terms": {
+                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                }
+            },
+            "bm": {
+                "tendency_terms": {
+                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                }
             }
         },
         "time_integration": {
@@ -119,8 +164,8 @@
                 {
                     "step": 1,
                     "description": "Calculate theta tendency and update theta to t+1",
-                    "calculate_tendencies": ["th"],
-                    "update_states": ["th"]
+                    "calculate_tendencies": ["th", "qv", "qc", "qr", "qi", "qm", "nc", "nr", "ni", "bm"],
+                    "update_states": ["th", "qv", "qc", "qr", "qi", "qm", "nc", "nr", "ni", "bm"]
                 },
                 {
                     "step": 2,
@@ -137,6 +182,7 @@
     },
     "physics": {
         "p3": {
+            "enable_p3": true,
             "do_predict_nc": true,
             "do_prescribed_ccn": true,
             "max_total_ni": 740.0e3

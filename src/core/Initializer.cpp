@@ -293,6 +293,30 @@ void Initializer::assign_vars() const {
         }
     );
 
+
+    // Assign pbar_up
+    const auto& pbar = state_.get_field<1>("pbar").get_device_data();
+    auto& pbar_up = state_.get_field<1>("pbar_up").get_mutable_device_data();
+    auto& dpbar_mid = state_.get_field<1>("dpbar_mid").get_mutable_device_data();
+    Kokkos::parallel_for("assign_pbar_up", Kokkos::RangePolicy<>(1, nz),
+        KOKKOS_LAMBDA(const int k) {
+            pbar_up(k) = 0.5*(pbar(k) + pbar(k+1));
+        }
+    );
+    Kokkos::parallel_for("assign_pbar_up", Kokkos::RangePolicy<>(2, nz),
+        KOKKOS_LAMBDA(const int k) {
+            dpbar_mid(k) = pbar_up(k) - pbar_up(k-1);
+        }
+    );
+
+    // Assign qv
+    const auto& qvbar = state_.get_field<1>("qvbar").get_device_data();
+    auto& qv = state_.get_field<3>("qv").get_mutable_device_data();
+    Kokkos::parallel_for("assign_qv", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h,ny-h,nx-h}),
+        KOKKOS_LAMBDA(int k, int j, int i) {
+            qv(k,j,i) = qvbar(k);
+        }
+    );
     return;
 }
 

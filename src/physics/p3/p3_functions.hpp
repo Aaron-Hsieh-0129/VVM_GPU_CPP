@@ -899,8 +899,8 @@ struct Functions
 
   KOKKOS_FUNCTION
   static void check_values(const uview_1d<const Spack>& qv, const uview_1d<const Spack>& temp, const Int& ktop, const Int& kbot,
-                           const Int& timestepcount, const bool& force_abort, const Int& source_ind, const MemberType& team,
-                           const uview_1d<const Scalar>& col_loc);
+                           const Int& timestepcount, const bool& force_abort, const Int& source_ind, const MemberType& team);
+                           // const uview_1d<const Scalar>& col_loc);
 
 #ifdef SCREAM_P3_SMALL_KERNELS
   static void check_values_disp(const uview_2d<const Spack>& qv, const uview_2d<const Spack>& temp, const Int& ktop, const Int& kbot,

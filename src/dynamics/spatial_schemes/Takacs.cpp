@@ -700,6 +700,8 @@ void Takacs::calculate_buoyancy_tendency_x(
     
     const auto& thbar = state.get_field<1>("thbar").get_device_data();
     const auto& th = state.get_field<3>("th").get_device_data();
+    const auto& qv = state.get_field<3>("qv").get_device_data();
+    const auto& qp = state.get_field<3>("qp").get_device_data();
     auto& tendency = out_tendency.get_mutable_device_data();
     const auto& rdy = params.rdy;
     const auto& gravity = params.gravity;
@@ -712,8 +714,10 @@ void Takacs::calculate_buoyancy_tendency_x(
     Kokkos::parallel_for("buoyancy_tendency_x",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h-1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            const double dB_dy = (th(k  ,j+1,i)-th(k  ,j,i)) / thbar(k) +
-                                 (th(k+1,j+1,i)-th(k+1,j,i)) / thbar(k+1);
+            const double dB_dy = (th(k  ,j+1,i)-th(k  ,j,i)) / thbar(k)
+                               + (th(k+1,j+1,i)-th(k+1,j,i)) / thbar(k+1)
+                               + 0.608*(qv(k,j+1,i)-qv(k,j,i)+qv(k+1,j+1,i)-qv(k+1,j,i))
+                               - (qp(k,j+1,i)-qp(k,j,i)+qp(k+1,j+1,i)-qp(k+1,j,i));
 
             tendency(k, j, i) += gravity() * 0.5 * dB_dy * rdy();
         }
@@ -736,6 +740,8 @@ void Takacs::calculate_buoyancy_tendency_y(
     
     const auto& thbar = state.get_field<1>("thbar").get_device_data();
     const auto& th = state.get_field<3>("th").get_device_data();
+    const auto& qv = state.get_field<3>("qv").get_device_data();
+    const auto& qp = state.get_field<3>("qp").get_device_data();
     auto& tendency = out_tendency.get_mutable_device_data();
     auto& rdx = params.rdx;
     auto& gravity = params.gravity;
@@ -748,8 +754,10 @@ void Takacs::calculate_buoyancy_tendency_y(
     Kokkos::parallel_for("buoyancy_tendency_y",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h-1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            const double dB_dx = (th(k  ,j,i+1)-th(k  ,j,i)) / thbar(k) +
-                                 (th(k+1,j,i+1)-th(k+1,j,i)) / thbar(k+1);
+            const double dB_dx = (th(k  ,j,i+1)-th(k  ,j,i)) / thbar(k)
+                               + (th(k+1,j,i+1)-th(k+1,j,i)) / thbar(k+1)
+                               + (0.608*(qv(k,j,i+1)-qv(k,j,i)+qv(k+1,j,i+1)-qv(k+1,j,i)))
+                               - (qp(k,j,i+1)-qp(k,j,i)+qp(k+1,j,i+1)-qp(k+1,j,i));
 
             // WARNING: dB_dy has a negative sign in original VVM because the definition of eta in that VVM is negative from this one.
             // FIXME: Fix the comparison negative sign

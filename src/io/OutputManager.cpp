@@ -311,25 +311,64 @@ void OutputManager::grads_ctl_file() {
         if (k < nz_phy+h-1) outFile << ", ";
     }
     outFile << "\n";
-
-    int outnum = 7; // xi,eta,zeta,u,v,w,th
-
     outFile << "TDEF " << (int) (total_time_ / (dt*output_interval_s_)+1) << " LINEAR 00:00Z01JAN2000 " << "1hr\n";
     outFile << "\n";
-    outFile << "VARS " << outnum << "\n";
-    outFile << "/Step0/th=>th " << nz_phy << " z,y,x theta\n";
-    outFile << "/Step0/u=>u " << nz_phy << " z,y,x u\n";
-    outFile << "/Step0/v=>v " << nz_phy << " z,y,x v\n";
-    outFile << "/Step0/w=>w " << nz_phy << " z,y,x w\n";
-    outFile << "/Step0/eta=>eta " << nz_phy << " z,y,x eta\n";
-    outFile << "/Step0/xi=>xi " << nz_phy << " z,y,x xi\n";
-    outFile << "/Step0/zeta=>zeta " << nz_phy << " z,y,x zeta\n";
-    // outFile << "ubarTop=>ubarTop 1 t ubarTop\n";
-    outFile << "ENDVARS\n";
 
+    // int outnum = 7; // xi,eta,zeta,u,v,w,th
+    //
+    // outFile << "VARS " << outnum << "\n";
+    // outFile << "/Step0/th=>th " << nz_phy << " z,y,x theta\n";
+    // outFile << "/Step0/u=>u " << nz_phy << " z,y,x u\n";
+    // outFile << "/Step0/v=>v " << nz_phy << " z,y,x v\n";
+    // outFile << "/Step0/w=>w " << nz_phy << " z,y,x w\n";
+    // outFile << "/Step0/eta=>eta " << nz_phy << " z,y,x eta\n";
+    // outFile << "/Step0/xi=>xi " << nz_phy << " z,y,x xi\n";
+    // outFile << "/Step0/zeta=>zeta " << nz_phy << " z,y,x zeta\n";
+    // outFile << "ubarTop=>ubarTop 1 t ubarTop\n";
+
+    int valid_vars_count = 0;
+    std::vector<std::string> lines_to_write;
+    for (const auto& field_name : fields_to_output_) {
+        auto it = state_.begin();
+        while (it != state_.end() && it->first != field_name) ++it;
+        if (it != state_.end()) {
+            bool found_dim = false;
+            std::visit([&](const auto& field) {
+                using T = std::decay_t<decltype(field)>;
+                if constexpr (!std::is_same_v<T, std::monostate>) {
+                    std::stringstream ss;
+                    if constexpr (T::DimValue == 3 || T::DimValue == 4) {
+                        ss << "/Step0/" << field_name << "=>" << field_name << " " << nz_phy << " z,y,x " << field_name << "\n";
+                        found_dim = true;
+                    }
+                    else if constexpr (T::DimValue == 2) {
+                        ss << "/Step0/" << field_name << "=>" << field_name << " 0 y,x " << field_name << "\n";
+                        found_dim = true;
+                    }
+                    else if constexpr (T::DimValue == 1) {
+                        ss << "/Step0/" << field_name << "=>" << field_name << " " << nz_phy << " z " << field_name << "\n";
+                        found_dim = true;
+                    }
+                    // else {
+                    //     
+                    // }
+
+                    if (found_dim) {
+                        lines_to_write.push_back(ss.str());
+                        valid_vars_count++;
+                    }
+                }
+            }, it->second);
+        }
+    }
+
+    outFile << "VARS " << valid_vars_count << "\n";
+    for(const auto& line : lines_to_write) {
+        outFile << line;
+    }
+    outFile << "ENDVARS\n";
     // Close the file
     outFile.close();
-
 
     // Open topo output file
     std::ofstream outtopoFile(output_dir_ + "/topo.ctl");
