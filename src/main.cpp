@@ -96,12 +96,15 @@ int main(int argc, char *argv[]) {
         // halo_exchanger.exchange_halos(state);
 
         // B.C. process
-        // bc_manager.apply_z_bcs_to_field(state.get_field<1>("thbar"));
-        // bc_manager.apply_z_bcs_to_field(state.get_field<1>("rhobar"));
-        // bc_manager.apply_z_bcs_to_field(state.get_field<1>("rhobar_up"));
-        // bc_manager.apply_z_bcs_to_field(state.get_field<1>("pbar"));
-        // bc_manager.apply_z_bcs_to_field(state.get_field<1>("pibar"));
-        // bc_manager.apply_z_bcs_to_field(state.get_field<1>("U"));
+        bc_manager.apply_z_bcs_to_field(state.get_field<1>("thbar"));
+        bc_manager.apply_z_bcs_to_field(state.get_field<1>("qvbar"));
+        bc_manager.apply_z_bcs_to_field(state.get_field<1>("Tbar"));
+        bc_manager.apply_z_bcs_to_field(state.get_field<1>("Tvbar"));
+        bc_manager.apply_z_bcs_to_field(state.get_field<1>("rhobar"));
+        bc_manager.apply_z_bcs_to_field(state.get_field<1>("rhobar_up"));
+        bc_manager.apply_z_bcs_to_field(state.get_field<1>("pbar"));
+        bc_manager.apply_z_bcs_to_field(state.get_field<1>("pibar"));
+        bc_manager.apply_z_bcs_to_field(state.get_field<1>("U"));
 
         if (rank == 0) state.get_field<1>("qvbar").print_profile(grid, 0, 0, 0);
         if (rank == 0) state.get_field<1>("rhobar_up").print_profile(grid, 0, 0, 0);
@@ -117,6 +120,8 @@ int main(int argc, char *argv[]) {
         if (rank == 0) parameters.flex_height_coef_up.print_profile(grid, 0, 0, 0);
 
         auto& th = state.get_field<3>("th").get_mutable_device_data();
+        auto& qc = state.get_field<3>("qc").get_mutable_device_data();
+        auto& nc = state.get_field<3>("nc").get_mutable_device_data();
         auto& thbar = state.get_field<1>("thbar").get_device_data();
         auto& xi = state.get_field<3>("xi").get_mutable_device_data();
         auto& eta = state.get_field<3>("eta").get_mutable_device_data();
@@ -180,12 +185,14 @@ int main(int argc, char *argv[]) {
                 */
 
                 double radius_norm = std::sqrt(
-                                      std::pow(((global_i + 1) - 32. / 2.) * dx() / 2000., 2) +
-                                      std::pow(((global_j + 1) - 32. / 2.) * dy() / 2000., 2) +
-                                      std::pow((z_mid(k) - 5000.) / 2000., 2)
+                                      std::pow(((global_i + 1) - nx/2.) * dx() / 2000., 2) +
+                                      // std::pow(((global_j + 1) - 32. / 2.) * dy() / 2000., 2) +
+                                      std::pow((z_mid(k) - 3000.) / 2000., 2)
                                      );
                 if (radius_norm <= 1) {
                     th(k, j, i) += 5. * (std::cos(3.14159265 * 0.5 * radius_norm));
+                    qc(k, j, i) = 0.01;
+                    // nc(k, j, i) = 2e8;
                     // th(k,j,i) = 5.*(std::cos(3.14159265*0.5*radius_norm));
                     // xi(k,j,i) = th(k,j,i);
                     // eta(k,j,i) = th(k,j,i);
@@ -202,6 +209,13 @@ int main(int argc, char *argv[]) {
         halo_exchanger.exchange_halos(state.get_field<3>("u"));
         halo_exchanger.exchange_halos(state.get_field<3>("v"));
         halo_exchanger.exchange_halos(state.get_field<3>("w"));
+        halo_exchanger.exchange_halos(state.get_field<3>("qv"));
+        halo_exchanger.exchange_halos(state.get_field<3>("qc"));
+        Kokkos::parallel_for("th_init_with_perturbation", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, nx}),
+            KOKKOS_LAMBDA(int j, int i) {
+                th(0,j,i) = th(1,j,i);
+            }
+        );
 
         // if (rank == 0) {
         //     std::cout << "\n--- Field State AFTER Halo Exchange ---" << std::endl; state.get_field<3>("v").print_slice_z_at_k(grid, 0, 18);
@@ -229,7 +243,7 @@ int main(int argc, char *argv[]) {
         // Simulation loop
         while (current_time < total_time) {
             dynamical_core.step(state, dt);
-            // p3_interface->run(state, dt);
+            p3_interface->run(state, dt);
             halo_exchanger.exchange_halos(state);
             current_time += dt;
 

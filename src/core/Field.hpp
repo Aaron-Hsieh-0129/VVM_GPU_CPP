@@ -162,7 +162,7 @@ inline void Field<Dim>::print_profile(const Grid& grid, int N_idx, int j_local_i
     else if constexpr (Dim == 3) {
         std::cout << ", j=" << j_local_idx << ", i=" << i_local_idx<< std::endl;
         for (int k = 0; k < host_data.extent(0); ++k) {
-            std::cout << host_data(k, j_local_idx, i_local_idx) << "\t";
+            std::cout << std::scientific << std::setprecision(6) << host_data(k, j_local_idx, i_local_idx) << "\t";
         }
         std::cout << std::endl;
     } 

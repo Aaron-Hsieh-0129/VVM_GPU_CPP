@@ -174,10 +174,7 @@ Int Functions<S,D>
     const auto ocld_frac_i         = ekat::subview(diagnostic_inputs.cld_frac_i, i);
     const auto ocld_frac_l         = ekat::subview(diagnostic_inputs.cld_frac_l, i);
     const auto ocld_frac_r         = ekat::subview(diagnostic_inputs.cld_frac_r, i);
-    // if (i == 0) {
-    //     Kokkos::abort("Terminated: No errors before this line");
-    // }
-    // const auto ocol_location       = ekat::subview(infrastructure.col_location, i);
+    const auto ocol_location       = ekat::subview(infrastructure.col_location, i);
     const auto oqc                 = ekat::subview(prognostic_state.qc, i);
     const auto onc                 = ekat::subview(prognostic_state.nc, i);
     const auto oqr                 = ekat::subview(prognostic_state.qr, i);
@@ -217,6 +214,7 @@ Int Functions<S,D>
       &tmparr1, &qtend_ignore, &ntend_ignore,
       &mu_c, &lamc, &orho_qi, &oqv2qi_depos_tend, &oprecip_total_tend, &onevapr, &oprecip_liq_flux, &oprecip_ice_flux
     };
+
 
     // initialize
     p3_main_init(
@@ -321,7 +319,7 @@ Int Functions<S,D>
     });
 
     check_values(oqv, tmparr1, ktop, kbot, infrastructure.it, debug_ABORT, 900,
-                 team);
+                 team, ocol_location);
 #endif
   });
   Kokkos::fence();

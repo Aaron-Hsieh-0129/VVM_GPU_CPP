@@ -94,7 +94,7 @@ struct p3_preamble {
         const Spack& pseudo_density_dry_pack(pseudo_density_dry(icol,ipack));
 
         //compute dz from full pressure
-        dz(icol,ipack) = PF::calculate_dz(pseudo_density_pack, pmid_pack, T_atm_pack, qv(icol,ipack));
+        // dz(icol,ipack) = PF::calculate_dz(pseudo_density_pack, pmid_pack, T_atm_pack, qv(icol,ipack));
 
         // Wet to dry mixing ratios
         qc(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(qc(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
@@ -254,6 +254,7 @@ struct p3_postamble {
     double m_dt;
     view_2d       T_atm; // IN/OUT
     view_2d_const pmid;
+    view_2d_const pmid_dry;
     view_2d_const pseudo_density;
     view_2d_const pseudo_density_dry;
     view_2d       th_atm; // IN
@@ -292,6 +293,7 @@ struct p3_postamble {
       m_npack = npack;
       th_atm = th_atm_; 
       pmid = pmid_; 
+      pmid_dry = pmid_dry_;
       pseudo_density = pseudo_density_;
       pseudo_density_dry = pseudo_density_dry_;
       qv = qv_; 
@@ -441,7 +443,7 @@ protected:
     view_2d m_vap_liq_exchange_view;
     view_2d m_vap_ice_exchange_view;
 
-    // sview_2d col_location;
+    sview_2d m_col_location_view;
 
     using MemberType = typename P3F::KT::MemberType;
 };

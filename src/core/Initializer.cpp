@@ -201,9 +201,6 @@ void Initializer::initialize_poisson() const {
     const auto& flex_height_coef_up = parameters_.flex_height_coef_up.get_device_data();
     const int h = grid_.get_halo_cells();
     const int nz = grid_.get_local_total_points_z();
-    // Kokkos::deep_copy(state_.get_field<1>("rhobar_up").get_mutable_device_data(), 1.);
-    // Kokkos::deep_copy(state_.get_field<1>("rhobar").get_mutable_device_data(), 1.);
-    // Kokkos::deep_copy(state_.get_field<1>("thbar").get_mutable_device_data(), 300.);
     const auto& rhobar = state_.get_field<1>("rhobar").get_device_data();
     const auto& rhobar_up = state_.get_field<1>("rhobar_up").get_device_data();
 
@@ -305,7 +302,7 @@ void Initializer::assign_vars() const {
     );
     Kokkos::parallel_for("assign_pbar_up", Kokkos::RangePolicy<>(2, nz),
         KOKKOS_LAMBDA(const int k) {
-            dpbar_mid(k) = pbar_up(k) - pbar_up(k-1);
+            dpbar_mid(k) = -(pbar_up(k) - pbar_up(k-1)); // make it positive
         }
     );
 

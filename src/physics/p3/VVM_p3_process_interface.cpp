@@ -11,13 +11,7 @@ VVM_P3_Interface::VVM_P3_Interface(const VVM::Utils::ConfigurationManager &confi
     m_num_cols(grid_.get_local_physical_points_x() * grid_.get_local_physical_points_y()),
     m_num_levs(grid_.get_local_physical_points_z()),
     m_num_lev_packs(ekat::npack<Spack>(m_num_levs))
-    // m_col_location_view("col_location", m_num_cols, 3)
 {
-
-    // m_num_cols = grid_.get_local_physical_points_x() * grid_.get_local_physical_points_y();
-    // m_num_levs = grid_.get_local_physical_points_z();
-    // m_num_lev_packs = ekat::npack<Spack>(m_num_levs);
-
     // Infrastructure initialization
     // dt is passed as an argument to run
     m_infrastructure.it = 0;
@@ -86,6 +80,8 @@ void VVM_P3_Interface::allocate_p3_buffers() {
     m_liq_ice_exchange_view = view_2d("liq_ice_exchange", m_num_cols, m_num_lev_packs);
     m_vap_liq_exchange_view = view_2d("vap_liq_exchange", m_num_cols, m_num_lev_packs);
     m_vap_ice_exchange_view = view_2d("vap_ice_exchange", m_num_cols, m_num_lev_packs);
+
+    m_col_location_view = sview_2d("col_location", m_num_cols, 3);
 
     // 1d scalar views
     m_precip_liq_surf_flux_view = view_1d("precip_liq_surf_flux", m_num_cols);
@@ -160,11 +156,38 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
     m_diag_outputs.precip_liq_flux  = m_precip_liq_flux_view;
     m_diag_outputs.precip_ice_flux  = m_precip_ice_flux_view;
 
+    m_infrastructure.col_location = m_col_location_view;
+
     m_history_only.liq_ice_exchange  = m_liq_ice_exchange_view;
     m_history_only.vap_liq_exchange  = m_vap_liq_exchange_view;
     m_history_only.vap_ice_exchange  = m_vap_ice_exchange_view;
 
-    // m_infrastructure.col_location = m_col_location_view;
+    
+    m_p3_preproc.set_variables(m_num_cols, m_num_lev_packs,
+        m_pmid_view, m_pmid_dry_view, 
+        m_pseudo_density_view, m_pseudo_density_dry_view,
+        m_T_atm_view, m_cld_frac_t_view,
+        m_qv_view, m_qc_view, m_nc_view, m_qr_view, m_nr_view, 
+        m_qi_view, m_qm_view, m_ni_view, m_bm_view, 
+        m_qv_prev_view,
+        m_inv_exner_view, 
+        m_th_view,        
+        m_cld_frac_l_view, m_cld_frac_i_view, m_cld_frac_r_view, 
+        m_dz_view
+    );
+    
+    m_p3_postproc.set_variables(m_num_cols, m_num_lev_packs,
+        m_th_view, m_pmid_view, m_pmid_dry_view, m_T_atm_view, m_t_prev_view,
+        m_pseudo_density_view, m_pseudo_density_dry_view,
+        m_qv_view, m_qc_view, m_nc_view, m_qr_view, m_nr_view,
+        m_qi_view, m_qm_view, m_ni_view, m_bm_view, m_qv_prev_view,
+        m_diag_eff_radius_qc_view, m_diag_eff_radius_qi_view, 
+        m_diag_eff_radius_qr_view,
+        m_precip_liq_surf_flux_view, m_precip_ice_surf_flux_view,
+        m_precip_liq_surf_mass_view, m_precip_ice_surf_mass_view
+    );
+    
+    
 
     // Load tables
     P3F::init_kokkos_ice_lookup_tables(m_lookup_tables.ice_table_vals, m_lookup_tables.collect_table_vals);
@@ -183,14 +206,18 @@ void VVM_P3_Interface::initialize_constant_buffers(VVM::Core::State& initial_sta
     const int ny = grid_.get_local_total_points_y();
     const int nx = grid_.get_local_total_points_x();
     VVM::Core::Field<3> dz_mid_3d_field("dz_mid_3d", {nz, ny, nx});
-    VVM::Core::Field<3> pbar_3d_field("pbar_3d", {nz, ny, nx});
-    VVM::Core::Field<3> dpbar_mid_3d_field("dpbar_mid_3d", {nz, ny, nx});
+    // VVM::Core::Field<3> pbar_3d_field("pbar_3d", {nz, ny, nx});
+    // VVM::Core::Field<3> dpbar_mid_3d_field("dpbar_mid_3d", {nz, ny, nx});
+    VVM::Core::Field<3> p_dry_3d_field("p_dry_3d", {nz, ny, nx});
+    VVM::Core::Field<3> dp_dry_3d_field("dp_dry_3d", {nz, ny, nx});
     VVM::Core::Field<3> rhobar_3d_field("rhobar_3d", {nz, ny, nx});
     VVM::Core::Field<3> inv_pibar_3d_field("inv_pibar_3d", {nz, ny, nx});
 
     auto& dz_mid_3d = dz_mid_3d_field.get_mutable_device_data();
-    auto& pbar_3d = pbar_3d_field.get_mutable_device_data();
-    auto& dpbar_mid_3d = dpbar_mid_3d_field.get_mutable_device_data();
+    // auto& pbar_3d = pbar_3d_field.get_mutable_device_data();
+    // auto& dpbar_mid_3d = dpbar_mid_3d_field.get_mutable_device_data();
+    auto& p_dry_3d = p_dry_3d_field.get_mutable_device_data();
+    auto& dp_dry_3d = dp_dry_3d_field.get_mutable_device_data();
     auto& rhobar_3d = rhobar_3d_field.get_mutable_device_data();
     auto& inv_pibar_3d = inv_pibar_3d_field.get_mutable_device_data();
 
@@ -205,16 +232,21 @@ void VVM_P3_Interface::initialize_constant_buffers(VVM::Core::State& initial_sta
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             dz_mid_3d(k,j,i) = dz_mid(k);
-            pbar_3d(k,j,i) = pbar(k);
-            dpbar_mid_3d(k,j,i) = pbar(k);
+            // pbar_3d(k,j,i) = pbar(k);
+            // dpbar_mid_3d(k,j,i) = dpbar_mid(k);
+            p_dry_3d(k,j,i) = pbar(k);
+            dp_dry_3d(k,j,i) = dpbar_mid(k);
             rhobar_3d(k,j,i) = rhobar(k);
             inv_pibar_3d(k,j,i) = 1. / pibar(k);
             T(k,j,i) = th(k,j,i) * pibar(k);
         }
     );
     pack_3d_to_2d_packed(dz_mid_3d, m_dz_view);
-    pack_3d_to_2d_packed(pbar_3d, m_pmid_dry_view);
-    pack_3d_to_2d_packed(dpbar_mid_3d, m_pseudo_density_dry_view);
+    // pack_3d_to_2d_packed(pbar_3d, m_pmid_view);
+    // pack_3d_to_2d_packed(dpbar_mid_3d, m_pseudo_density_dry_view);
+    pack_3d_to_2d_packed(p_dry_3d, m_pmid_dry_view);
+    pack_3d_to_2d_packed(dp_dry_3d, m_pseudo_density_dry_view);
+
     pack_3d_to_2d_packed(inv_pibar_3d, m_inv_exner_view);
     pack_3d_to_2d_packed(initial_state.get_field<3>("T").get_device_data(), m_t_prev_view);
     pack_3d_to_2d_packed(initial_state.get_field<3>("qv").get_device_data(), m_qv_prev_view);
@@ -232,7 +264,7 @@ void VVM_P3_Interface::initialize_constant_buffers(VVM::Core::State& initial_sta
     auto& cld_frac_r_view = m_cld_frac_r_view;
     auto& cld_frac_t_view = m_cld_frac_t_view;
     auto& inv_qc_r_view = m_inv_qc_relvar_view;
-    // auto& col_loc_view = m_col_location_view;
+    auto& col_loc_view = m_col_location_view;
 
     const int nlev_packs = m_num_lev_packs;
     Kokkos::parallel_for("fill_constant_buffers", m_policy,
@@ -252,9 +284,9 @@ void VVM_P3_Interface::initialize_constant_buffers(VVM::Core::State& initial_sta
                     cld_frac_t_view(icol, k_pack) = cld_frac_val;
                     inv_qc_r_view(icol, k_pack)   = inv_qc_r_val;
 
-                    // col_loc_view(icol, 0) = static_cast<Real>(icol); 
-                    // col_loc_view(icol, 1) = 0.0;
-                    // col_loc_view(icol, 2) = 0.0;
+                    col_loc_view(icol, 0) = static_cast<Real>(icol); 
+                    col_loc_view(icol, 1) = 0.0;
+                    col_loc_view(icol, 2) = 0.0;
                 });
         }
     );    
@@ -368,6 +400,8 @@ void VVM_P3_Interface::pack_2d_to_1d(const VVMViewType& vvm_view, const P3ViewTy
 
 
 void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
+    // FIXME: The pmid, pmid_try should be decided. The pmid from VVM is now dry pressure. 
+
     const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
     const int nx = grid_.get_local_total_points_x();
@@ -384,6 +418,21 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
     auto& th = state.get_field<3>("th").get_mutable_device_data();
     auto& qv = state.get_field<3>("qv").get_mutable_device_data();
 
+
+    Kokkos::parallel_for("Data_clipping",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h, ny-h, nx-h}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            if (qv(k,j,i) < 0) qv(k,j,i) = 0;
+            if (qc(k,j,i) < 0) qc(k,j,i) = 0;
+            if (qr(k,j,i) < 0) qr(k,j,i) = 0;
+            if (qi(k,j,i) < 0) qi(k,j,i) = 0;
+            if (nc(k,j,i) < 0) nc(k,j,i) = 0;
+            if (ni(k,j,i) < 0) ni(k,j,i) = 0;
+            if (nr(k,j,i) < 0) nr(k,j,i) = 0;
+        }
+    );
+
+
     // Prognostic State
     pack_3d_to_2d_packed(state.get_field<3>("qc").get_device_data(), m_qc_view);
     pack_3d_to_2d_packed(state.get_field<3>("nc").get_device_data(), m_nc_view);
@@ -399,21 +448,23 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
     // Diagnostic Input
     // TODO: Calculate T here is a hack that needs to be changed
     
-    // pack_3d_to_2d_packed(pbar_3d, m_pmid_view);
     const auto& th_m = state.get_field<3>("th_m").get_device_data();
     const auto& pibar = state.get_field<1>("pibar").get_device_data();
     VVM::Core::Field<3> T_field("T", {nz, ny, nx});
-    VVM::Core::Field<3> T_m_field("T", {nz, ny, nx});
+    VVM::Core::Field<3> T_m_field("T_m", {nz, ny, nx});
     auto& T = T_field.get_mutable_device_data();
     auto& T_m = T_m_field.get_mutable_device_data();
 
-
     VVM::Core::Field<3> P_wet_field("P_wet", {nz, ny, nx});
     auto& P_wet = P_wet_field.get_mutable_device_data();
-    const auto& pbar = state.get_field<1>("pbar").get_device_data();
-
     VVM::Core::Field<3> pseudo_density_field("pseudo_density", {nz, ny, nx});
     auto& pseudo_density = pseudo_density_field.get_mutable_device_data();
+    // VVM::Core::Field<3> P_dry_field("P_dry", {nz, ny, nx});
+    // auto& P_dry = P_dry_field.get_mutable_device_data();
+    // VVM::Core::Field<3> pseudo_density_dry_field("pseudo_density_dry", {nz, ny, nx});
+    // auto& pseudo_density_dry = pseudo_density_dry_field.get_mutable_device_data();
+
+    const auto& pbar = state.get_field<1>("pbar").get_device_data();
     const auto& dpbar_mid = state.get_field<1>("dpbar_mid").get_device_data();
 
     Kokkos::parallel_for("AssignValues",
@@ -422,14 +473,27 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
             T(k,j,i) = th(k,j,i) * pibar(k);
             T_m(k,j,i) = th_m(k,j,i) * pibar(k);
 
-            P_wet(k,j,i) = pbar(k) * (1. + qv(k,j,i));
+            const Real qv_val = qv(k,j,i);
+            // pseudo_density(k,j,i) = dpbar_mid(k);
 
-            pseudo_density(k,j,i) = dpbar_mid(k) * (1. + qv(k,j,i));
+            // P_wet(k,j,i) = pbar(k) * (1. + qv(k,j,i));
+            // pseudo_density(k,j,i) = dpbar_mid(k) * (1. + qv(k,j,i));
+
+            // P_wet(k,j,i) = pbar(k);
+
+            // pseudo_density_dry(k,j,i) = dpbar_mid(k) * (1.0 - qv_safe);
+
+            P_wet(k,j,i) = pbar(k) * (1.0 + qv_val);
+            pseudo_density(k,j,i) = dpbar_mid(k) * (1.0 + qv_val);
+            // P_dry(k,j,i) = pbar(k);
+            // pseudo_density_dry(k,j,i) = dpbar_mid(k);
         }
     );
 
     pack_3d_to_2d_packed(P_wet, m_pmid_view);
+    // pack_3d_to_2d_packed(P_dry, m_pmid_dry_view);
     pack_3d_to_2d_packed(pseudo_density, m_pseudo_density_view);
+    // pack_3d_to_2d_packed(pseudo_density_dry, m_pseudo_density_dry_view);
     pack_3d_to_2d_packed(T, m_T_atm_view);
     pack_3d_to_2d_packed(state.get_field<3>("qv_m").get_device_data(), m_qv_prev_view);
     pack_3d_to_2d_packed(T_m, m_t_prev_view);
@@ -437,18 +501,10 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
     pack_2d_to_1d(state.get_field<2>("precip_liq_surf_mass").get_device_data(), m_precip_liq_surf_mass_view);
     pack_2d_to_1d(state.get_field<2>("precip_ice_surf_mass").get_device_data(), m_precip_ice_surf_mass_view);
 
-    m_p3_preproc.set_variables(m_num_cols, m_num_lev_packs,
-        m_pmid_view, m_pmid_dry_view, 
-        m_pseudo_density_view, m_pseudo_density_dry_view,
-        m_T_atm_view, m_cld_frac_t_view,
-        m_qv_view, m_qc_view, m_nc_view, m_qr_view, m_nr_view, 
-        m_qi_view, m_qm_view, m_ni_view, m_bm_view, 
-        m_qv_prev_view,
-        m_inv_exner_view, 
-        m_th_view,        
-        m_cld_frac_l_view, m_cld_frac_i_view, m_cld_frac_r_view, 
-        m_dz_view
-    );
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    if (rank == 0) state.get_field<3>("qc").print_profile(grid_, 0, 8, 64);
+    if (rank == 0) state.get_field<3>("nc").print_profile(grid_, 0, 8, 64);
 
     // Assign values to local arrays used by P3, these are now stored in p3_loc.
     Kokkos::parallel_for("p3_main_local_vals", 
@@ -472,17 +528,6 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
     );
 
     m_p3_postproc.m_dt = dt;
-    m_p3_postproc.set_variables(m_num_cols, m_num_lev_packs,
-        m_th_view, m_pmid_view, m_pmid_dry_view, 
-        m_T_atm_view, m_t_prev_view,
-        m_pseudo_density_view, m_pseudo_density_dry_view,
-        m_qv_view, m_qc_view, m_nc_view, m_qr_view, m_nr_view,
-        m_qi_view, m_qm_view, m_ni_view, m_bm_view,
-        m_qv_prev_view,
-        m_diag_eff_radius_qc_view, m_diag_eff_radius_qi_view, m_diag_eff_radius_qr_view,
-        m_precip_liq_surf_flux_view, m_precip_ice_surf_flux_view,
-        m_precip_liq_surf_mass_view, m_precip_ice_surf_mass_view
-    );
 
     // Conduct the post-processing of the p3_main output.
     Kokkos::parallel_for("p3_main_local_vals",
@@ -500,32 +545,38 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
     unpack_2d_packed_to_3d(m_ni_view, state.get_field<3>("ni").get_mutable_device_data());
     unpack_2d_packed_to_3d(m_bm_view, state.get_field<3>("bm").get_mutable_device_data());
     unpack_2d_packed_to_3d(m_qv_view, state.get_field<3>("qv").get_mutable_device_data());
-    unpack_2d_packed_to_3d(m_th_view, state.get_field<3>("th").get_mutable_device_data());
+    unpack_2d_packed_to_3d(m_T_atm_view, T);
+    Kokkos::parallel_for("AssignValues",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            th(k,j,i) = T(k,j,i) / pibar(k);
+        }
+    );
     unpack_2d_packed_to_3d(m_qv_prev_view, state.get_field<3>("qv_m").get_mutable_device_data());
     unpack_1d_to_2d(m_precip_liq_surf_mass_view, state.get_field<2>("precip_liq_surf_mass").get_mutable_device_data());
     unpack_1d_to_2d(m_precip_ice_surf_mass_view, state.get_field<2>("precip_ice_surf_mass").get_mutable_device_data());
 
     // Consider topography
-    // const auto& ITYPEW = state.get_field<3>("ITYPEW").get_device_data();
-    // const auto& max_topo_idx = params_.max_topo_idx;
-    // const auto& thbar = state.get_field<1>("thbar").get_device_data();
-    // Kokkos::parallel_for("assign_topo_values",
-    //     Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx, ny-h, nx-h}),
-    //     KOKKOS_LAMBDA(const int k, const int j, const int i) {
-    //         if (ITYPEW(k,j,i) != 1) {
-    //             qc(k,j,i) = 0.;
-    //             nc(k,j,i) = 0.;
-    //             qr(k,j,i) = 0.;
-    //             nr(k,j,i) = 0.;
-    //             qi(k,j,i) = 0.;
-    //             qm(k,j,i) = 0.;
-    //             ni(k,j,i) = 0.;
-    //             bm(k,j,i) = 0.;
-    //             qv(k,j,i) = 0.;
-    //             th(k,j,i) = thbar(k);
-    //         }
-    //     }
-    // );
+    const auto& ITYPEW = state.get_field<3>("ITYPEW").get_device_data();
+    const auto& max_topo_idx = params_.max_topo_idx;
+    const auto& thbar = state.get_field<1>("thbar").get_device_data();
+    Kokkos::parallel_for("assign_topo_values",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx, ny-h, nx-h}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            if (ITYPEW(k,j,i) != 1) {
+                qc(k,j,i) = 0.;
+                nc(k,j,i) = 0.;
+                qr(k,j,i) = 0.;
+                nr(k,j,i) = 0.;
+                qi(k,j,i) = 0.;
+                qm(k,j,i) = 0.;
+                ni(k,j,i) = 0.;
+                bm(k,j,i) = 0.;
+                qv(k,j,i) = 0.;
+                th(k,j,i) = thbar(k);
+            }
+        }
+    );
 
     // Update qp (qc+qr+qi)
     auto& qp = state.get_field<3>("qp").get_mutable_device_data();
@@ -591,7 +642,7 @@ void VVM_P3_Interface::finalize() {
     m_precip_liq_surf_mass_view = {};
     m_precip_ice_surf_mass_view = {};
 
-    // m_col_location_view = {};
+    m_col_location_view = {};
 }
 
 } // namespace Physics
