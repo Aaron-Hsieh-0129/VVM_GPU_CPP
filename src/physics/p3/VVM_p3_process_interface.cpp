@@ -501,11 +501,6 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
     pack_2d_to_1d(state.get_field<2>("precip_liq_surf_mass").get_device_data(), m_precip_liq_surf_mass_view);
     pack_2d_to_1d(state.get_field<2>("precip_ice_surf_mass").get_device_data(), m_precip_ice_surf_mass_view);
 
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    if (rank == 0) state.get_field<3>("qc").print_profile(grid_, 0, 8, 64);
-    if (rank == 0) state.get_field<3>("nc").print_profile(grid_, 0, 8, 64);
-
     // Assign values to local arrays used by P3, these are now stored in p3_loc.
     Kokkos::parallel_for("p3_main_local_vals", 
         Kokkos::RangePolicy<>(0,m_num_cols),

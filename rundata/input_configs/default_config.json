@@ -186,6 +186,9 @@
             "do_predict_nc": true,
             "do_prescribed_ccn": true,
             "max_total_ni": 740.0e3
+        },
+        "rrtmgp": {
+            "enable": true
         }
     }
 

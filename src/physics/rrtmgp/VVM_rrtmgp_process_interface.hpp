@@ -14,6 +14,8 @@
 #include <string>
 #include <vector>
 
+#include <spdlog/spdlog.h>
+
 namespace VVM {
 namespace Physics {
 /*
@@ -85,8 +87,10 @@ public:
     std::vector<int> m_col_chunk_beg;
     int m_nlay;
     // FIXME: VVM should process this
-    Field m_lat;
-    Field m_lon;
+    // Field m_lat;
+    // Field m_lon;
+    VVM::Core::Field<2> m_lat;
+    VVM::Core::Field<2> m_lon;
 
     // Whether we use aerosol forcing in radiation
     bool m_do_aerosol_rad;
@@ -339,11 +343,16 @@ public:
     };
 
 protected:
-
+    size_t requested_buffer_size_in_bytes() const;
     void init_buffers();
 
     // Struct which contains local variables
     Buffer m_buffer;
+
+    Kokkos::View<Real*, DefaultDevice> m_buffer_storage;
+
+    int m_nx, m_ny, m_nz;
+    std::shared_ptr<spdlog::logger> m_logger;
 };  // class RRTMGPRadiation
 
 } // namespace Physics
