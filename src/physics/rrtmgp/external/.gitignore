@@ -1,0 +1,20 @@
+# Module files
+*.mod
+
+# Libraries
+*.a
+
+# Object files
+*.o
+
+# Intel vectorization reports
+*.optrpt
+
+# Don't commit specific Makefile variants
+Makefile.libs
+Makefile.conf
+
+# Backup files
+*~
+
+src/

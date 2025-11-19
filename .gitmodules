@@ -1,3 +1,6 @@
 [submodule "externals/ekat"]
 	path = externals/ekat
 	url = https://github.com/E3SM-Project/ekat.git
+[submodule "externals/YAKL"]
+	path = externals/YAKL
+	url = https://github.com/mrnorman/YAKL.git
