@@ -16,7 +16,7 @@
 #include "dynamics/DynamicalCore.hpp"
 #include "io/OutputManager.hpp"
 #include "physics/p3/VVM_p3_process_interface.hpp"
-#include "physics/rrtmgp/VVM_rrtmgp_process_interface.hpp"
+// #include "physics/rrtmgp/VVM_rrtmgp_process_interface.hpp"
 #include "utils/ConfigurationManager.hpp"
 #include "utils/Timer.hpp"
 #include "utils/TimingManager.hpp"
@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
     }
 
     std::unique_ptr<VVM::Physics::VVM_P3_Interface> p3_interface;
-    std::unique_ptr<VVM::Physics::VVM_RRTMGP_Interface> rrtmgp_interface;
+    // std::unique_ptr<VVM::Physics::VVM_RRTMGP_Interface> rrtmgp_interface;
     Kokkos::initialize(argc, argv);
     {
         VVM::Utils::Timer total_timer("total vvm");
@@ -94,10 +94,10 @@ int main(int argc, char *argv[]) {
             p3_interface->initialize(state);
         }
         bool enable_rrtmgp = config.get_value<bool>("physics.rrtmgp.enable"); 
-        if (enable_rrtmgp) {
-            rrtmgp_interface = std::make_unique<VVM::Physics::VVM_RRTMGP_Interface>(config, grid, parameters);
-            rrtmgp_interface->initialize(state);
-        }
+        // if (enable_rrtmgp) {
+        //     rrtmgp_interface = std::make_unique<VVM::Physics::VVM_RRTMGP_Interface>(config, grid, parameters);
+        //     rrtmgp_interface->initialize(state);
+        // }
         // VVM::Physics::VVM_P3_Interface p3_physics(config, grid, parameters);
         // p3_physics.initialize(state);
         // halo_exchanger.exchange_halos(state);
@@ -253,9 +253,9 @@ int main(int argc, char *argv[]) {
             if (p3_interface) {
                 p3_interface->run(state, dt);
             }
-            if (rrtmgp_interface) {
-                rrtmgp_interface->run(state, dt, current_time);
-            }
+            // if (rrtmgp_interface) {
+            //     rrtmgp_interface->run(state, dt, current_time);
+            // }
             halo_exchanger.exchange_halos(state);
             current_time += dt;
 
@@ -274,10 +274,10 @@ int main(int argc, char *argv[]) {
         p3_interface->finalize();
         p3_interface.reset();
     }
-    if (rrtmgp_interface) {
-        rrtmgp_interface->finalize();
-        rrtmgp_interface.reset();
-    }
+    // if (rrtmgp_interface) {
+    //     rrtmgp_interface->finalize();
+    //     rrtmgp_interface.reset();
+    // }
     Kokkos::finalize();
     MPI_Finalize();
     return 0;

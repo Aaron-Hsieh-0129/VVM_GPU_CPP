@@ -13,7 +13,6 @@ target_link_libraries(vvm_physics PUBLIC
     ekat
     Kokkos::kokkos
     scream_rrtmgp
-    yakl
 )
 target_compile_definitions(vvm_physics PUBLIC 
     -DYAKL_INLINE=KOKKOS_INLINE_FUNCTION
