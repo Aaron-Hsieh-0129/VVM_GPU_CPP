@@ -14,10 +14,10 @@ target_link_libraries(vvm_physics PUBLIC
     Kokkos::kokkos
     scream_rrtmgp
 )
-target_compile_definitions(vvm_physics PUBLIC 
-    -DYAKL_INLINE=KOKKOS_INLINE_FUNCTION
-    -DYAKL_LAMBDA=KOKKOS_LAMBDA
-)
+# target_compile_definitions(vvm_physics PUBLIC 
+#     -DYAKL_INLINE=KOKKOS_INLINE_FUNCTION
+#     -DYAKL_LAMBDA=KOKKOS_LAMBDA
+# )
 
 target_include_directories(vvm_physics PUBLIC
     ${PROJECT_SOURCE_DIR}/src
