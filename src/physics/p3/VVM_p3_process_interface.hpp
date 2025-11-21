@@ -11,21 +11,21 @@
 #include "core/Parameters.hpp"
 #include "utils/ConfigurationManager.hpp"
 
-#include "share/scream_types.hpp" 
-#include "share/util/scream_common_physics_functions.hpp"
-#include "ekat/ekat_pack.hpp"
-#include "ekat/kokkos/ekat_kokkos_types.hpp"
-#include "ekat/kokkos/ekat_kokkos_utils.hpp" 
-#include "ekat/ekat_parameter_list.hpp"
-#include "ekat/ekat_assert.hpp"
-#include "ekat/ekat_pack_kokkos.hpp"
-#include "ekat/ekat_workspace.hpp"
-#include "ekat/ekat_workspace_impl.hpp"
+#include "share/core/eamxx_types.hpp" 
+#include "share/physics/eamxx_common_physics_functions.hpp"
+#include <ekat_pack.hpp>
+#include <ekat_kokkos_types.hpp>
+// #include <ekat_kokkos_utils.hpp>
+#include <ekat_parameter_list.hpp>
+#include <ekat_assert.hpp>
+#include <ekat_pack_kokkos.hpp>
+#include <ekat_workspace.hpp>
+// #include "ekat/ekat_workspace_impl.hpp"
 
-#include "p3_f90.hpp"
+// #include "p3_f90.hpp"
+// #include "p3_main_wrap.hpp"
 #include "p3_functions.hpp" 
-#include "p3_main_wrap.hpp"
-#include "physics/share/physics_constants.hpp"
+#include "share/physics/physics_constants.hpp"
 
 
 
@@ -33,13 +33,8 @@ using ekat::KokkosTypes;
 using ekat::Unmanaged;
 
 namespace ekat {
-
     using Real = scream::Real;
-
     using Spack = scream::p3::Functions<Real, scream::DefaultDevice>::Spack;
-
-    template<>
-    const double WorkspaceManager<Spack, scream::DefaultDevice>::GPU_DEFAULT_OVERPROVISION_FACTOR = 1.25;
 
 } // namespace ekat
 
@@ -51,9 +46,9 @@ using Int = scream::Int;
 using DefaultDevice = scream::DefaultDevice;
 
 using P3F           = scream::p3::Functions<Real, DefaultDevice>;
-using CP3           = scream::physics::P3_Constants<Real>;
 using Spack         = typename P3F::Spack;
 using Smask         = typename P3F::Smask;
+using IntSpack      = typename P3F::IntSmallPack;
 using Pack          = ekat::Pack<Real,Spack::n>;
 using PF            = scream::PhysicsFunctions<DefaultDevice>;
 using PC            = scream::physics::Constants<Real>;
@@ -84,12 +79,16 @@ struct p3_preamble {
     p3_preamble() = default;
     // Functor for Kokkos loop to pre-process every run step
     KOKKOS_INLINE_FUNCTION
-    void operator()(const int icol) const {
-      for (int ipack=0;ipack<m_npack;ipack++) {
+    void operator()(const KT::MemberType& team) const {
+      const int icol = team.league_rank();
+      const auto npack = ekat::npack<Spack>(m_nlev);
+      Kokkos::parallel_for(Kokkos::TeamVectorRange(team, npack), [&] (const Int& ipack) {
         // The ipack slice of input variables used more than once
         const Spack& pmid_pack(pmid(icol,ipack));
         const Spack& T_atm_pack(T_atm(icol,ipack));
-        const Spack& cld_frac_t_pack(cld_frac_t(icol,ipack));
+        const Spack& cld_frac_t_in_pack(cld_frac_t_in(icol,ipack));
+        const Spack& cld_frac_l_in_pack(cld_frac_l_in(icol,ipack));
+        const Spack& cld_frac_i_in_pack(cld_frac_i_in(icol,ipack));
         const Spack& pseudo_density_pack(pseudo_density(icol,ipack));
         const Spack& pseudo_density_dry_pack(pseudo_density_dry(icol,ipack));
 
@@ -113,35 +112,48 @@ struct p3_preamble {
         inv_exner(icol,ipack) = 1.0/exner;
         // Potential temperature, from full pressure
         th_atm(icol,ipack) = PF::calculate_theta_from_T(T_atm_pack,pmid_pack);
-        
-        // Cloud fraction
-        cld_frac_l(icol,ipack) = ekat::max(cld_frac_t_pack,mincld);
-        cld_frac_i(icol,ipack) = ekat::max(cld_frac_t_pack,mincld);
-        cld_frac_r(icol,ipack) = ekat::max(cld_frac_t_pack,mincld);
 
-        // max-overlap cloud fraction calculation for rain
-        for (int ivec=0;ivec<Spack::n;ivec++)
-        {
-          Int lev = ipack*Spack::n + ivec;
-          Int ipack_m1 = (lev - 1) / Spack::n;
-          Int ivec_m1  = (lev - 1) % Spack::n;
-          if (lev != 0) { 
-            cld_frac_r(icol,ipack)[ivec] = cld_frac_t(icol,ipack_m1)[ivec_m1]>cld_frac_r(icol,ipack)[ivec] ?
-                                              cld_frac_t(icol,ipack_m1)[ivec_m1] :
-                                              cld_frac_r(icol,ipack)[ivec];
+
+        if (runtime_opts.use_separate_ice_liq_frac){
+          cld_frac_l(icol,ipack) = runtime_opts.set_cld_frac_l_to_one ? 1 : ekat::max(cld_frac_l_in_pack,mincld);
+          cld_frac_i(icol,ipack) = runtime_opts.set_cld_frac_i_to_one ? 1 : ekat::max(cld_frac_i_in_pack,mincld);
+        } else {
+          cld_frac_l(icol,ipack) = runtime_opts.set_cld_frac_l_to_one ? 1 : ekat::max(cld_frac_t_in_pack,mincld);
+          cld_frac_i(icol,ipack) = runtime_opts.set_cld_frac_i_to_one ? 1 : ekat::max(cld_frac_t_in_pack,mincld);
+        }
+        cld_frac_r(icol,ipack) = runtime_opts.set_cld_frac_r_to_one ? 1 : ekat::max(cld_frac_t_in_pack, mincld);
+
+        // update rain cloud fraction given neighboring levels using max-overlap approach.
+        if ( not runtime_opts.set_cld_frac_r_to_one ) {
+          // Get the cld_frac_t_in(icol, ilev-1) entries
+          const auto& cld_frac_t_in_s = ekat::scalarize(ekat::subview(cld_frac_t_in, icol));
+          Spack cld_frac_t_in_k, cld_frac_t_in_km1;
+          auto range_pack1 = ekat::range<IntSpack>(ipack*Spack::n);
+          auto range_pack2 = range_pack1;
+          range_pack2.set(range_pack1 < 1, 1); // don't want the shift to go below zero. we mask out that result anyway
+          ekat::index_and_shift<-1>(cld_frac_t_in_s, range_pack2, cld_frac_t_in_k, cld_frac_t_in_km1);
+
+          // Hard-coded max-overlap cloud fraction calculation.  Cycle through the layers from top to bottom and
+          // determine if the rain fraction needs to be updated to match the cloud fraction in the layer above.
+          const auto active_range = range_pack1 > 0 && range_pack1 < m_nlev;
+          if (active_range.any()) {
+            const auto set_to_t_in = cld_frac_t_in_km1 > cld_frac_r(icol, ipack);
+            cld_frac_r(icol,ipack).set(active_range and set_to_t_in, cld_frac_t_in_km1);
           }
         }
-      }
+      });
     } // operator
     // Local variables
-    int m_ncol, m_npack;
+    int m_ncol, m_nlev;
     Real mincld = 0.0001; 
     view_2d_const pmid;
     view_2d_const pmid_dry;
     view_2d_const pseudo_density;
     view_2d_const pseudo_density_dry;
     view_2d       T_atm;
-    view_2d_const cld_frac_t;
+    view_2d_const cld_frac_t_in;
+    view_2d_const cld_frac_l_in;
+    view_2d_const cld_frac_i_in;
     view_2d       qv;
     view_2d       qc;
     view_2d       nc;
@@ -166,28 +178,33 @@ struct p3_preamble {
     view_1d_const precip_ice_surf_flux;
     view_1d       precip_liq_surf_mass;
     view_1d       precip_ice_surf_mass;
+    P3F::P3Runtime runtime_opts;
 
     // Assigning local variables
-    void set_variables(const int ncol, const int npack,
+    void set_variables(const int ncol, const int nlev,
            const view_2d_const& pmid_, const view_2d_const& pmid_dry_,
            const view_2d_const& pseudo_density_,
            const view_2d_const& pseudo_density_dry_, const view_2d& T_atm_,
-           const view_2d_const& cld_frac_t_, const view_2d& qv_, const view_2d& qc_,
+           const view_2d_const& cld_frac_t_in_, const view_2d_const& cld_frac_l_in_, const view_2d_const& cld_frac_i_in_,
+           const view_2d& qv_, const view_2d& qc_,
            const view_2d& nc_, const view_2d& qr_, const view_2d& nr_, const view_2d& qi_,
            const view_2d& qm_, const view_2d& ni_, const view_2d& bm_, const view_2d& qv_prev_,
            const view_2d& inv_exner_, const view_2d& th_atm_, const view_2d& cld_frac_l_,
-           const view_2d& cld_frac_i_, const view_2d& cld_frac_r_, const view_2d& dz_
+           const view_2d& cld_frac_i_, const view_2d& cld_frac_r_, const view_2d& dz_,
+           const P3F::P3Runtime& runtime_opts_
            )
     {
         m_ncol = ncol; 
-        m_npack = npack;
+        m_nlev = nlev;
         // IN
         pmid = pmid_; 
         pmid_dry = pmid_dry_; 
         pseudo_density = pseudo_density_;
         pseudo_density_dry = pseudo_density_dry_; 
         T_atm = T_atm_; 
-        cld_frac_t = cld_frac_t_;
+        cld_frac_t_in     = cld_frac_t_in_;
+        cld_frac_l_in     = cld_frac_l_in_;
+        cld_frac_i_in     = cld_frac_i_in_;
         // OUT
         qv = qv_; 
         qc = qc_; 
@@ -205,6 +222,7 @@ struct p3_preamble {
         cld_frac_i = cld_frac_i_; 
         cld_frac_r = cld_frac_r_; 
         dz = dz_;
+        runtime_opts = runtime_opts_;
     } 
 }; 
 
@@ -212,12 +230,14 @@ struct p3_postamble {
     p3_postamble() = default;
     // Functor for Kokkos loop to pre-process every run step
     KOKKOS_INLINE_FUNCTION
-    void operator()(const int icol) const {
-      for (int ipack=0;ipack<m_npack;ipack++) {
+    void operator()(const KT::MemberType& team) const {
+      const int icol = team.league_rank();
+      const auto npack = m_npack;
+      Kokkos::parallel_for(Kokkos::TeamVectorRange(team, npack), [&] (const Int& ipack) {
         const Spack& pseudo_density_pack(pseudo_density(icol,ipack));
         const Spack& pseudo_density_dry_pack(pseudo_density_dry(icol,ipack));
 
-        // Update the atmospheric temperature
+        // Update the atmospheric temperature and the previous temperature.
         {
           const Spack T_atm_before_p3 = T_atm(icol,ipack);
           T_atm(icol,ipack)  = (PF::calculate_T_from_theta(th_atm(icol,ipack),pmid(icol,ipack)) - T_atm_before_p3)
@@ -242,11 +262,16 @@ struct p3_postamble {
         diag_eff_radius_qc(icol,ipack) *= 1e6;
         diag_eff_radius_qi(icol,ipack) *= 1e6;
         diag_eff_radius_qr(icol,ipack) *= 1e6;
-      } // for ipack
+      }); // for ipack
 
-      // Accumulate surface precipitation
-      precip_liq_surf_mass(icol) += precip_liq_surf_flux(icol) * PC::RHO_H2O * m_dt;
-      precip_ice_surf_mass(icol) += precip_ice_surf_flux(icol) * PC::RHO_H2O * m_dt;
+      // Microphysics can be subcycled together during a single physics timestep,
+      // therefore we must accumulate these fluxes.
+      // Note: we need to ensure that only a single thread within the team is
+      //       updating the mass value.
+      Kokkos::single(Kokkos::PerTeam(team), [&] {
+        precip_liq_surf_mass(icol) += precip_liq_surf_flux(icol) * PC::RHO_H2O * m_dt;
+        precip_ice_surf_mass(icol) += precip_ice_surf_flux(icol) * PC::RHO_H2O * m_dt;
+      });
     } // operator
     
     // Local variables
@@ -368,7 +393,6 @@ protected:
     int m_num_lev_packs; // Spacks dim for P3 
 
     P3LookupTables            m_lookup_tables; 
-    CP3                       m_p3constants;
     P3Runtime                 m_runtime_options; 
     
     // P3 data structure
@@ -442,6 +466,9 @@ protected:
     view_2d m_liq_ice_exchange_view;
     view_2d m_vap_liq_exchange_view;
     view_2d m_vap_ice_exchange_view;
+    view_2d m_diag_equiv_reflectivity_view;
+
+    view_2d m_unused;
 
     sview_2d m_col_location_view;
 

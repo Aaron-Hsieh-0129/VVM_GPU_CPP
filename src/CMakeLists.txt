@@ -5,26 +5,13 @@ set(SCREAM_POSSIBLY_NO_PACK_SIZE 1 CACHE STRING "The number of scalars in a poss
 set(SCREAM_NUM_VERTICAL_LEV 33 CACHE STRING "Default number of vertical levels")
 
 
-include_directories(BEFORE
-  "${CMAKE_SOURCE_DIR}/externals/ekat/src"
-  "${CMAKE_BINARY_DIR}/externals/ekat/src"
-)
-configure_file(
-  "${CMAKE_CURRENT_SOURCE_DIR}/scream_config.h.in"
-  "${CMAKE_CURRENT_BINARY_DIR}/scream_config.h"
-)
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/scream_config.f" "")
-include_directories(BEFORE
-    "${CMAKE_CURRENT_BINARY_DIR}"
-)
-
-
 add_subdirectory(utils)
 add_subdirectory(core)
 add_subdirectory(io)
 add_subdirectory(dynamics)
 add_subdirectory(share)
 add_subdirectory(physics)
+
 
 add_executable(vvm 
     main.cpp
@@ -45,7 +32,7 @@ target_link_libraries(vvm
         vvm_io
         vvm_dynamics
         scream_share
-        p3
-        vvm_physics
-        ekat
+        eamxx_physics
+        # p3
+        # ekat
 )
