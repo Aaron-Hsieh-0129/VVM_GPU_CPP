@@ -33,6 +33,4 @@ target_link_libraries(vvm
         vvm_dynamics
         scream_share
         eamxx_physics
-        # p3
-        # ekat
 )
