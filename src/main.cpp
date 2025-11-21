@@ -91,9 +91,6 @@ int main(int argc, char *argv[]) {
             p3_interface = std::make_unique<VVM::Physics::VVM_P3_Interface>(config, grid, parameters);
             p3_interface->initialize(state);
         }
-        // VVM::Physics::VVM_P3_Interface p3_physics(config, grid, parameters);
-        // p3_physics.initialize(state);
-        // halo_exchanger.exchange_halos(state);
 
         // B.C. process
         bc_manager.apply_z_bcs_to_field(state.get_field<1>("thbar"));
@@ -202,15 +199,7 @@ int main(int argc, char *argv[]) {
         // if (rank == 0) {
         //     std::cout << "\n--- Field State BEFORE Halo Exchange ---" << std::endl; state.get_field<3>("v").print_slice_z_at_k(grid, 0, 18);
         // }
-        halo_exchanger.exchange_halos(state.get_field<3>("th"));
-        halo_exchanger.exchange_halos(state.get_field<3>("xi"));
-        halo_exchanger.exchange_halos(state.get_field<3>("eta"));
-        halo_exchanger.exchange_halos(state.get_field<3>("zeta"));
-        halo_exchanger.exchange_halos(state.get_field<3>("u"));
-        halo_exchanger.exchange_halos(state.get_field<3>("v"));
-        halo_exchanger.exchange_halos(state.get_field<3>("w"));
-        halo_exchanger.exchange_halos(state.get_field<3>("qv"));
-        halo_exchanger.exchange_halos(state.get_field<3>("qc"));
+        halo_exchanger.exchange_halos(state);
         Kokkos::parallel_for("th_init_with_perturbation", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, nx}),
             KOKKOS_LAMBDA(int j, int i) {
                 th(0,j,i) = th(1,j,i);
@@ -243,7 +232,9 @@ int main(int argc, char *argv[]) {
         // Simulation loop
         while (current_time < total_time) {
             dynamical_core.step(state, dt);
-            p3_interface->run(state, dt);
+            if (p3_interface) {
+                p3_interface->run(state, dt);
+            }
             halo_exchanger.exchange_halos(state);
             current_time += dt;
 

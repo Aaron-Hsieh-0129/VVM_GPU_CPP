@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --account=MST114049
+#SBATCH --account=MST114418
 #SBATCH --partition=gp2d
 #SBATCH --job-name=VVM_GPU_CPP
 #SBATCH --nodes=1

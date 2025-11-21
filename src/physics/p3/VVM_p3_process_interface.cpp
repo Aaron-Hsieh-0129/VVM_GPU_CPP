@@ -1,19 +1,26 @@
+#include "p3_functions.hpp"
 #include "physics/p3/VVM_p3_process_interface.hpp"
-#include "ekat/util/ekat_units.hpp"
-#include "impl/p3_main_impl.hpp"
-#include "core/Field.hpp"
+
+#include <ekat_assert.hpp>
+#include <ekat_units.hpp>
+
+#include <array>
 
 namespace VVM {
 namespace Physics {
 
 VVM_P3_Interface::VVM_P3_Interface(const VVM::Utils::ConfigurationManager &config, const VVM::Core::Grid &grid, const VVM::Core::Parameters &params)
-    : config_(config), grid_(grid), params_(params), m_p3constants(CP3()), 
+    : config_(config), grid_(grid), params_(params), 
     m_num_cols(grid_.get_local_physical_points_x() * grid_.get_local_physical_points_y()),
     m_num_levs(grid_.get_local_physical_points_z()),
     m_num_lev_packs(ekat::npack<Spack>(m_num_levs))
 {
     // Infrastructure initialization
     // dt is passed as an argument to run
+
+    // Note that users can use runtime)options to load some configuration related to p3
+    // runtime_options.load_runtime_options_from_file(m_params);
+
     m_infrastructure.it = 0;
     m_infrastructure.its = 0;
     m_infrastructure.ite = m_num_cols - 1;
@@ -24,7 +31,8 @@ VVM_P3_Interface::VVM_P3_Interface(const VVM::Utils::ConfigurationManager &confi
     m_infrastructure.prescribedCCN = config_.get_value<bool>("physics.p3.do_prescribed_ccn");
 
     // Set Kokkos execution policy
-    m_policy = ekat::ExeSpaceUtils<KT::ExeSpace>::get_default_team_policy(m_num_cols, m_num_lev_packs);
+    using TPF = ekat::TeamPolicyFactory<KT::ExeSpace>;
+    m_policy = TPF::get_default_team_policy(m_num_cols, m_num_lev_packs);
     m_team_size = m_policy.team_size();
 
     allocate_p3_buffers();
@@ -77,6 +85,8 @@ void VVM_P3_Interface::allocate_p3_buffers() {
     m_diag_eff_radius_qi_view = view_2d("diag_eff_radius_qi", m_num_cols, m_num_lev_packs);
     m_diag_eff_radius_qr_view = view_2d("diag_eff_radius_qr", m_num_cols, m_num_lev_packs);
 
+    m_diag_equiv_reflectivity_view = view_2d("diag_equiv_reflectivity", m_num_cols, m_num_lev_packs);
+
     m_liq_ice_exchange_view = view_2d("liq_ice_exchange", m_num_cols, m_num_lev_packs);
     m_vap_liq_exchange_view = view_2d("vap_liq_exchange", m_num_cols, m_num_lev_packs);
     m_vap_ice_exchange_view = view_2d("vap_ice_exchange", m_num_cols, m_num_lev_packs);
@@ -88,6 +98,8 @@ void VVM_P3_Interface::allocate_p3_buffers() {
     m_precip_ice_surf_flux_view = view_1d("precip_ice_surf_flux", m_num_cols);
     m_precip_liq_surf_mass_view = view_1d("precip_liq_surf_mass_acc", m_num_cols);
     m_precip_ice_surf_mass_view = view_1d("precip_ice_surf_mass_acc", m_num_cols);
+
+    m_unused = view_2d("unused", m_num_cols);
 
     const int num_wsm_vars = 52;
 
@@ -111,7 +123,8 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
 
     // Initialize p3
     bool is_root = (grid_.get_mpi_rank() == 0);
-    scream::p3::p3_init(false, is_root);
+    m_lookup_tables = P3F::p3_init(/* write_tables = */ false, is_root);
+
 
     // This section ties the variables in m_prog_state/m_diag_inputs/m_diag_outputs with m_variables --Prognostic State Variables: m_prog_state.qc = m_qc_view; m_prog_state.nc = m_nc_view; m_prog_state.qr = m_qr_view;
     m_prog_state.qc = m_qc_view;
@@ -142,12 +155,25 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
     m_diag_inputs.dz             = m_dz_view;
     m_diag_inputs.inv_exner      = m_inv_exner_view;
 
+    if (m_runtime_options.use_hetfrz_classnuc){
+        // diag_inputs.hetfrz_immersion_nucleation_tend  = get_field_in("hetfrz_immersion_nucleation_tend").get_view<const Pack**>();
+        // diag_inputs.hetfrz_contact_nucleation_tend    = get_field_in("hetfrz_contact_nucleation_tend").get_view<const Pack**>();
+        // diag_inputs.hetfrz_deposition_nucleation_tend = get_field_in("hetfrz_deposition_nucleation_tend").get_view<const Pack**>();
+    }
+    else {
+        // set to unused, double check if this has any side effects (testing should catch this)
+        m_diag_inputs.hetfrz_immersion_nucleation_tend  = m_unused;
+        m_diag_inputs.hetfrz_contact_nucleation_tend    = m_unused;
+        m_diag_inputs.hetfrz_deposition_nucleation_tend = m_unused;
+    }
+
     // Diagnostic Outputs:
     m_diag_outputs.diag_eff_radius_qc = m_diag_eff_radius_qc_view;
     m_diag_outputs.diag_eff_radius_qi = m_diag_eff_radius_qi_view;
     m_diag_outputs.diag_eff_radius_qr = m_diag_eff_radius_qr_view;
     m_diag_outputs.precip_total_tend  = m_precip_total_tend_view;
     m_diag_outputs.nevapr             = m_nevapr_view;
+    m_diag_outputs.diag_equiv_reflectivity = m_diag_equiv_reflectivity_view;
 
     m_diag_outputs.precip_liq_surf  = m_precip_liq_surf_flux_view;
     m_diag_outputs.precip_ice_surf  = m_precip_ice_surf_flux_view;
@@ -162,18 +188,53 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
     m_history_only.vap_liq_exchange  = m_vap_liq_exchange_view;
     m_history_only.vap_ice_exchange  = m_vap_ice_exchange_view;
 
+    if (m_runtime_options.extra_p3_diags) {
+        // if we are doing extra diagnostics, assign the fields to the history only struct
+        // history_only.qr2qv_evap   = get_field_out("qr2qv_evap").get_view<Pack**>();
+        // history_only.qi2qv_sublim = get_field_out("qi2qv_sublim").get_view<Pack**>();
+        // history_only.qc2qr_accret = get_field_out("qc2qr_accret").get_view<Pack**>();
+        // history_only.qc2qr_autoconv = get_field_out("qc2qr_autoconv").get_view<Pack**>();
+        // history_only.qv2qi_vapdep = get_field_out("qv2qi_vapdep").get_view<Pack**>();
+        // history_only.qc2qi_berg = get_field_out("qc2qi_berg").get_view<Pack**>();
+        // history_only.qc2qr_ice_shed = get_field_out("qc2qr_ice_shed").get_view<Pack**>();
+        // history_only.qc2qi_collect = get_field_out("qc2qi_collect").get_view<Pack**>();
+        // history_only.qr2qi_collect = get_field_out("qr2qi_collect").get_view<Pack**>();
+        // history_only.qc2qi_hetero_freeze = get_field_out("qc2qi_hetero_freeze").get_view<Pack**>();
+        // history_only.qr2qi_immers_freeze = get_field_out("qr2qi_immers_freeze").get_view<Pack**>();
+        // history_only.qi2qr_melt = get_field_out("qi2qr_melt").get_view<Pack**>();
+        // history_only.qr_sed = get_field_out("qr_sed").get_view<Pack**>();
+        // history_only.qc_sed = get_field_out("qc_sed").get_view<Pack**>();
+        // history_only.qi_sed = get_field_out("qi_sed").get_view<Pack**>();
+    } 
+    else {
+        // if not, let's use the unused buffer
+        m_history_only.qr2qv_evap = m_unused;
+        m_history_only.qi2qv_sublim = m_unused;
+        m_history_only.qc2qr_accret = m_unused;
+        m_history_only.qc2qr_autoconv = m_unused;
+        m_history_only.qv2qi_vapdep = m_unused;
+        m_history_only.qc2qi_berg = m_unused;
+        m_history_only.qc2qr_ice_shed = m_unused;
+        m_history_only.qc2qi_collect = m_unused;
+        m_history_only.qr2qi_collect = m_unused;
+        m_history_only.qc2qi_hetero_freeze = m_unused;
+        m_history_only.qr2qi_immers_freeze = m_unused;
+        m_history_only.qi2qr_melt = m_unused;
+        m_history_only.qr_sed = m_unused;
+        m_history_only.qc_sed = m_unused;
+        m_history_only.qi_sed = m_unused;
+    }
     
-    m_p3_preproc.set_variables(m_num_cols, m_num_lev_packs,
-        m_pmid_view, m_pmid_dry_view, 
-        m_pseudo_density_view, m_pseudo_density_dry_view,
-        m_T_atm_view, m_cld_frac_t_view,
-        m_qv_view, m_qc_view, m_nc_view, m_qr_view, m_nr_view, 
-        m_qi_view, m_qm_view, m_ni_view, m_bm_view, 
-        m_qv_prev_view,
-        m_inv_exner_view, 
-        m_th_view,        
-        m_cld_frac_l_view, m_cld_frac_i_view, m_cld_frac_r_view, 
-        m_dz_view
+    auto m_cld_frac_l_in = m_cld_frac_t_view;
+    auto m_cld_frac_i_in = m_cld_frac_t_view;
+    if (m_runtime_options.use_separate_ice_liq_frac) {
+        // cld_frac_l_in = get_field_in("cldfrac_liq").get_view<const Pack **>();
+        // cld_frac_i_in = get_field_in("cldfrac_ice").get_view<const Pack **>();
+    }
+    m_p3_preproc.set_variables(m_num_cols, m_num_lev_packs, m_pmid_view, m_pmid_dry_view, m_pseudo_density_view, m_pseudo_density_dry_view,
+        m_T_atm_view, m_cld_frac_t_view, m_cld_frac_l_in, m_cld_frac_i_in,
+        m_qv_view, m_qc_view, m_nc_view, m_qr_view, m_nr_view, m_qi_view, m_qm_view, m_ni_view, m_bm_view, m_qv_prev_view,
+        m_inv_exner_view, m_th_view, m_cld_frac_l_view, m_cld_frac_i_view, m_cld_frac_r_view, m_dz_view, m_runtime_options
     );
     
     m_p3_postproc.set_variables(m_num_cols, m_num_lev_packs,
@@ -187,14 +248,6 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
         m_precip_liq_surf_mass_view, m_precip_ice_surf_mass_view
     );
     
-    
-
-    // Load tables
-    P3F::init_kokkos_ice_lookup_tables(m_lookup_tables.ice_table_vals, m_lookup_tables.collect_table_vals);
-    P3F::init_kokkos_tables(m_lookup_tables.vn_table_vals, m_lookup_tables.vm_table_vals,
-                            m_lookup_tables.revap_table_vals, m_lookup_tables.mu_r_table_vals,
-                            m_lookup_tables.dnu_table_vals);
-
     const int nk_pack_p1 = ekat::npack<Spack>(m_num_levs+1);
     workspace_mgr.setup(m_wsm_data, nk_pack_p1, 52, m_policy);
 
@@ -506,17 +559,19 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
     if (rank == 0) state.get_field<3>("qc").print_profile(grid_, 0, 8, 64);
     if (rank == 0) state.get_field<3>("nc").print_profile(grid_, 0, 8, 64);
 
+    m_p3_postproc.m_dt = dt;
+
     // Assign values to local arrays used by P3, these are now stored in p3_loc.
     Kokkos::parallel_for("p3_main_local_vals", 
-        Kokkos::RangePolicy<>(0,m_num_cols),
+        m_policy,
         m_p3_preproc
     ); // Kokkos::parallel_for(p3_main_local_vals)
     Kokkos::fence();
 
-    workspace_mgr.reset_internals();
-
     m_infrastructure.dt = dt;
     m_infrastructure.it++;
+
+    workspace_mgr.reset_internals();
 
     P3F::p3_main(
         m_runtime_options, m_prog_state, m_diag_inputs, m_diag_outputs, m_infrastructure,
@@ -524,14 +579,12 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
 #ifdef SCREAM_P3_SMALL_KERNELS
         temporaries,
 #endif
-        workspace_mgr, m_num_cols, m_num_levs, m_p3constants
+        workspace_mgr, m_num_cols, m_num_levs
     );
-
-    m_p3_postproc.m_dt = dt;
 
     // Conduct the post-processing of the p3_main output.
     Kokkos::parallel_for("p3_main_local_vals",
-        Kokkos::RangePolicy<>(0,m_num_cols),
+        m_policy,
         m_p3_postproc
     ); // Kokkos::parallel_for(p3_main_local_vals)
     Kokkos::fence();
@@ -636,11 +689,14 @@ void VVM_P3_Interface::finalize() {
     m_liq_ice_exchange_view = {};
     m_vap_liq_exchange_view = {};
     m_vap_ice_exchange_view = {};
+    view_2d m_diag_equiv_reflectivity_view;
 
     m_precip_liq_surf_flux_view = {};
     m_precip_ice_surf_flux_view = {};
     m_precip_liq_surf_mass_view = {};
     m_precip_ice_surf_mass_view = {};
+
+    m_unused = {};
 
     m_col_location_view = {};
 }

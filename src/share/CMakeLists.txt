@@ -1,15 +1,12 @@
-add_library(scream_share STATIC
-    # scream_config.cpp
-    # scream_session.cpp
-    util/scream_utils.cpp
-)
+add_subdirectory(core)
+add_subdirectory(util)
+add_subdirectory(physics)
+# add_subdirectory(property_checks)
 
-target_include_directories(scream_share PUBLIC
-    ${CMAKE_CURRENT_LIST_DIR}
-    ${EKAT_INCLUDE_DIRS}
-)
-
-target_link_libraries(scream_share PUBLIC
-    ekat
-    Kokkos::kokkos
+add_library(scream_share INTERFACE)
+target_link_libraries(scream_share INTERFACE
+    eamxx_core
+    eamxx_utils
+    eamxx_physics_share
+    # eamxx_property_checks
 )
