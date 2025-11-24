@@ -94,7 +94,7 @@ int main(int argc, char *argv[]) {
             p3_interface->initialize(state);
         }
         if (config.get_value<bool>("physics.rrtmgp.enable_rrtmgp")) {
-            rrtmgp_interface = std::make_unique<VVM::Physics::RRTMGP::RRTMGPRadiation>(grid, config);
+            rrtmgp_interface = std::make_unique<VVM::Physics::RRTMGP::RRTMGPRadiation>(config, grid, parameters);
             rrtmgp_interface->initialize(state);
         }
 
@@ -240,6 +240,9 @@ int main(int argc, char *argv[]) {
             dynamical_core.step(state, dt);
             if (p3_interface) {
                 p3_interface->run(state, dt);
+            }
+            if (rrtmgp_interface) {
+                rrtmgp_interface->run(state, dt);
             }
             halo_exchanger.exchange_halos(state);
             current_time += dt;

@@ -59,13 +59,13 @@ public:
     using interface_t = VVM::Physics::RRTMGP::rrtmgp_interface<Real, layout_t, DefaultDevice>;
 
     // Constructors
-    RRTMGPRadiation(const VVM::Core::Grid& grid, const VVM::Utils::ConfigurationManager& config);
+    RRTMGPRadiation(const VVM::Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params);
     ~RRTMGPRadiation();
 
     std::string name() const { return "rrtmgp"; }
 
     void initialize(const VVM::Core::State& state);
-    void run(const double dt, VVM::Core::State& state);
+    void run(VVM::Core::State& state, const double dt);
     void finalize();
 
 
@@ -75,8 +75,8 @@ public:
     int m_col_chunk_size;
     std::vector<int> m_col_chunk_beg;
     int m_nlay;
-    // VVM::Core::Field<2> m_lat;
-    // VVM::Core::Field<2> m_lon;
+    real1dk m_lat;
+    real1dk m_lon;
 
     // Configuration Flags
     // Whether we use aerosol forcing in radiation
@@ -234,6 +234,7 @@ protected:
     // VVM References
     const VVM::Core::Grid& m_grid;
     const VVM::Utils::ConfigurationManager& m_config;
+    const VVM::Core::Parameters& m_params;
 
     // Backing storage for the Buffer struct
     Kokkos::View<Real*, DefaultDevice> m_buffer_storage;
