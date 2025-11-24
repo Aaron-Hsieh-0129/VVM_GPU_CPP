@@ -28,8 +28,8 @@ using ekat::Unmanaged;
 class RRTMGPRadiation {
 public:
     using DefaultDevice = scream::DefaultDevice;
-    using Real = scream::Real; 
-    using Int = scream::Int; 
+    using Real = scream::Real;
+    using Int = scream::Int;
     using KT = ekat::KokkosTypes<DefaultDevice>;
 
 #ifdef RRTMGP_LAYOUT_LEFT
@@ -56,7 +56,7 @@ public:
     using lrreal2dk   = typename KT::template view_2d<Real>;
     using ulrreal2dk  = Unmanaged<lrreal2dk>;
 
-    using interface_t = scream::rrtmgp::rrtmgp_interface<Real, layout_t, DefaultDevice>;
+    using interface_t = VVM::Physics::RRTMGP::rrtmgp_interface<Real, layout_t, DefaultDevice>;
 
     // Constructors
     RRTMGPRadiation(const VVM::Core::Grid& grid, const VVM::Utils::ConfigurationManager& config);
@@ -75,8 +75,8 @@ public:
     int m_col_chunk_size;
     std::vector<int> m_col_chunk_beg;
     int m_nlay;
-    VVM::Core::Field<2> m_lat;
-    VVM::Core::Field<2> m_lon;
+    // VVM::Core::Field<2> m_lat;
+    // VVM::Core::Field<2> m_lon;
 
     // Configuration Flags
     // Whether we use aerosol forcing in radiation

@@ -26,12 +26,16 @@
 using DefaultDevice = scream::DefaultDevice;
 using HostDevice = scream::HostDevice;
 
-namespace scream {
+using Real = scream::Real;
+using Int = scream::Int;
+
+namespace VVM {
+namespace Physics {
 
 void init_kls ();
 void finalize_kls();
 
-namespace rrtmgp {
+namespace RRTMGP {
 
 // New interface for Kokkos and flexible types
 template <typename RealT=Real, typename LayoutT=Kokkos::LayoutRight, typename DeviceT=DefaultDevice>
@@ -1512,7 +1516,8 @@ static optical_props1_t get_subsampled_clouds(
 
 }; // struct rrtmgp_interface
 
-} // namespace rrtmgp
-} // namespace scream
+} // namespace RRTMGP
+} // namespace Physics
+} // namespace VVM
 
 #endif  // SCREAM_RRTMGP_INTERFACE_HPP

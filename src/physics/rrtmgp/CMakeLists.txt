@@ -82,3 +82,5 @@ target_include_directories(scream_rrtmgp PUBLIC
     ${CMAKE_CURRENT_BINARY_DIR}/modules)
 
 target_compile_definitions(scream_rrtmgp PUBLIC RRTMGP_ENABLE_KOKKOS)
+
+target_link_libraries(eamxx_physics INTERFACE scream_rrtmgp)

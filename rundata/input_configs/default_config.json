@@ -59,7 +59,23 @@
         "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/p3",
         "enable_netcdf": true,
         "output_filename_prefix": "vvm_output",
-        "fields_to_output": ["thbar", "rhobar", "rhobar_up", "htflx_sfc", "u", "v", "w", "th", "xi", "eta", "zeta", "qv", "qc", "qr","qi"],
+        "fields_to_output": [
+            "thbar",
+            "rhobar",
+            "rhobar_up",
+            "htflx_sfc",
+            "u",
+            "v",
+            "w",
+            "th",
+            "xi",
+            "eta",
+            "zeta",
+            "qv",
+            "qc",
+            "qr",
+            "qi"
+        ],
         "output_grid": {
             "x_start": 0,
             "x_end": -1,
@@ -87,75 +103,138 @@
         "prognostic_variables": {
             "th": {
                 "tendency_terms": {
-                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                    "advection": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    }
                 }
             },
             "xi": {
                 "tendency_terms": {
-                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "buoyancy": { "temporal_scheme": "ForwardEuler", "spatial_scheme": "Takacs" },
-                    "stretching": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "twisting": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                    "advection": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    },
+                    "buoyancy": {
+                        "temporal_scheme": "ForwardEuler",
+                        "spatial_scheme": "Takacs"
+                    },
+                    "stretching": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    },
+                    "twisting": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    }
                 }
             },
             "eta": {
                 "tendency_terms": {
-                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "buoyancy": { "temporal_scheme": "ForwardEuler", "spatial_scheme": "Takacs" }, 
-                    "stretching": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "twisting": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                    "advection": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    },
+                    "buoyancy": {
+                        "temporal_scheme": "ForwardEuler",
+                        "spatial_scheme": "Takacs"
+                    },
+                    "stretching": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    },
+                    "twisting": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    }
                 }
             },
             "zeta": {
                 "tendency_terms": {
-                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "stretching": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" },
-                    "twisting": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                    "advection": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    },
+                    "stretching": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    },
+                    "twisting": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    }
                 }
             },
             "qv": {
                 "tendency_terms": {
-                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                    "advection": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    }
                 }
             },
             "qc": {
                 "tendency_terms": {
-                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                    "advection": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    }
                 }
             },
             "qr": {
                 "tendency_terms": {
-                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                    "advection": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    }
                 }
             },
             "qi": {
                 "tendency_terms": {
-                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                    "advection": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    }
                 }
             },
             "qm": {
                 "tendency_terms": {
-                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                    "advection": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    }
                 }
             },
             "nc": {
                 "tendency_terms": {
-                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                    "advection": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    }
                 }
             },
             "nr": {
                 "tendency_terms": {
-                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                    "advection": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    }
                 }
             },
             "ni": {
                 "tendency_terms": {
-                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                    "advection": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    }
                 }
             },
             "bm": {
                 "tendency_terms": {
-                    "advection": { "temporal_scheme": "AdamsBashforth2", "spatial_scheme": "Takacs" }
+                    "advection": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    }
                 }
             }
         },
@@ -164,18 +243,48 @@
                 {
                     "step": 1,
                     "description": "Calculate theta tendency and update theta to t+1",
-                    "calculate_tendencies": ["th", "qv", "qc", "qr", "qi", "qm", "nc", "nr", "ni", "bm"],
-                    "update_states": ["th", "qv", "qc", "qr", "qi", "qm", "nc", "nr", "ni", "bm"]
+                    "calculate_tendencies": [
+                        "th",
+                        "qv",
+                        "qc",
+                        "qr",
+                        "qi",
+                        "qm",
+                        "nc",
+                        "nr",
+                        "ni",
+                        "bm"
+                    ],
+                    "update_states": [
+                        "th",
+                        "qv",
+                        "qc",
+                        "qr",
+                        "qi",
+                        "qm",
+                        "nc",
+                        "nr",
+                        "ni",
+                        "bm"
+                    ]
                 },
                 {
                     "step": 2,
                     "description": "Calculate all other tendencies (including buoyancy using new theta)",
-                    "calculate_tendencies": ["xi", "eta", "zeta"]
+                    "calculate_tendencies": [
+                        "xi",
+                        "eta",
+                        "zeta"
+                    ]
                 },
                 {
                     "step": 3,
                     "description": "Update all other prognostic variables to t+1",
-                    "update_states": ["xi", "eta", "zeta"]
+                    "update_states": [
+                        "xi",
+                        "eta",
+                        "zeta"
+                    ]
                 }
             ]
         }
@@ -186,7 +295,9 @@
             "do_predict_nc": true,
             "do_prescribed_ccn": true,
             "max_total_ni": 740.0e3
+        },
+        "rrtmgp": {
+            "enable_rrtmgp": true
         }
     }
-
 }

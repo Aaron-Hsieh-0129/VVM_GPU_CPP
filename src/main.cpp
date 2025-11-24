@@ -16,6 +16,7 @@
 #include "dynamics/DynamicalCore.hpp"
 #include "io/OutputManager.hpp"
 #include "physics/p3/VVM_p3_process_interface.hpp"
+#include "physics/rrtmgp/VVM_rrtmgp_process_interface.hpp"
 #include "utils/ConfigurationManager.hpp"
 #include "utils/Timer.hpp"
 #include "utils/TimingManager.hpp"
@@ -34,6 +35,7 @@ int main(int argc, char *argv[]) {
     }
 
     std::unique_ptr<VVM::Physics::VVM_P3_Interface> p3_interface;
+    std::unique_ptr<VVM::Physics::RRTMGP::RRTMGPRadiation> rrtmgp_interface;
     Kokkos::initialize(argc, argv);
     {
         VVM::Utils::Timer total_timer("total vvm");
@@ -90,6 +92,10 @@ int main(int argc, char *argv[]) {
         if (config.get_value<bool>("physics.p3.enable_p3")) {
             p3_interface = std::make_unique<VVM::Physics::VVM_P3_Interface>(config, grid, parameters);
             p3_interface->initialize(state);
+        }
+        if (config.get_value<bool>("physics.rrtmgp.enable_rrtmgp")) {
+            rrtmgp_interface = std::make_unique<VVM::Physics::RRTMGP::RRTMGPRadiation>(grid, config);
+            rrtmgp_interface->initialize(state);
         }
 
         // B.C. process
