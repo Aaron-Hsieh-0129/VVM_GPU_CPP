@@ -3,6 +3,8 @@
 #include "physics/rrtmgp/shr_orb_mod_c2f.hpp"
 #include "share/physics/eamxx_trcmix.hpp"
 #include "share/physics/eamxx_common_physics_functions.hpp"
+#include "share/util/eamxx_column_ops.hpp"
+#include "share/util/eamxx_utils.hpp"
 
 #include <ekat_assert.hpp>
 #include <ekat_units.hpp>
@@ -15,18 +17,16 @@ using Real = scream::Real;
 using Int = scream::Int;
 using PF = scream::PhysicsFunctions<DefaultDevice>;
 using PC = scream::physics::Constants<Real>;
+using CO = scream::ColumnOps<DefaultDevice, Real>;
 
-RRTMGPRadiation::RRTMGPRadiation(const VVM::Core::Grid& grid, const VVM::Utils::ConfigurationManager& config)
-    : m_grid(grid), m_config(config)
+RRTMGPRadiation::RRTMGPRadiation(const VVM::Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params)
+    : m_grid(grid), m_config(config), m_params(params)
 {
     // Initialize dimensions
     m_ncol = m_grid.get_local_physical_points_x() * m_grid.get_local_physical_points_y();
     m_nlay = m_grid.get_local_physical_points_z();
 
-    // Column chunking (mimic EAMxx logic or just use ncol)
     m_col_chunk_size = m_config.get_value<int>("physics.rrtmgp.column_chunk_size", m_ncol);
-    if (m_col_chunk_size <= 0) m_col_chunk_size = m_ncol;
-    
     m_num_col_chunks = (m_ncol + m_col_chunk_size - 1) / m_col_chunk_size;
     m_col_chunk_beg.resize(m_num_col_chunks + 1, 0);
     for (int i = 0; i < m_num_col_chunks; ++i) {
@@ -34,42 +34,11 @@ RRTMGPRadiation::RRTMGPRadiation(const VVM::Core::Grid& grid, const VVM::Utils::
     }
 
     // Configuration
+    m_nswgpts = m_params.get<int>("nswgpts",112);
+    m_nlwgpts = m_params.get<int>("nlwgpts",128);
     m_do_aerosol_rad = m_config.get_value<bool>("physics.rrtmgp.do_aerosol_rad", false);
     m_extra_clnsky_diag = m_config.get_value<bool>("physics.rrtmgp.extra_clnsky_diag", false);
     m_extra_clnclrsky_diag = m_config.get_value<bool>("physics.rrtmgp.extra_clnclrsky_diag", false);
-
-    m_orbital_year = m_config.get_value<int>("physics.rrtmgp.orbital_year", -9999);
-    m_orbital_eccen = m_config.get_value<double>("physics.rrtmgp.orbital_eccentricity", -9999.0);
-    m_orbital_obliq = m_config.get_value<double>("physics.rrtmgp.orbital_obliquity", -9999.0);
-    m_orbital_mvelp = m_config.get_value<double>("physics.rrtmgp.orbital_mvelp", -9999.0);
-    m_fixed_total_solar_irradiance = m_config.get_value<double>("physics.rrtmgp.fixed_total_solar_irradiance", -9999.0);
-    m_fixed_solar_zenith_angle = m_config.get_value<double>("physics.rrtmgp.fixed_solar_zenith_angle", -9999.0);
-
-    m_rad_freq_in_steps = m_config.get_value<int>("physics.rrtmgp.rad_frequency", 1);
-    m_do_subcol_sampling = m_config.get_value<bool>("physics.rrtmgp.do_subcol_sampling", true);
-
-    // Gas configuration
-    std::vector<std::string> default_gases = {"h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"};
-    for (const auto& gas : default_gases) {
-        m_gas_names.push_back(gas);
-    }
-    m_ngas = m_gas_names.size();
-
-    // Prescribed gas values
-    m_co2vmr = m_config.get_value<double>("physics.rrtmgp.co2vmr", 388.717e-6);
-    m_n2ovmr = m_config.get_value<double>("physics.rrtmgp.n2ovmr", 323.141e-9);
-    m_ch4vmr = m_config.get_value<double>("physics.rrtmgp.ch4vmr", 1807.851e-9);
-    m_f11vmr = m_config.get_value<double>("physics.rrtmgp.f11vmr", 768.7644e-12);
-    m_f12vmr = m_config.get_value<double>("physics.rrtmgp.f12vmr", 531.2820e-12);
-    m_n2vmr  = m_config.get_value<double>("physics.rrtmgp.n2vmr", 0.7906);
-    m_covmr  = m_config.get_value<double>("physics.rrtmgp.covmr", 1.0e-7);
-
-    // Initialize Lat/Lon fields
-    // m_lat = VVM::Core::Field<2>("lat", {m_grid.get_local_total_points_y(), m_grid.get_local_total_points_x()});
-    // m_lon = VVM::Core::Field<2>("lon", {m_grid.get_local_total_points_y(), m_grid.get_local_total_points_x()});
-
-    m_nswgpts = m_config.get_value<int>("physics.rrtmgp.nswgpts", 112);
-    m_nlwgpts = m_config.get_value<int>("physics.rrtmgp.nlwgpts", 128);
 }
 
 RRTMGPRadiation::~RRTMGPRadiation() {}
@@ -85,29 +54,42 @@ void RRTMGPRadiation::initialize(const VVM::Core::State& state) {
     // for duration of simulation.
     m_orbital_year = m_config.get_value<Int>("orbital_year",-9999);
     // Get orbital parameters from yaml file
-    m_orbital_eccen = m_config.get_value<double>("orbital_eccentricity",-9999);
-    m_orbital_obliq = m_config.get_value<double>("orbital_obliquity"   ,-9999);
-    m_orbital_mvelp = m_config.get_value<double>("orbital_mvelp"       ,-9999);
+    m_orbital_eccen = m_config.get_value<double>("orbital_eccentricity",-9999.0);
+    m_orbital_obliq = m_config.get_value<double>("orbital_obliquity"   ,-9999.0);
+    m_orbital_mvelp = m_config.get_value<double>("orbital_mvelp"       ,-9999.0);
 
 
     // Value for prescribing an invariant solar constant (i.e. total solar irradiance at
     // TOA).  Used for idealized experiments such as RCE. Disabled when value is less than 0.
-    m_fixed_total_solar_irradiance = m_config.get_value<double>("fixed_total_solar_irradiance", -9999);
+    m_fixed_total_solar_irradiance = m_config.get_value<double>("fixed_total_solar_irradiance", -9999.0);
 
     // Determine whether or not we are using a fixed solar zenith angle (positive value)
-    m_fixed_solar_zenith_angle = m_config.get_value<double>("fixed_solar_zenith_angle", -9999);
+    m_fixed_solar_zenith_angle = m_config.get_value<double>("fixed_solar_zenith_angle", -9999.0);
 
     // Get prescribed surface values of greenhouse gases
-    m_co2vmr     = m_config.get_value<double>("co2vmr", 388.717e-6);
-    m_n2ovmr     = m_config.get_value<double>("n2ovmr", 323.141e-9);
-    m_ch4vmr     = m_config.get_value<double>("ch4vmr", 1807.851e-9);
-    m_f11vmr     = m_config.get_value<double>("f11vmr", 768.7644e-12);
-    m_f12vmr     = m_config.get_value<double>("f12vmr", 531.2820e-12);
-    m_n2vmr      = m_config.get_value<double>("n2vmr", 0.7906);
-    m_covmr      = m_config.get_value<double>("covmr", 1.0e-7);
+    m_co2vmr     = m_config.get_value<double>("physics.rrtmgp.co2vmr", 388.717e-6);
+    m_n2ovmr     = m_config.get_value<double>("physics.rrtmgp.n2ovmr", 323.141e-9);
+    m_ch4vmr     = m_config.get_value<double>("physics.rrtmgp.ch4vmr", 1807.851e-9);
+    m_f11vmr     = m_config.get_value<double>("physics.rrtmgp.f11vmr", 768.7644e-12);
+    m_f12vmr     = m_config.get_value<double>("physics.rrtmgp.f12vmr", 531.2820e-12);
+    m_n2vmr      = m_config.get_value<double>("physics.rrtmgp.n2vmr", 0.7906);
+    m_covmr      = m_config.get_value<double>("physics.rrtmgp.covmr", 1.0e-7);
 
     // Whether or not to do MCICA subcolumn sampling
     m_do_subcol_sampling = m_config.get_value<bool>("do_subcol_sampling",true);
+
+    std::vector<std::string> active_gases = {"h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"};
+    // TODO:  Ideally this comes from config: m_config.get_value<std::vector<std::string>>("active_gases");
+    for (const auto& gas : active_gases) {
+        bool already_present = false;
+        for (const auto& existing : m_gas_names) {
+            if (std::string(existing) == gas) already_present = true;
+        }
+        if (!already_present) {
+            m_gas_names.push_back(gas);
+        }
+    }
+    m_ngas = m_gas_names.size();
 
     // Initialize kokkos
     init_kls();
@@ -119,7 +101,6 @@ void RRTMGPRadiation::initialize(const VVM::Core::State& state) {
     auto gas_mol_w_host = Kokkos::create_mirror_view(m_gas_mol_weights);
     for (int igas = 0; igas < m_ngas; igas++) {
         const auto& gas_name = m_gas_names[igas];
-
         gas_names_offset[igas] = gas_name;
         gas_mol_w_host[igas]   = PC::get_gas_mol_weight(gas_name);
 
@@ -154,6 +135,8 @@ void RRTMGPRadiation::initialize(const VVM::Core::State& state) {
     //     Kokkos::deep_copy(co_vmr, m_params.get<double>("covmr", 1.0e-7));
     // }
     
+    m_lat = real1dk("lat", m_ncol);
+    m_lon = real1dk("lon", m_ncol);
     init_buffers();
 }
 
@@ -275,15 +258,19 @@ void RRTMGPRadiation::init_buffers() {
 
 void RRTMGPRadiation::finalize() {
     m_buffer_storage = Kokkos::View<Real*, DefaultDevice>();
+    interface_t::rrtmgp_finalize();
 }
 
-void RRTMGPRadiation::run(const double dt, VVM::Core::State& state) {
+void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
     const int nx = m_grid.get_local_physical_points_x();
     const int halo = m_grid.get_halo_cells();
     const int nlay = m_nlay;
 
     // Get VVM fields
     auto pbar = state.get_field<1>("pbar").get_device_data(); 
+    auto pbar_up = state.get_field<1>("pbar_up").get_device_data(); 
+    auto dpbar_mid = state.get_field<1>("dpbar_mid").get_device_data(); 
+    auto dz_mid = m_params.dz_mid.get_device_data(); 
     auto qc = state.get_field<3>("qc").get_device_data();
     auto nc = state.get_field<3>("nc").get_device_data();
     auto qi = state.get_field<3>("qi").get_device_data();
@@ -292,31 +279,62 @@ void RRTMGPRadiation::run(const double dt, VVM::Core::State& state) {
     auto pibar = state.get_field<1>("pibar").get_device_data(); 
 
     // Orbital parameters and Zenith Angle
-    double eccf = 1.0; 
-    double delta = 0.0; 
+    double obliqr, lambm0, mvelpp;
+    Int orbital_year = m_orbital_year;
+    double eccen = m_orbital_eccen;
+    double obliq = m_orbital_obliq;
+    double mvelp = m_orbital_mvelp;
+    
+    // TODO: Need timestamp/year from VVM state or time manager
+    // For now assuming a default or simple time stepping
+    double calday = 1.0;       // Placeholder for Jan 1st
+    if (eccen >= 0 && obliq >= 0 && mvelp >= 0) {
+        orbital_year = shr_orb_undef_int_c2f;
+    }
+
+    // If we had a timestamp, we would set orbital_year based on it if m_orbital_year < 0
+    shr_orb_params_c2f(&orbital_year, &eccen, &obliq, &mvelp,
+                       &obliqr, &lambm0, &mvelpp);
+
+    double delta, eccf;
+    shr_orb_decl_c2f(calday, eccen, mvelpp, lambm0,
+                     obliqr, &delta, &eccf);
     
     if (m_fixed_total_solar_irradiance > 0) {
         eccf = m_fixed_total_solar_irradiance / 1360.9;
     }
+
+    const auto gas_mol_weights = m_gas_mol_weights;
 
     // Loop over chunks
     for (int ic = 0; ic < m_num_col_chunks; ++ic) {
         int beg = m_col_chunk_beg[ic];
         int ncol = m_col_chunk_beg[ic + 1] - beg;
 
+        auto buffer = m_buffer;
+
         // Calculate Zenith Angle (mu0) on Host
         Kokkos::View<Real*, Kokkos::HostSpace> h_mu0("h_mu0", ncol);
+        auto h_lat = Kokkos::create_mirror_view(m_lat); // Need to sync lat/lon if they change
+        Kokkos::deep_copy(h_lat, m_lat);
+        auto h_lon = Kokkos::create_mirror_view(m_lon);
+        Kokkos::deep_copy(h_lon, m_lon);
         
         if (m_fixed_solar_zenith_angle > 0) {
             for (int i = 0; i < ncol; ++i) h_mu0(i) = m_fixed_solar_zenith_angle;
-        } else {
-            for (int i = 0; i < ncol; ++i) h_mu0(i) = 0.5; 
+        } 
+        else {
+            for (int i = 0; i < ncol; ++i) {
+                // EAMxx uses physics::Constants::Pi, need to verify VVM namespace
+                double lat_rad = h_lat(beg + i) * PC::Pi / 180.0;
+                double lon_rad = h_lon(beg + i) * PC::Pi / 180.0;
+                h_mu0(i) = shr_orb_cosz_c2f(calday, lat_rad, lon_rad, delta, dt);
+            }
         }
         
         Kokkos::View<Real*, DefaultDevice> mu0_k("mu0_k", ncol);
         Kokkos::deep_copy(mu0_k, h_mu0);
 
-        auto buffer = m_buffer; // Local copy for lambda capture
 
         // Pack data for this chunk
         const int nlay_local = m_nlay;
@@ -332,56 +350,94 @@ void RRTMGPRadiation::run(const double dt, VVM::Core::State& state) {
                     buffer.qc_k(i, k) = qc(k + halo, iy + halo, ix + halo);
                     buffer.nc_k(i, k) = nc(k + halo, iy + halo, ix + halo);
                     buffer.qi_k(i, k) = qi(k + halo, iy + halo, ix + halo);
-                    buffer.cldfrac_tot_k(i, k) = (buffer.qc_k(i, k) > 1e-6 || buffer.qi_k(i, k) > 1e-6) ? 1.0 : 0.0;
+
                     buffer.eff_radius_qc_k(i, k) = 10.0e-6; 
                     buffer.eff_radius_qi_k(i, k) = 25.0e-6;
                 }
                 
                 for (int k = 0; k <= nlay_local; ++k) {
-                     buffer.p_lev_k(i, k) = pbar(std::min(k + halo, nlay_local + halo - 1)); 
+                     buffer.p_lev_k(i, k) = pbar_up(k+halo); 
                 }
                 
                 for (int k = 0; k < nlay_local; ++k) {
-                    buffer.p_del_k(i, k) = buffer.p_lev_k(i, k+1) - buffer.p_lev_k(i, k); 
+                    buffer.p_del_k(i, k) = dpbar_mid(k+halo); 
+                }
+
+                for (int k = 0; k < nlay_local; ++k) {
+                    buffer.d_dz(i, k) = dz_mid(k+halo); 
                 }
             });
-        
-        // Fill gas concentrations
-        auto gas_concs = m_gas_concs_k; 
-        Kokkos::parallel_for("fill_gas_concs", Kokkos::RangePolicy<>(0, ncol),
+
+
+        // Compute T_int Manually
+        Kokkos::parallel_for("compute_t_int", Kokkos::RangePolicy<>(0, ncol),
             KOKKOS_LAMBDA(int i) {
-                int col_idx = beg + i;
-                int ix = col_idx % nx;
-                int iy = col_idx / nx;
-                
-                for (int k = 0; k < nlay_local; ++k) {
-                    Real qv_val = qv(k + halo, iy + halo, ix + halo);
-                    // TODO: Set VMRs correctly using gas_concs
+                buffer.t_lev_k(i, 0) = buffer.t_lay_k(i, 0);
+
+                for (int k = 1; k < nlay; ++k) {
+                    // Interface k is between layer k-1 (below) and k (above)
+                    Real dz_below = buffer.d_dz(i, k-1);
+                    Real dz_above = buffer.d_dz(i, k);
+                    Real t_below = buffer.t_lay_k(i, k-1);
+                    Real t_above = buffer.t_lay_k(i, k);
+                    buffer.t_lev_k(i, k) = (t_below * dz_above + t_above * dz_below) / (dz_below + dz_above);
                 }
+                // Interface nlay is Top
+                buffer.t_lev_k(i, nlay) = buffer.t_lay_k(i, nlay - 1);
             });
-            
-        // Run RRTMGP
+
+        m_gas_concs_k.ncol = ncol;
+        for (int igas = 0; igas < m_ngas; igas++) {
+             std::string name = m_gas_names[igas];
+             // We need a temporary view of the correct shape (ncol, nlay) to pass to set_vmr
+             auto vmr_view = Kokkos::subview(buffer.tmp2d_k, std::make_pair(0, ncol), Kokkos::ALL());
+
+             if (name == "h2o") {
+                 Kokkos::parallel_for("set_h2o_vmr", Kokkos::RangePolicy<>(0, ncol),
+                    KOKKOS_LAMBDA(int i) {
+                        int col_idx = beg + i;
+                        int ix = col_idx % nx;
+                        int iy = col_idx / nx;
+                        for (int k = 0; k < nlay; ++k) {
+                            Real qv_val = qv(k + halo, iy + halo, ix + halo);
+                            vmr_view(i, k) = PF::calculate_vmr_from_mmr(gas_mol_weights(igas), qv_val, qv_val);
+                        }
+                    });
+             } 
+             else {
+                 Real pres_val = 0.0;
+                 if (name == "co2") pres_val = m_co2vmr;
+                 else if (name == "n2o") pres_val = m_n2ovmr;
+                 else if (name == "ch4") pres_val = m_ch4vmr;
+                 else if (name == "f11") pres_val = m_f11vmr;
+                 else if (name == "f12") pres_val = m_f12vmr;
+                 else if (name == "n2")  pres_val = m_n2vmr;
+                 else if (name == "co")  pres_val = m_covmr;
+                 Kokkos::deep_copy(vmr_view, pres_val);
+             }
+             m_gas_concs_k.set_vmr(name, vmr_view);
+        }
         std::shared_ptr<spdlog::logger> logger = nullptr;
-        
+
         interface_t::rrtmgp_main(
             ncol, m_nlay,
-            m_buffer.p_lay_k, m_buffer.t_lay_k, m_buffer.p_lev_k, m_buffer.t_lev_k,
+            buffer.p_lay_k, buffer.t_lay_k, buffer.p_lev_k, buffer.t_lev_k,
             m_gas_concs_k,
-            m_buffer.sfc_alb_dir_k, m_buffer.sfc_alb_dif_k, mu0_k,
-            m_buffer.lwp_k, m_buffer.iwp_k, m_buffer.eff_radius_qc_k, m_buffer.eff_radius_qi_k, m_buffer.cldfrac_tot_k,
-            m_buffer.aero_tau_sw_k, m_buffer.aero_ssa_sw_k, m_buffer.aero_g_sw_k, m_buffer.aero_tau_lw_k,
-            m_buffer.cld_tau_sw_bnd_k, m_buffer.cld_tau_lw_bnd_k,
-            m_buffer.cld_tau_sw_gpt_k, m_buffer.cld_tau_lw_gpt_k,
-            m_buffer.sw_flux_up_k, m_buffer.sw_flux_dn_k, m_buffer.sw_flux_dn_dir_k,
-            m_buffer.lw_flux_up_k, m_buffer.lw_flux_dn_k,
-            m_buffer.sw_clnclrsky_flux_up_k, m_buffer.sw_clnclrsky_flux_dn_k, m_buffer.sw_clnclrsky_flux_dn_dir_k,
-            m_buffer.sw_clrsky_flux_up_k, m_buffer.sw_clrsky_flux_dn_k, m_buffer.sw_clrsky_flux_dn_dir_k,
-            m_buffer.sw_clnsky_flux_up_k, m_buffer.sw_clnsky_flux_dn_k, m_buffer.sw_clnsky_flux_dn_dir_k,
-            m_buffer.lw_clnclrsky_flux_up_k, m_buffer.lw_clnclrsky_flux_dn_k,
-            m_buffer.lw_clrsky_flux_up_k, m_buffer.lw_clrsky_flux_dn_k,
-            m_buffer.lw_clnsky_flux_up_k, m_buffer.lw_clnsky_flux_dn_k,
-            m_buffer.sw_bnd_flux_up_k, m_buffer.sw_bnd_flux_dn_k, m_buffer.sw_bnd_flux_dir_k,
-            m_buffer.lw_bnd_flux_up_k, m_buffer.lw_bnd_flux_dn_k,
+            buffer.sfc_alb_dir_k, buffer.sfc_alb_dif_k, mu0_k,
+            buffer.lwp_k, buffer.iwp_k, buffer.eff_radius_qc_k, buffer.eff_radius_qi_k, buffer.cldfrac_tot_k,
+            buffer.aero_tau_sw_k, buffer.aero_ssa_sw_k, buffer.aero_g_sw_k, buffer.aero_tau_lw_k,
+            buffer.cld_tau_sw_bnd_k, buffer.cld_tau_lw_bnd_k,
+            buffer.cld_tau_sw_gpt_k, buffer.cld_tau_lw_gpt_k,
+            buffer.sw_flux_up_k, buffer.sw_flux_dn_k, buffer.sw_flux_dn_dir_k,
+            buffer.lw_flux_up_k, buffer.lw_flux_dn_k,
+            buffer.sw_clnclrsky_flux_up_k, buffer.sw_clnclrsky_flux_dn_k, buffer.sw_clnclrsky_flux_dn_dir_k,
+            buffer.sw_clrsky_flux_up_k, buffer.sw_clrsky_flux_dn_k, buffer.sw_clrsky_flux_dn_dir_k,
+            buffer.sw_clnsky_flux_up_k, buffer.sw_clnsky_flux_dn_k, buffer.sw_clnsky_flux_dn_dir_k,
+            buffer.lw_clnclrsky_flux_up_k, buffer.lw_clnclrsky_flux_dn_k,
+            buffer.lw_clrsky_flux_up_k, buffer.lw_clrsky_flux_dn_k,
+            buffer.lw_clnsky_flux_up_k, buffer.lw_clnsky_flux_dn_k,
+            buffer.sw_bnd_flux_up_k, buffer.sw_bnd_flux_dn_k, buffer.sw_bnd_flux_dir_k,
+            buffer.lw_bnd_flux_up_k, buffer.lw_bnd_flux_dn_k,
             eccf, logger,
             m_extra_clnclrsky_diag, m_extra_clnsky_diag
         );
