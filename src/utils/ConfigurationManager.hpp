@@ -20,6 +20,10 @@ public:
     template<typename T>
     T get_value(const std::string& key_path) const;
 
+    // Default value mode
+    template<typename T>
+    T get_value(const std::string& key_path, const T& default_value) const;
+
     // Check if a key exists
     bool has_key(const std::string& key_path) const;
 
@@ -46,6 +50,22 @@ T ConfigurationManager::get_value(const std::string& key_path) const {
     try {
         return node->get<T>();
     } catch (const nlohmann::json::exception& e) {
+        throw std::runtime_error("Configuration error: Type mismatch for key '" + key_path + "'. " + e.what());
+    }
+}
+
+template<typename T>
+T ConfigurationManager::get_value(const std::string& key_path, const T& default_value) const {
+    const nlohmann::json* node = find_node(key_path);
+    
+    if (!node) {
+        return default_value;
+    }
+
+    try {
+        return node->get<T>();
+    } 
+    catch (const nlohmann::json::exception& e) {
         throw std::runtime_error("Configuration error: Type mismatch for key '" + key_path + "'. " + e.what());
     }
 }

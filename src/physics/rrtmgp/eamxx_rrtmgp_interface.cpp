@@ -1,7 +1,8 @@
 #include "eamxx_rrtmgp_interface.hpp"
 #include "share/physics/physics_constants.hpp"
 
-namespace scream {
+namespace VVM {
+namespace Physics {
 
 void init_kls ()
 {
@@ -14,4 +15,5 @@ void finalize_kls()
   //Kokkos::finalize(); We do the kokkos finalization elsewhere
 }
 
-}  // namespace scream
+}  // namespace Physics
+}  // namespace VVM
