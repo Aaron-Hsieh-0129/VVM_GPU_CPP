@@ -73,6 +73,12 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<2>("precip_liq_surf_mass", {ny_total, nx_total});
     add_field<2>("precip_ice_surf_mass", {ny_total, nx_total});
     add_field<3>("qp", {nz_total, ny_total, nx_total}); // qc+qr+qi
+    // rrtmgp
+    add_field<3>("sw_heating", {nz_total, ny_total, nx_total});
+    add_field<3>("lw_heating", {nz_total, ny_total, nx_total});
+    add_field<3>("net_heating", {nz_total, ny_total, nx_total});
+    add_field<3>("net_sw_flux", {nz_total, ny_total, nx_total});
+    add_field<3>("net_lw_flux", {nz_total, ny_total, nx_total});
 
     // Rotation term
     add_field<3>("R_xi", {nz_total, ny_total, nx_total});
