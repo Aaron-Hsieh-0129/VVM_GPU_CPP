@@ -34,8 +34,8 @@ RRTMGPRadiation::RRTMGPRadiation(const VVM::Utils::ConfigurationManager& config,
     }
 
     // Configuration
-    m_nswgpts = m_params.get<int>("nswgpts",112);
-    m_nlwgpts = m_params.get<int>("nlwgpts",128);
+    m_nswgpts = m_config.get_value<int>("nswgpts",112);
+    m_nlwgpts = m_config.get_value<int>("nlwgpts",128);
     m_do_aerosol_rad = m_config.get_value<bool>("physics.rrtmgp.do_aerosol_rad", false);
     m_extra_clnsky_diag = m_config.get_value<bool>("physics.rrtmgp.extra_clnsky_diag", false);
     m_extra_clnclrsky_diag = m_config.get_value<bool>("physics.rrtmgp.extra_clnclrsky_diag", false);
@@ -92,7 +92,7 @@ void RRTMGPRadiation::initialize(const VVM::Core::State& state) {
     m_ngas = m_gas_names.size();
 
     // Initialize kokkos
-    init_kls();
+    // init_kls();
 
     // Names of active gases
     auto gas_names_offset = string1dv(m_ngas);
@@ -257,8 +257,13 @@ void RRTMGPRadiation::init_buffers() {
 }
 
 void RRTMGPRadiation::finalize() {
+    m_gas_concs_k.reset();
     m_buffer_storage = Kokkos::View<Real*, DefaultDevice>();
-    interface_t::rrtmgp_finalize();
+    bool is_root = (m_grid.get_mpi_rank() == 0);
+    interface_t::rrtmgp_finalize(is_root);
+    m_gas_mol_weights = real1dk();
+    m_lon = real1dk();
+    m_lat = real1dk();
 }
 
 void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
@@ -335,6 +340,8 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
         Kokkos::View<Real*, DefaultDevice> mu0_k("mu0_k", ncol);
         Kokkos::deep_copy(mu0_k, h_mu0);
 
+        const int nswbands = m_nswbands;
+        const int nlwbands = m_nlwbands;
 
         // Pack data for this chunk
         const int nlay_local = m_nlay;
@@ -353,6 +360,13 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
 
                     buffer.eff_radius_qc_k(i, k) = 10.0e-6; 
                     buffer.eff_radius_qi_k(i, k) = 25.0e-6;
+
+                    if (buffer.qc_k(i,k) + buffer.qi_k(i,k) > 1e-12) {
+                        buffer.cldfrac_tot_k(i, k) = 1.0;
+                    }
+                    else {
+                        buffer.cldfrac_tot_k(i, k) = 0.0;
+                    }
                 }
                 
                 for (int k = 0; k <= nlay_local; ++k) {
@@ -365,6 +379,24 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
 
                 for (int k = 0; k < nlay_local; ++k) {
                     buffer.d_dz(i, k) = dz_mid(k+halo); 
+                }
+
+                // Initialize Broadband Surface Albedo  (TODO: Get from State)
+                // For now, assuming ocean-like albedo
+                buffer.sfc_alb_dir_vis_k(i) = 0.06;
+                buffer.sfc_alb_dir_nir_k(i) = 0.06;
+                buffer.sfc_alb_dif_vis_k(i) = 0.06;
+                buffer.sfc_alb_dif_nir_k(i) = 0.06;
+
+                for(int k=0; k<nlay_local; ++k) {
+                    for(int b=0; b<nswbands; ++b) {
+                        buffer.aero_tau_sw_k(i,k,b) = 0.0;
+                        buffer.aero_ssa_sw_k(i,k,b) = 0.0;
+                        buffer.aero_g_sw_k(i,k,b) = 0.0;
+                    }
+                    for(int b=0; b<nlwbands; ++b) {
+                        buffer.aero_tau_lw_k(i,k,b) = 0.0;
+                    }
                 }
             });
 
@@ -385,6 +417,27 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 // Interface nlay is Top
                 buffer.t_lev_k(i, nlay) = buffer.t_lay_k(i, nlay - 1);
             });
+
+        interface_t::mixing_ratio_to_cloud_mass(buffer.qc_k, buffer.cldfrac_tot_k, buffer.p_del_k, buffer.lwp_k);
+        interface_t::mixing_ratio_to_cloud_mass(buffer.qi_k, buffer.cldfrac_tot_k, buffer.p_del_k, buffer.iwp_k);
+
+        // Convert kg/m2 to g/m2 as required by RRTMGP
+        Kokkos::parallel_for("convert_cld_mass_units", Kokkos::RangePolicy<>(0, ncol),
+             KOKKOS_LAMBDA(int i) {
+                  for(int k=0; k<nlay; ++k) {
+                       buffer.lwp_k(i,k) *= 1e3;
+                       buffer.iwp_k(i,k) *= 1e3;
+                  }
+             });
+
+        // Compute Band-by-Band Surface Albedos
+        interface_t::compute_band_by_band_surface_albedos(
+            ncol, m_nswbands,
+            buffer.sfc_alb_dir_vis_k, buffer.sfc_alb_dir_nir_k,
+            buffer.sfc_alb_dif_vis_k, buffer.sfc_alb_dif_nir_k,
+            buffer.sfc_alb_dir_k, buffer.sfc_alb_dif_k
+        );
+
 
         m_gas_concs_k.ncol = ncol;
         for (int igas = 0; igas < m_ngas; igas++) {
@@ -442,6 +495,10 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
             m_extra_clnclrsky_diag, m_extra_clnsky_diag
         );
 
+        // Compute Heating Rates (Using RRTMGP helper)
+        scream::rrtmgp::compute_heating_rate(buffer.sw_flux_up_k, buffer.sw_flux_dn_k, buffer.p_del_k, buffer.sw_heating_k);
+        scream::rrtmgp::compute_heating_rate(buffer.lw_flux_up_k, buffer.lw_flux_dn_k, buffer.p_del_k, buffer.lw_heating_k);
+
         // Unpack data and compute heating
         Kokkos::parallel_for("unpack_chunk_data", Kokkos::RangePolicy<>(0, ncol),
             KOKKOS_LAMBDA(int i) {
@@ -449,23 +506,13 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 int ix = col_idx % nx;
                 int iy = col_idx / nx;
                 
-                Real g = 9.80665;
-                Real cp = 1004.64;
-                
                 for (int k = 0; k < nlay; ++k) {
-                    Real flux_net_top = buffer.sw_flux_dn_k(i, k) - buffer.sw_flux_up_k(i, k) +
-                                        buffer.lw_flux_dn_k(i, k) - buffer.lw_flux_up_k(i, k);
-                    Real flux_net_bot = buffer.sw_flux_dn_k(i, k+1) - buffer.sw_flux_up_k(i, k+1) +
-                                        buffer.lw_flux_dn_k(i, k+1) - buffer.lw_flux_up_k(i, k+1);
-                    
-                    Real dp = buffer.p_lev_k(i, k+1) - buffer.p_lev_k(i, k);
-                    
-                    if (abs(dp) > 1e-10) {
-                        Real heating = (g / cp) * (flux_net_top - flux_net_bot) / dp;
-                        th(k + halo, iy + halo, ix + halo) += heating * dt / pibar(k + halo);
-                    }
-                }
-            });
+                    Real net_heating = buffer.sw_heating_k(i, k) + buffer.lw_heating_k(i, k); // K/s
+                    // Update Potential Temperature (th = T / Pi)
+                    // d(th)/dt = (dT/dt) / Pi
+                    th(k + halo, iy + halo, ix + halo) += net_heating * dt / pibar(k + halo);
+            }
+        });
     }
 }
 

@@ -4,7 +4,6 @@
 #include "p3_functions.hpp" // for ETI only but harmless for GPU
 
 #include <fstream>
-#define SCREAM_DOUBLE_PRECISION
 
 namespace scream {
 namespace p3 {

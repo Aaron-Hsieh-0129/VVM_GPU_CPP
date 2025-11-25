@@ -5,6 +5,7 @@
 #include <vector>
 #include <memory>
 #include <Kokkos_Core.hpp>
+#include <iostream>
 
 // VVM Includes
 #include "core/Grid.hpp"
@@ -56,7 +57,7 @@ public:
     using lrreal2dk   = typename KT::template view_2d<Real>;
     using ulrreal2dk  = Unmanaged<lrreal2dk>;
 
-    using interface_t = VVM::Physics::RRTMGP::rrtmgp_interface<Real, layout_t, DefaultDevice>;
+    using interface_t = scream::rrtmgp::rrtmgp_interface<Real, layout_t, DefaultDevice>;
 
     // Constructors
     RRTMGPRadiation(const VVM::Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params);

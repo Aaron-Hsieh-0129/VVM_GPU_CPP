@@ -18,10 +18,10 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "NVHPC")
 endif()
 
 add_compile_definitions(EAMXX_ENABLE_GPU)
-add_compile_definitions(SCREAM_DOUBLE_PRECISIION)
+add_compile_definitions(SCREAM_DOUBLE_PRECISION)
 add_compile_definitions(RRTMGP_ENABLE_KOKKOS)
 add_definitions(-DEAMXX_ENABLE_GPU)
-add_definitions(-DSCREAM_DOUBLE_PRECISIION)
+add_definitions(-DSCREAM_DOUBLE_PRECISION)
 add_definitions(-DRRTMGP_ENABLE_KOKKOS)
 
 

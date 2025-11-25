@@ -262,6 +262,9 @@ int main(int argc, char *argv[]) {
         p3_interface->finalize();
         p3_interface.reset();
     }
+    if (rrtmgp_interface) {
+        rrtmgp_interface->finalize();
+    }
     Kokkos::finalize();
     MPI_Finalize();
     return 0;
