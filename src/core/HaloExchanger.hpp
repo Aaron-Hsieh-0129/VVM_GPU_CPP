@@ -259,7 +259,7 @@ void HaloExchanger::wait_exchange_halo_x(Field<Dim>& field, HaloExchangeRequests
                 if (neighbor_right != MPI_PROC_NULL) data(w, k, j, h + nx_phys + i_h) = recv_r(idx);
         });
     }
-    Kokkos::fence();
+    // Kokkos::fence();
 }
 
 template<size_t Dim>
@@ -378,7 +378,7 @@ void HaloExchanger::wait_exchange_halo_y(Field<Dim>& field, HaloExchangeRequests
                 if (neighbor_top != MPI_PROC_NULL) data(w, k, h + ny_phys + j_h, i) = recv_t(idx);
         });
     }
-    Kokkos::fence();
+    // Kokkos::fence();
 }
 
 

@@ -10,9 +10,9 @@
         "dz1": 100.0
     },
     "simulation": {
-        "total_time_s": 10.0,
+        "total_time_s": 500.0,
         "dt_s": 1.0,
-        "output_interval_s": 1.0
+        "output_interval_s": 50.0
     },
     "boundary_conditions": {
         "default": {
@@ -74,7 +74,12 @@
             "qv",
             "qc",
             "qr",
-            "qi"
+            "qi",
+            "sw_heating",
+            "lw_heating",
+            "net_heating",
+            "net_sw_flux",
+            "net_lw_flux"
         ],
         "output_grid": {
             "x_start": 0,

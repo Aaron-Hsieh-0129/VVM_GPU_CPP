@@ -500,6 +500,11 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
         scream::rrtmgp::compute_heating_rate(buffer.lw_flux_up_k, buffer.lw_flux_dn_k, buffer.p_del_k, buffer.lw_heating_k);
 
         // Unpack data and compute heating
+        auto& sw_heating = state.get_field<3>("sw_heating").get_mutable_device_data();
+        auto& lw_heating = state.get_field<3>("lw_heating").get_mutable_device_data();
+        auto& net_heating = state.get_field<3>("net_heating").get_mutable_device_data();
+        auto& net_sw_flux = state.get_field<3>("net_sw_flux").get_mutable_device_data();
+        auto& net_lw_flux = state.get_field<3>("net_lw_flux").get_mutable_device_data();
         Kokkos::parallel_for("unpack_chunk_data", Kokkos::RangePolicy<>(0, ncol),
             KOKKOS_LAMBDA(int i) {
                 int col_idx = beg + i;
@@ -507,11 +512,26 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 int iy = col_idx / nx;
                 
                 for (int k = 0; k < nlay; ++k) {
-                    Real net_heating = buffer.sw_heating_k(i, k) + buffer.lw_heating_k(i, k); // K/s
+                    Real net_heating_val = buffer.sw_heating_k(i, k) + buffer.lw_heating_k(i, k); // K/s
                     // Update Potential Temperature (th = T / Pi)
                     // d(th)/dt = (dT/dt) / Pi
-                    th(k + halo, iy + halo, ix + halo) += net_heating * dt / pibar(k + halo);
-            }
+                    th(k + halo, iy + halo, ix + halo) += net_heating_val * dt / pibar(k + halo);
+
+                    sw_heating(k + halo, iy + halo, ix + halo) = buffer.sw_heating_k(i, k);
+                    lw_heating(k + halo, iy + halo, ix + halo) = buffer.lw_heating_k(i, k);
+                    net_heating(k + halo, iy + halo, ix + halo) = net_heating_val;
+                }
+
+                for (int k = 0; k <= nlay; ++k) {
+                    // Net SW Flux (Down - Up)
+                    Real net_sw = buffer.sw_flux_dn_k(i, k) - buffer.sw_flux_up_k(i, k);
+                    // Net LW Flux (Down - Up)
+                    Real net_lw = buffer.lw_flux_dn_k(i, k) - buffer.lw_flux_up_k(i, k);
+                    if (k < nlay) {
+                        net_sw_flux(k + halo, iy + halo, ix + halo) = net_sw;
+                        net_lw_flux(k + halo, iy + halo, ix + halo) = net_lw;
+                    }
+                 }
         });
     }
 }
