@@ -29,13 +29,12 @@ using HostDevice = scream::HostDevice;
 using Real = scream::Real;
 using Int = scream::Int;
 
-namespace VVM {
-namespace Physics {
+namespace scream {
 
 void init_kls ();
 void finalize_kls();
 
-namespace RRTMGP {
+namespace rrtmgp {
 
 // New interface for Kokkos and flexible types
 template <typename RealT=Real, typename LayoutT=Kokkos::LayoutRight, typename DeviceT=DefaultDevice>
@@ -130,7 +129,7 @@ static void rrtmgp_initialize(
   const size_t base_ref = 40000;
   const size_t ncol = gas_concs.ncol;
   const size_t nlay = gas_concs.nlay;
-  const size_t nlev = SCREAM_NUM_VERTICAL_LEV;
+  const size_t nlev = gas_concs.nlay*1.5;
   const size_t my_size_ref = ncol * nlay * nlev;
   pool_t::init(2e6 * (float(my_size_ref) / base_ref) * multiplier);
 
@@ -247,6 +246,8 @@ static void compute_broadband_surface_fluxes(
  * The input logger is in charge of outputing info to
  * screen and/or to file (or neither), depending on how it was set up.
  */
+#define SCREAM_RRTMGP_DEBUG
+
 static void rrtmgp_main(
   const int ncol, const int nlay,
   const creal2dk &p_lay, const creal2dk &t_lay, const creal2dk &p_lev, const creal2dk &t_lev,
@@ -1516,8 +1517,7 @@ static optical_props1_t get_subsampled_clouds(
 
 }; // struct rrtmgp_interface
 
-} // namespace RRTMGP
-} // namespace Physics
-} // namespace VVM
+} // namespace rrtmgp
+} // namespace scream
 
 #endif  // SCREAM_RRTMGP_INTERFACE_HPP
