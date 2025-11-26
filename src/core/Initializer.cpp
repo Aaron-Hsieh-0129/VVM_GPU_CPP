@@ -187,7 +187,7 @@ void Initializer::initialize_topo() const {
         }
     );
     halo_exchanger.exchange_halos(state_.get_field<3>("ITYPEU"));
-    halo_exchanger.exchange_halos(state_.get_field<3>("ITYPEU"));
+    halo_exchanger.exchange_halos(state_.get_field<3>("ITYPEV"));
       
     return;
 }

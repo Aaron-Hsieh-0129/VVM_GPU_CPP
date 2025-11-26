@@ -159,33 +159,31 @@ int main(int argc, char *argv[]) {
                 // if (k == 3 && j == ny/2 && i == nx/2 && (rank == 0 || rank == 1))
                 // th(k,j,i) += 50;
 
-                /*
-                if ((32/2-3-1 <= global_j && 32/2+3-1 >= global_j) && (32/2-3-1 <= global_i && 32/2+3-1 >= global_i)) { 
-                    if (k == h+15) { 
-                        xi(k,j,i) = 50;
-                        eta(k,j,i) = 50;
-                        th(k,j,i) += 50;
-                    }
-                    else if (k == nz-h-1) {
-                        zeta(k,j,i) = 50;
-                    }
-                    else if (k == nz-h-2) {
-                        eta(k,j,i) = 50;
-                    }
-                }
-
-                if (global_j >= 4 && global_j <= 32-1-3 && global_i >= 4 && global_i <= 32-1-3) {
-                    // u(k,j,i) = 32./2. - global_i - 1;
-                    // v(k,j,i) = 32./2. - global_j - 1;
-                    // u(k,j,i) = 32./2. - global_j - 1;
-                    u(k,j,i) = 32./2. - (global_i+global_j)/2. - 1;
-                    v(k,j,i) = 32./2. - (global_i+global_j)/2. - 1;
-
-                    u(k,j,i) /= 8;
-                    v(k,j,i) /= 8;
-                }
-                // if (k == 0 || k == nz-1 || k == nz-2) w(k,j,i) = 0;
-                */
+                // if ((32/2-3-1 <= global_j && 32/2+3-1 >= global_j) && (32/2-3-1 <= global_i && 32/2+3-1 >= global_i)) { 
+                //     if (k == h+15) { 
+                //         xi(k,j,i) = 50;
+                //         eta(k,j,i) = 50;
+                //         th(k,j,i) += 50;
+                //     }
+                //     else if (k == nz-h-1) {
+                //         zeta(k,j,i) = 50;
+                //     }
+                //     else if (k == nz-h-2) {
+                //         eta(k,j,i) = 50;
+                //     }
+                // }
+                //
+                // if (global_j >= 4 && global_j <= 32-1-3 && global_i >= 4 && global_i <= 32-1-3) {
+                //     // u(k,j,i) = 32./2. - global_i - 1;
+                //     // v(k,j,i) = 32./2. - global_j - 1;
+                //     // u(k,j,i) = 32./2. - global_j - 1;
+                //     u(k,j,i) = 32./2. - (global_i+global_j)/2. - 1;
+                //     v(k,j,i) = 32./2. - (global_i+global_j)/2. - 1;
+                //
+                //     u(k,j,i) /= 8;
+                //     v(k,j,i) /= 8;
+                // }
+                // // if (k == 0 || k == nz-1 || k == nz-2) w(k,j,i) = 0;
 
                 double radius_norm = std::sqrt(
                                       std::pow(((global_i + 1) - nx/2.) * dx() / 2000., 2) +

@@ -305,7 +305,8 @@
             "enable_rrtmgp": true,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
             "fixed_total_solar_irradiance": 340,
-            "fixed_solar_zenith_angle": 0.1
+            "fixed_solar_zenith_angle": 0.1,
+            "pool_size_multiplier": 1.9
         }
     }
 }

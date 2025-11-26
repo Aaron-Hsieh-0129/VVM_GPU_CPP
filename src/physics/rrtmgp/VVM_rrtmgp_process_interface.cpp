@@ -110,7 +110,7 @@ void RRTMGPRadiation::initialize(const VVM::Core::State& state) {
     std::string coefficients_file_lw = m_config.get_value<std::string>("physics.rrtmgp.coefficients_file_lw", "../rundata/rrtmgp/rrtmgp-data-lw-g128-210809.nc");
     std::string cloud_optics_file_sw = m_config.get_value<std::string>("physics.rrtmgp.cloud_optics_file_sw", "../rundata/rrtmgp/rrtmgp-cloud-optics-coeffs-sw.nc");
     std::string cloud_optics_file_lw = m_config.get_value<std::string>("physics.rrtmgp.cloud_optics_file_lw", "../rundata/rrtmgp/rrtmgp-cloud-optics-coeffs-lw.nc");
-    const double multiplier = m_config.get_value<double>("pool_size_multiplier", 1.0);
+    const double multiplier = m_config.get_value<double>("physics.rrtmgp.pool_size_multiplier", 1.0);
 
     m_gas_concs_k.init(gas_names_offset,m_col_chunk_size,m_nlay);
     interface_t::rrtmgp_initialize(
