@@ -5,6 +5,7 @@
 #include <ekat_units.hpp>
 
 #include <array>
+#include "utils/Timer.hpp"
 
 namespace VVM {
 namespace Physics {
@@ -107,8 +108,7 @@ void VVM_P3_Interface::allocate_p3_buffers() {
     const size_t wsm_size_in_spacks = (wsm_size_in_bytes + sizeof(Spack) - 1) / sizeof(Spack);
     m_wsm_view_storage = Kokkos::View<Spack*>("P3 WSM Storage", wsm_size_in_spacks);
     m_wsm_data = m_wsm_view_storage.data();
-    if (m_wsm_data == nullptr) {
-        std::cerr << "ERROR: FAILED TO ALLOCATE WORKSPACE MANAGER MEMORY FOR P3." << std::endl;
+    if (m_wsm_data == nullptr) { std::cerr << "ERROR: FAILED TO ALLOCATE WORKSPACE MANAGER MEMORY FOR P3." << std::endl;
     }
 }
 
@@ -453,6 +453,9 @@ void VVM_P3_Interface::pack_2d_to_1d(const VVMViewType& vvm_view, const P3ViewTy
 
 
 void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
+    VVM::Utils::Timer p3_timer("P3_timer");
+
+
     // FIXME: The pmid, pmid_try should be decided. The pmid from VVM is now dry pressure. 
 
     const int nz = grid_.get_local_total_points_z();
@@ -606,6 +609,10 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
         }
     );
     unpack_2d_packed_to_3d(m_qv_prev_view, state.get_field<3>("qv_m").get_mutable_device_data());
+
+    unpack_2d_packed_to_3d(m_diag_eff_radius_qc_view, state.get_field<3>("diag_eff_radius_qc").get_mutable_device_data());
+    unpack_2d_packed_to_3d(m_diag_eff_radius_qi_view, state.get_field<3>("diag_eff_radius_qi").get_mutable_device_data());
+    unpack_2d_packed_to_3d(m_diag_eff_radius_qr_view, state.get_field<3>("diag_eff_radius_qr").get_mutable_device_data());
     unpack_1d_to_2d(m_precip_liq_surf_mass_view, state.get_field<2>("precip_liq_surf_mass").get_mutable_device_data());
     unpack_1d_to_2d(m_precip_ice_surf_mass_view, state.get_field<2>("precip_ice_surf_mass").get_mutable_device_data());
 

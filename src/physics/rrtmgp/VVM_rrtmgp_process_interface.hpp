@@ -66,6 +66,7 @@ public:
     std::string name() const { return "rrtmgp"; }
 
     void initialize(const VVM::Core::State& state);
+    // void set_grids(const VVM::Core::State& state);
     void run(VVM::Core::State& state, const double dt);
     void finalize();
 
@@ -76,8 +77,8 @@ public:
     int m_col_chunk_size;
     std::vector<int> m_col_chunk_beg;
     int m_nlay;
-    real1dk m_lat;
-    real1dk m_lon;
+    Kokkos::View<double*> m_lat;
+    Kokkos::View<double*> m_lon;
 
     // Configuration Flags
     // Whether we use aerosol forcing in radiation

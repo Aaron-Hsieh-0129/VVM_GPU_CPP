@@ -129,7 +129,7 @@ static void rrtmgp_initialize(
   const size_t base_ref = 40000;
   const size_t ncol = gas_concs.ncol;
   const size_t nlay = gas_concs.nlay;
-  const size_t nlev = gas_concs.nlay*1.5;
+  const size_t nlev = gas_concs.nlay*2;
   const size_t my_size_ref = ncol * nlay * nlev;
   pool_t::init(2e6 * (float(my_size_ref) / base_ref) * multiplier);
 

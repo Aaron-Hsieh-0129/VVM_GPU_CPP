@@ -302,7 +302,10 @@
             "max_total_ni": 740.0e3
         },
         "rrtmgp": {
-            "enable_rrtmgp": true
+            "enable_rrtmgp": true,
+            "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
+            "fixed_total_solar_irradiance": 340,
+            "fixed_solar_zenith_angle": 0.1
         }
     }
 }
