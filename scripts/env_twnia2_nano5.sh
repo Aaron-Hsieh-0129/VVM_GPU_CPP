@@ -15,6 +15,7 @@ export C_INCLUDE_PATH=${NVHPC_ROOT}/comm_libs/openmpi/openmpi-3.1.5/include:$C_I
 export LD_LIBRARY_PATH=${NVHPC_ROOT}/comm_libs/openmpi/openmpi-3.1.5/lib:$LD_LIBRARY_PATH
 export LIBRARY_PATH=${NVHPC_ROOT}/comm_libs/openmpi/openmpi-3.1.5/lib:$LIBRARY_PATH
 export PATH=$NVHPC_ROOT/compilers/bin:$PATH
+export OPAL_PREFIX=${NVHPC_ROOT}/comm_libs/openmpi/openmpi-3.1.5
 
 export CUDA_HOME=${NVHPC_ROOT}/cuda/12.6
 export PATH=$CUDA_HOME/bin:$PATH

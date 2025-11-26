@@ -68,7 +68,7 @@ void WindSolver::solve_w(Core::State& state) {
                          -( xi(k,j,i) -  xi(k,j-1,i))*rdy();
         }
     );
-    halo_exchanger_.exchange_halos(YTEM_field_);
+    // halo_exchanger_.exchange_halos(YTEM_field_);
     // int rank;
     // MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     // if (rank == 0) state.get_field<3>("w").print_slice_z_at_k(grid_, 0, 17);
@@ -137,7 +137,7 @@ void WindSolver::solve_w(Core::State& state) {
                     else w(k,j,i) = pm(k,j,i) / rhobar_up(k);
                 }
             );
-            halo_exchanger_.exchange_halos(state.get_field<3>("w"));
+            halo_exchanger_.exchange_halos(state.get_field<3>("w"), 1);
         }
     }
     else {
@@ -317,7 +317,7 @@ void WindSolver::relax_2d(Core::Field<2>& A_field, Core::Field<2>& ANM1_field, C
             }
         );
 
-        halo_exchanger_.exchange_halos(AOUT_field);
+        halo_exchanger_.exchange_halos(AOUT_field, 1);
     }
     return;
 }

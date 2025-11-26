@@ -132,9 +132,13 @@ void Grid::calculate_local_grid_distribution() {
 
         std::cout << "Z-NonPeriodic" << std::endl; // Added for clarity
     }
+
+    std::cout << "Rank " << mpi_rank_ << " is ready to call MPI_Cart_create." << std::endl;
     
     // 3. Create MPI Cartesian Communicator
     MPI_Cart_create(MPI_COMM_WORLD, ndims_cart, p_dims, periods, reorder, &cart_comm_);
+
+    std::cout << "Rank " << mpi_rank_ << " finished MPI_Cart_create." << std::endl;
 
     // 4. Get current process coordinates in 2D topology
     int coords[2]; // coords[0] for Y-coordinate, coords[1] for X-coordinate
