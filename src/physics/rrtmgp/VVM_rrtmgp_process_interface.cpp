@@ -5,6 +5,7 @@
 #include "share/physics/eamxx_common_physics_functions.hpp"
 #include "share/util/eamxx_column_ops.hpp"
 #include "share/util/eamxx_utils.hpp"
+#include "utils/Timer.hpp"
 
 #include <ekat_assert.hpp>
 #include <ekat_units.hpp>
@@ -39,6 +40,18 @@ RRTMGPRadiation::RRTMGPRadiation(const VVM::Utils::ConfigurationManager& config,
     m_do_aerosol_rad = m_config.get_value<bool>("physics.rrtmgp.do_aerosol_rad", false);
     m_extra_clnsky_diag = m_config.get_value<bool>("physics.rrtmgp.extra_clnsky_diag", false);
     m_extra_clnclrsky_diag = m_config.get_value<bool>("physics.rrtmgp.extra_clnclrsky_diag", false);
+
+    const auto& active_gases = m_config.get_value<std::vector<std::string>>("physics.rrtmgp.active_gases", {"h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"});
+    for (const auto& gas : active_gases) {
+        bool already_present = false;
+        for (const auto& existing : m_gas_names) {
+            if (std::string(existing) == gas) already_present = true;
+        }
+        if (!already_present) {
+            m_gas_names.push_back(gas);
+        }
+    }
+    m_ngas = m_gas_names.size();
 }
 
 RRTMGPRadiation::~RRTMGPRadiation() {}
@@ -61,10 +74,10 @@ void RRTMGPRadiation::initialize(const VVM::Core::State& state) {
 
     // Value for prescribing an invariant solar constant (i.e. total solar irradiance at
     // TOA).  Used for idealized experiments such as RCE. Disabled when value is less than 0.
-    m_fixed_total_solar_irradiance = m_config.get_value<double>("fixed_total_solar_irradiance", -9999.0);
+    m_fixed_total_solar_irradiance = m_config.get_value<double>("physics.rrtmgp.fixed_total_solar_irradiance", -9999.0);
 
     // Determine whether or not we are using a fixed solar zenith angle (positive value)
-    m_fixed_solar_zenith_angle = m_config.get_value<double>("fixed_solar_zenith_angle", -9999.0);
+    m_fixed_solar_zenith_angle = m_config.get_value<double>("physics.rrtmgp.fixed_solar_zenith_angle", -9999.0);
 
     // Get prescribed surface values of greenhouse gases
     m_co2vmr     = m_config.get_value<double>("physics.rrtmgp.co2vmr", 388.717e-6);
@@ -78,19 +91,6 @@ void RRTMGPRadiation::initialize(const VVM::Core::State& state) {
     // Whether or not to do MCICA subcolumn sampling
     m_do_subcol_sampling = m_config.get_value<bool>("do_subcol_sampling",true);
 
-    std::vector<std::string> active_gases = {"h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"};
-    // TODO:  Ideally this comes from config: m_config.get_value<std::vector<std::string>>("active_gases");
-    for (const auto& gas : active_gases) {
-        bool already_present = false;
-        for (const auto& existing : m_gas_names) {
-            if (std::string(existing) == gas) already_present = true;
-        }
-        if (!already_present) {
-            m_gas_names.push_back(gas);
-        }
-    }
-    m_ngas = m_gas_names.size();
-
     // Initialize kokkos
     // init_kls();
 
@@ -103,7 +103,6 @@ void RRTMGPRadiation::initialize(const VVM::Core::State& state) {
         const auto& gas_name = m_gas_names[igas];
         gas_names_offset[igas] = gas_name;
         gas_mol_w_host[igas]   = PC::get_gas_mol_weight(gas_name);
-
     }
     Kokkos::deep_copy(m_gas_mol_weights,gas_mol_w_host);
 
@@ -135,8 +134,25 @@ void RRTMGPRadiation::initialize(const VVM::Core::State& state) {
     //     Kokkos::deep_copy(co_vmr, m_params.get<double>("covmr", 1.0e-7));
     // }
     
-    m_lat = real1dk("lat", m_ncol);
-    m_lon = real1dk("lon", m_ncol);
+    const auto& h = m_grid.get_halo_cells();
+    const auto& ny = m_grid.get_local_physical_points_y();
+    const auto& nx = m_grid.get_local_physical_points_x();
+    Kokkos::View<double*> m_lat("m_lat", ny);
+    Kokkos::View<double*> m_lon("m_lon", nx);
+
+    const auto& lon = state.get_field<1>("lon").get_device_data();
+    const auto& lat = state.get_field<1>("lat").get_device_data();
+    Kokkos::parallel_for("lon", Kokkos::RangePolicy<>(0, nx),
+        KOKKOS_LAMBDA(const int i) {
+            m_lon(i) = lon(i+h);
+        }
+    );
+    Kokkos::parallel_for("lat", Kokkos::RangePolicy<>(0, ny),
+        KOKKOS_LAMBDA(const int j) {
+            m_lat(j) = lat(j+h);
+        }
+    );
+
     init_buffers();
 }
 
@@ -180,6 +196,7 @@ void RRTMGPRadiation::init_buffers() {
         return v;
     };
 
+
     // 1d arrays
     m_buffer.sfc_alb_dir_vis_k = alloc_1d(m_col_chunk_size);
     m_buffer.sfc_alb_dir_nir_k = alloc_1d(m_col_chunk_size);
@@ -191,7 +208,6 @@ void RRTMGPRadiation::init_buffers() {
     m_buffer.sfc_flux_dif_nir_k = alloc_1d(m_col_chunk_size);
 
     // 2d arrays (ncol, nlay)
-    m_buffer.d_dz = alloc_2d(m_col_chunk_size, m_nlay);
     m_buffer.p_lay_k = alloc_2d(m_col_chunk_size, m_nlay);
     m_buffer.t_lay_k = alloc_2d(m_col_chunk_size, m_nlay);
     m_buffer.z_del_k = alloc_2d(m_col_chunk_size, m_nlay);
@@ -209,9 +225,11 @@ void RRTMGPRadiation::init_buffers() {
     m_buffer.lw_heating_k = alloc_2d(m_col_chunk_size, m_nlay);
 
     // 2d arrays (ncol, nlay+1)
-    m_buffer.d_tint = alloc_2d(m_col_chunk_size, m_nlay + 1);
     m_buffer.p_lev_k = alloc_2d(m_col_chunk_size, m_nlay + 1);
     m_buffer.t_lev_k = alloc_2d(m_col_chunk_size, m_nlay + 1);
+    m_buffer.d_tint = alloc_2d(m_col_chunk_size, m_nlay + 1);
+    m_buffer.d_dz = alloc_2d(m_col_chunk_size, m_nlay);
+
     m_buffer.sw_flux_up_k = alloc_2d(m_col_chunk_size, m_nlay + 1);
     m_buffer.sw_flux_dn_k = alloc_2d(m_col_chunk_size, m_nlay + 1);
     m_buffer.sw_flux_dn_dir_k = alloc_2d(m_col_chunk_size, m_nlay + 1);
@@ -251,7 +269,6 @@ void RRTMGPRadiation::init_buffers() {
 
     m_buffer.cld_tau_sw_bnd_k = alloc_3d(m_col_chunk_size, m_nlay, m_nswbands);
     m_buffer.cld_tau_lw_bnd_k = alloc_3d(m_col_chunk_size, m_nlay, m_nlwbands);
-
     m_buffer.cld_tau_sw_gpt_k = alloc_3d(m_col_chunk_size, m_nlay, m_nswgpts);
     m_buffer.cld_tau_lw_gpt_k = alloc_3d(m_col_chunk_size, m_nlay, m_nlwgpts);
 }
@@ -267,21 +284,31 @@ void RRTMGPRadiation::finalize() {
 }
 
 void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
+    VVM::Utils::Timer rrtmgp_timer("RRTMGP_timer");
     const int nx = m_grid.get_local_physical_points_x();
     const int halo = m_grid.get_halo_cells();
     const int nlay = m_nlay;
 
     // Get VVM fields
-    auto pbar = state.get_field<1>("pbar").get_device_data(); 
-    auto pbar_up = state.get_field<1>("pbar_up").get_device_data(); 
-    auto dpbar_mid = state.get_field<1>("dpbar_mid").get_device_data(); 
-    auto dz_mid = m_params.dz_mid.get_device_data(); 
-    auto qc = state.get_field<3>("qc").get_device_data();
-    auto nc = state.get_field<3>("nc").get_device_data();
-    auto qi = state.get_field<3>("qi").get_device_data();
-    auto qv = state.get_field<3>("qv").get_device_data();
-    auto th = state.get_field<3>("th").get_device_data();
-    auto pibar = state.get_field<1>("pibar").get_device_data(); 
+    auto& pbar = state.get_field<1>("pbar").get_device_data(); 
+    auto& pbar_up = state.get_field<1>("pbar_up").get_device_data(); 
+    auto& dpbar_mid = state.get_field<1>("dpbar_mid").get_device_data(); 
+    auto& dz_mid = m_params.dz_mid.get_device_data(); 
+    auto& qc = state.get_field<3>("qc").get_device_data();
+    auto& nc = state.get_field<3>("nc").get_device_data();
+    auto& qi = state.get_field<3>("qi").get_device_data();
+    auto& qv = state.get_field<3>("qv").get_device_data();
+    auto& th = state.get_field<3>("th").get_device_data();
+    auto& pibar = state.get_field<1>("pibar").get_device_data(); 
+    const auto& diag_eff_radius_qc = state.get_field<3>("diag_eff_radius_qc").get_device_data();
+    const auto& diag_eff_radius_qi = state.get_field<3>("diag_eff_radius_qi").get_device_data();
+
+    // Output fields
+    auto& sw_heating = state.get_field<3>("sw_heating").get_mutable_device_data();
+    auto& lw_heating = state.get_field<3>("lw_heating").get_mutable_device_data();
+    auto& net_heating = state.get_field<3>("net_heating").get_mutable_device_data();
+    auto& net_sw_flux = state.get_field<3>("net_sw_flux").get_mutable_device_data();
+    auto& net_lw_flux = state.get_field<3>("net_lw_flux").get_mutable_device_data();
 
     // Orbital parameters and Zenith Angle
     double obliqr, lambm0, mvelpp;
@@ -357,9 +384,10 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                     buffer.qc_k(i, k) = qc(k + halo, iy + halo, ix + halo);
                     buffer.nc_k(i, k) = nc(k + halo, iy + halo, ix + halo);
                     buffer.qi_k(i, k) = qi(k + halo, iy + halo, ix + halo);
+                    buffer.eff_radius_qc_k(i,k) = diag_eff_radius_qc(k+halo, iy+halo, ix+halo);
+                    buffer.eff_radius_qi_k(i,k) = diag_eff_radius_qi(k+halo, iy+halo, ix+halo);
 
-                    buffer.eff_radius_qc_k(i, k) = 10.0e-6; 
-                    buffer.eff_radius_qi_k(i, k) = 25.0e-6;
+                    
 
                     if (buffer.qc_k(i,k) + buffer.qi_k(i,k) > 1e-12) {
                         buffer.cldfrac_tot_k(i, k) = 1.0;
@@ -481,8 +509,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
             buffer.aero_tau_sw_k, buffer.aero_ssa_sw_k, buffer.aero_g_sw_k, buffer.aero_tau_lw_k,
             buffer.cld_tau_sw_bnd_k, buffer.cld_tau_lw_bnd_k,
             buffer.cld_tau_sw_gpt_k, buffer.cld_tau_lw_gpt_k,
-            buffer.sw_flux_up_k, buffer.sw_flux_dn_k, buffer.sw_flux_dn_dir_k,
-            buffer.lw_flux_up_k, buffer.lw_flux_dn_k,
+            buffer.sw_flux_up_k, buffer.sw_flux_dn_k, buffer.sw_flux_dn_dir_k, buffer.lw_flux_up_k, buffer.lw_flux_dn_k,
             buffer.sw_clnclrsky_flux_up_k, buffer.sw_clnclrsky_flux_dn_k, buffer.sw_clnclrsky_flux_dn_dir_k,
             buffer.sw_clrsky_flux_up_k, buffer.sw_clrsky_flux_dn_k, buffer.sw_clrsky_flux_dn_dir_k,
             buffer.sw_clnsky_flux_up_k, buffer.sw_clnsky_flux_dn_k, buffer.sw_clnsky_flux_dn_dir_k,
@@ -500,11 +527,6 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
         scream::rrtmgp::compute_heating_rate(buffer.lw_flux_up_k, buffer.lw_flux_dn_k, buffer.p_del_k, buffer.lw_heating_k);
 
         // Unpack data and compute heating
-        auto& sw_heating = state.get_field<3>("sw_heating").get_mutable_device_data();
-        auto& lw_heating = state.get_field<3>("lw_heating").get_mutable_device_data();
-        auto& net_heating = state.get_field<3>("net_heating").get_mutable_device_data();
-        auto& net_sw_flux = state.get_field<3>("net_sw_flux").get_mutable_device_data();
-        auto& net_lw_flux = state.get_field<3>("net_lw_flux").get_mutable_device_data();
         Kokkos::parallel_for("unpack_chunk_data", Kokkos::RangePolicy<>(0, ncol),
             KOKKOS_LAMBDA(int i) {
                 int col_idx = beg + i;

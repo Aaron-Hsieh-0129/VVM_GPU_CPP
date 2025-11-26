@@ -31,6 +31,9 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<1>("U", {nz_total});
     add_field<1>("V", {nz_total});
 
+    add_field<1>("lon", {nx_total});
+    add_field<1>("lat", {ny_total});
+
     // 2D field
     add_field<2>("htflx_sfc", {ny_total, nx_total});
     add_field<2>("psi", {ny_total, nx_total});
@@ -73,6 +76,9 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<2>("precip_liq_surf_mass", {ny_total, nx_total});
     add_field<2>("precip_ice_surf_mass", {ny_total, nx_total});
     add_field<3>("qp", {nz_total, ny_total, nx_total}); // qc+qr+qi
+    add_field<3>("diag_eff_radius_qc", {nz_total, ny_total, nx_total}); // qc+qr+qi
+    add_field<3>("diag_eff_radius_qi", {nz_total, ny_total, nx_total}); // qc+qr+qi
+    add_field<3>("diag_eff_radius_qr", {nz_total, ny_total, nx_total}); // qc+qr+qi
     // rrtmgp
     add_field<3>("sw_heating", {nz_total, ny_total, nx_total});
     add_field<3>("lw_heating", {nz_total, ny_total, nx_total});
