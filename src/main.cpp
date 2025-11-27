@@ -192,7 +192,7 @@ int main(int argc, char *argv[]) {
                                      );
                 if (radius_norm <= 1) {
                     th(k, j, i) += 5. * (std::cos(3.14159265 * 0.5 * radius_norm));
-                    qc(k, j, i) = 0.01;
+                    // qc(k, j, i) = 0.01;
                     // nc(k, j, i) = 2e8;
                     // th(k,j,i) = 5.*(std::cos(3.14159265*0.5*radius_norm));
                     // xi(k,j,i) = th(k,j,i);
