@@ -10,7 +10,7 @@
         "dz1": 100.0
     },
     "simulation": {
-        "total_time_s": 500.0,
+        "total_time_s": 1500.0,
         "dt_s": 1.0,
         "output_interval_s": 50.0
     },
@@ -298,15 +298,15 @@
         "p3": {
             "enable_p3": true,
             "do_predict_nc": true,
-            "do_prescribed_ccn": true,
+            "do_prescribed_ccn": false,
             "max_total_ni": 740.0e3
         },
         "rrtmgp": {
-            "enable_rrtmgp": true,
+            "enable_rrtmgp": false,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
             "fixed_total_solar_irradiance": 340,
             "fixed_solar_zenith_angle": 0.1,
-            "pool_size_multiplier": 1.9
+            "pool_size_multiplier": 2
         }
     }
 }

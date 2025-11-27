@@ -6,7 +6,10 @@
 
 #include <array>
 #include "utils/Timer.hpp"
+#include "physics_functions.hpp" // for ETI only but harmless for GPU
 
+using Real = scream::Real;
+using Constants = scream::physics::Constants<Real>;
 namespace VVM {
 namespace Physics {
 
@@ -28,8 +31,8 @@ VVM_P3_Interface::VVM_P3_Interface(const VVM::Utils::ConfigurationManager &confi
     m_infrastructure.kts = 0;
     m_infrastructure.kte = m_num_levs - 1;
     // Get runtime options from config (mimicking m_params.get)
-    m_infrastructure.predictNc = config_.get_value<bool>("physics.p3.do_predict_nc");
-    m_infrastructure.prescribedCCN = config_.get_value<bool>("physics.p3.do_prescribed_ccn");
+    m_infrastructure.predictNc = config_.get_value<bool>("physics.p3.do_predict_nc", true);
+    m_infrastructure.prescribedCCN = config_.get_value<bool>("physics.p3.do_prescribed_ccn", true);
 
     // Set Kokkos execution policy
     using TPF = ekat::TeamPolicyFactory<KT::ExeSpace>;
@@ -108,8 +111,7 @@ void VVM_P3_Interface::allocate_p3_buffers() {
     const size_t wsm_size_in_spacks = (wsm_size_in_bytes + sizeof(Spack) - 1) / sizeof(Spack);
     m_wsm_view_storage = Kokkos::View<Spack*>("P3 WSM Storage", wsm_size_in_spacks);
     m_wsm_data = m_wsm_view_storage.data();
-    if (m_wsm_data == nullptr) { std::cerr << "ERROR: FAILED TO ALLOCATE WORKSPACE MANAGER MEMORY FOR P3." << std::endl;
-    }
+    if (m_wsm_data == nullptr) std::cerr << "ERROR: FAILED TO ALLOCATE WORKSPACE MANAGER MEMORY FOR P3." << std::endl;
 }
 
 void VVM_P3_Interface::initialize(VVM::Core::State& state) {
@@ -576,6 +578,74 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
 
     workspace_mgr.reset_internals();
 
+
+    // Pre-P3 Saturation Adjustment (Emulating qcnuc + qccon)
+    // This step creates cloud water (qc) and cloud number (nc) from supersaturation
+    // BEFORE P3 runs, acting as the "activation" and "macrophysics" step.
+    // Constants
+    const Real nccn_val = 2.0e8; // Target CCN concentration (#/kg) or use m_nccn_view
+    const Real min_qc = 1.0e-12; // Threshold for "new cloud"
+    using Physics = scream::physics::Functions<Real, scream::DefaultDevice>;
+    const int nlev_packs = m_num_lev_packs;
+
+    auto qv_view = m_qv_view;
+    auto qc_view = m_qc_view;
+    auto nc_view = m_nc_view;
+    auto th_view = m_th_view;
+    auto p_view  = m_pmid_dry_view; 
+    auto inv_exner_view = m_inv_exner_view;
+    Kokkos::parallel_for("p3_saturation_adjustment_library_call", m_policy,
+        KOKKOS_LAMBDA(const MemberType& team) {
+            const int icol = team.league_rank();
+
+            Kokkos::parallel_for(Kokkos::TeamThreadRange(team, nlev_packs), [&](const int k_pack) {
+                auto& qv_pack = qv_view(icol, k_pack);
+                auto& qc_pack = qc_view(icol, k_pack);
+                auto& nc_pack = nc_view(icol, k_pack);
+                auto& th_pack = th_view(icol, k_pack);
+                const auto& p_pack = p_view(icol, k_pack);
+                const auto& inv_exner_pack = inv_exner_view(icol, k_pack);
+
+                Spack T_pack = th_pack / inv_exner_pack;
+
+                Smask range_mask(true);
+
+                Spack qvs_pack = Physics::qv_sat_dry(
+                    T_pack, p_pack, 
+                    false, // is_ice = false 
+                    range_mask, 
+                    Physics::Polysvp1, // scream::physics::Polysvp1
+                    "VVM_Sat_Adj"
+                );
+
+                auto is_supersaturated = (qv_pack > qvs_pack);
+
+                if (is_supersaturated.any()) {
+                    const Real Lv = 2.501e6; 
+                    Spack numerator = qv_pack - qvs_pack;
+                    Spack denominator = 1.0 + (Lv * Lv * qvs_pack) / (Constants::Cpair * Constants::RH2O * T_pack * T_pack);
+
+                    Spack adjustment(0.0);
+                    adjustment.set(is_supersaturated, numerator / denominator);
+
+                    // If qc was tiny, and we are adding mass, we MUST initialize nc (qcnuc behavior)
+                    auto is_activation = is_supersaturated && (qc_pack < min_qc);
+
+                    qc_pack += adjustment;
+                    qv_pack -= adjustment;
+                    th_pack += inv_exner_pack * (Lv / Constants::Cpair) * adjustment;
+                    // Update number (Activation logic)
+                    // If activating, set nc to CCN concentration. 
+                    // Note: If predictNc is true, P3 expects nc to exist to evolve it.
+                    if (is_activation.any()) {
+                        nc_pack.set(is_activation, nccn_val);
+                    }
+                }
+            });
+        }
+    );
+    Kokkos::fence();
+
     P3F::p3_main(
         m_runtime_options, m_prog_state, m_diag_inputs, m_diag_outputs, m_infrastructure,
         m_history_only, m_lookup_tables,
@@ -584,6 +654,49 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
 #endif
         workspace_mgr, m_num_cols, m_num_levs
     );
+
+    Kokkos::parallel_for("p3_post_sat_adj", m_policy,
+        KOKKOS_LAMBDA(const MemberType& team) {
+            const int icol = team.league_rank();
+
+            Kokkos::parallel_for(Kokkos::TeamThreadRange(team, nlev_packs), [&](const int k_pack) {
+                auto& qv_pack = qv_view(icol, k_pack);
+                auto& qc_pack = qc_view(icol, k_pack);
+                auto& th_pack = th_view(icol, k_pack);
+                const auto& p_pack = p_view(icol, k_pack);
+                const auto& inv_exner_pack = inv_exner_view(icol, k_pack);
+
+                Spack T_pack = th_pack / inv_exner_pack;
+
+                Smask range_mask(true);
+
+                // Calculate Saturation (Polysvp1 - Liquid)
+                Spack qvs_pack = Physics::qv_sat_dry(
+                    T_pack, p_pack, 
+                    false, // is_ice = false 
+                    range_mask, 
+                    Physics::Polysvp1, // scream::physics::Polysvp1
+                    "VVM_Sat_Adj_Post"
+                );
+
+                auto is_supersaturated = (qv_pack > qvs_pack);
+
+                if (is_supersaturated.any()) {
+                    const Real Lv = 2.501e6; 
+                    Spack numerator = qv_pack - qvs_pack;
+                    Spack denominator = 1.0 + (Lv * Lv * qvs_pack) / (Constants::Cpair * Constants::RH2O * T_pack * T_pack);
+
+                    Spack adjustment(0.0);
+                    adjustment.set(is_supersaturated, numerator / denominator);
+
+                    qc_pack += adjustment;
+                    qv_pack -= adjustment;
+                    th_pack += inv_exner_pack * (Lv / Constants::Cpair) * adjustment;
+                }
+            });
+        }
+    );
+    Kokkos::fence();
 
     // Conduct the post-processing of the p3_main output.
     Kokkos::parallel_for("p3_main_local_vals",
