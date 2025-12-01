@@ -4,13 +4,15 @@ namespace VVM {
 namespace Utils {
 
 ConfigurationManager::ConfigurationManager(const std::string &config_file_path) {
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     std::ifstream file(config_file_path);
     if (!file.is_open()) {
         throw std::runtime_error("Failed to open configuration file: " + config_file_path);
     }
     try {
         file >> m_config_data;
-        std::cout << "Configuration loaded from: " << config_file_path << std::endl;
+        if (rank == 0) std::cout << "Configuration loaded from: " << config_file_path << std::endl;
     } catch (const nlohmann::json::exception& e) {
         throw std::runtime_error("Failed to parse configuration file '" + config_file_path + "': " + e.what());
     }

@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --account=MST114418
-#SBATCH --partition=gp4d
+#SBATCH --partition=gp2d
 #SBATCH --job-name=VVM_GPU_CPP
 #SBATCH --nodes=2
 #SBATCH --ntasks-per-node=8

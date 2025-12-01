@@ -70,6 +70,8 @@ public:
     void run(VVM::Core::State& state, const double dt);
     void finalize();
 
+    void apply_heating(VVM::Core::State& state, const double dt);
+
 
     // Dimensions
     int m_ncol;

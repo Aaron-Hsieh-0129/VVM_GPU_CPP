@@ -48,6 +48,7 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     // 3D field
     add_field<3>("th", {nz_total, ny_total, nx_total});
     add_field<3>("T", {nz_total, ny_total, nx_total});
+    add_field<3>("T_m", {nz_total, ny_total, nx_total});
     add_field<3>("xi", {nz_total, ny_total, nx_total});
     add_field<3>("eta", {nz_total, ny_total, nx_total});
     add_field<3>("zeta", {nz_total, ny_total, nx_total});
@@ -79,6 +80,7 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<3>("diag_eff_radius_qc", {nz_total, ny_total, nx_total}); // qc+qr+qi
     add_field<3>("diag_eff_radius_qi", {nz_total, ny_total, nx_total}); // qc+qr+qi
     add_field<3>("diag_eff_radius_qr", {nz_total, ny_total, nx_total}); // qc+qr+qi
+    add_field<3>("P_wet", {nz_total, ny_total, nx_total});
     // rrtmgp
     add_field<3>("sw_heating", {nz_total, ny_total, nx_total});
     add_field<3>("lw_heating", {nz_total, ny_total, nx_total});

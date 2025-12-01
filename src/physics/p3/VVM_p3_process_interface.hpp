@@ -351,6 +351,8 @@ public:
                      const VVM::Core::Grid& grid, 
                      const VVM::Core::Parameters& params);
 
+    void preprocessing_and_packing(VVM::Core::State& state);
+    void postprocessing_and_unpacking(VVM::Core::State& state);
     void initialize(VVM::Core::State& state);
     void finalize();
 
@@ -473,6 +475,8 @@ protected:
     sview_2d m_col_location_view;
 
     using MemberType = typename P3F::KT::MemberType;
+
+    std::unique_ptr<VVM::Core::Field<3>> m_pseudo_density;
 };
 
 } // namespace Physics

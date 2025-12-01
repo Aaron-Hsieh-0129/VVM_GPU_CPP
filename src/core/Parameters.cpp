@@ -65,12 +65,6 @@ Parameters::Parameters(const Utils::ConfigurationManager& config, const Grid& gr
     solver_iteration = config.get_value<int>("dynamics.solver.iteration");
 
     Kokkos::fence();
-
-    if (Kokkos::HostSpace::execution_space::concurrency() > 0) {
-        double nx_h = 0.;
-        Kokkos::deep_copy(nx_h, nx);
-        std::cout << "Parameters initialized. nx test: " << nx_h << std::endl;
-    }
 }
 
 double Parameters::get_value_host(const Kokkos::View<double>& device_view) const {

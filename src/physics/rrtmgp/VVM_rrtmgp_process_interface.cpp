@@ -60,7 +60,6 @@ void RRTMGPRadiation::initialize(const VVM::Core::State& state) {
     using PC = scream::physics::Constants<Real>;
 
     // Determine rad timestep, specified as number of atm steps
-    m_rad_freq_in_steps = m_config.get_value<Int>("physics.rrtmgp.rad_frequency", 1);
 
     // Determine orbital year. If orbital_year is negative, use current year
     // from timestamp for orbital year; if positive, use provided orbital year
@@ -137,19 +136,20 @@ void RRTMGPRadiation::initialize(const VVM::Core::State& state) {
     const auto& h = m_grid.get_halo_cells();
     const auto& ny = m_grid.get_local_physical_points_y();
     const auto& nx = m_grid.get_local_physical_points_x();
-    Kokkos::View<double*> m_lat("m_lat", ny);
-    Kokkos::View<double*> m_lon("m_lon", nx);
-
     const auto& lon = state.get_field<1>("lon").get_device_data();
     const auto& lat = state.get_field<1>("lat").get_device_data();
-    Kokkos::parallel_for("lon", Kokkos::RangePolicy<>(0, nx),
-        KOKKOS_LAMBDA(const int i) {
-            m_lon(i) = lon(i+h);
-        }
-    );
-    Kokkos::parallel_for("lat", Kokkos::RangePolicy<>(0, ny),
-        KOKKOS_LAMBDA(const int j) {
-            m_lat(j) = lat(j+h);
+    m_lat = Kokkos::View<double*>("m_lat", m_ncol);
+    m_lon = Kokkos::View<double*>("m_lon", m_ncol);
+    auto m_lat_view = m_lat; 
+    auto m_lon_view = m_lon;
+
+    Kokkos::parallel_for("init_latlon_2d", Kokkos::RangePolicy<>(0, m_ncol),
+        KOKKOS_LAMBDA(const int k) {
+            int ix = k % nx;
+            int iy = k / nx;
+
+            m_lon_view(k) = lon(ix + h);
+            m_lat_view(k) = lat(iy + h);
         }
     );
 
@@ -319,7 +319,8 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
     
     // TODO: Need timestamp/year from VVM state or time manager
     // For now assuming a default or simple time stepping
-    double calday = 1.0;       // Placeholder for Jan 1st
+    // double calday = 1.0;       // Placeholder for Jan 1st
+    double calday = 172.1639;
     if (eccen >= 0 && obliq >= 0 && mvelp >= 0) {
         orbital_year = shr_orb_undef_int_c2f;
     }
@@ -337,6 +338,10 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
     }
 
     const auto gas_mol_weights = m_gas_mol_weights;
+    auto h_lat = Kokkos::create_mirror_view(m_lat); // Need to sync lat/lon if they change
+    Kokkos::deep_copy(h_lat, m_lat);
+    auto h_lon = Kokkos::create_mirror_view(m_lon);
+    Kokkos::deep_copy(h_lon, m_lon);
 
     // Loop over chunks
     for (int ic = 0; ic < m_num_col_chunks; ++ic) {
@@ -347,10 +352,6 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
 
         // Calculate Zenith Angle (mu0) on Host
         Kokkos::View<Real*, Kokkos::HostSpace> h_mu0("h_mu0", ncol);
-        auto h_lat = Kokkos::create_mirror_view(m_lat); // Need to sync lat/lon if they change
-        Kokkos::deep_copy(h_lat, m_lat);
-        auto h_lon = Kokkos::create_mirror_view(m_lon);
-        Kokkos::deep_copy(h_lon, m_lon);
         
         if (m_fixed_solar_zenith_angle > 0) {
             for (int i = 0; i < ncol; ++i) h_mu0(i) = m_fixed_solar_zenith_angle;
@@ -360,6 +361,8 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 // EAMxx uses physics::Constants::Pi, need to verify VVM namespace
                 double lat_rad = h_lat(beg + i) * PC::Pi / 180.0;
                 double lon_rad = h_lon(beg + i) * PC::Pi / 180.0;
+                // double lat_rad = 23.5 * PC::Pi / 180.0;
+                // double lon_rad = 121. * PC::Pi / 180.0;
                 h_mu0(i) = shr_orb_cosz_c2f(calday, lat_rad, lon_rad, delta, dt);
             }
         }
@@ -537,7 +540,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                     Real net_heating_val = buffer.sw_heating_k(i, k) + buffer.lw_heating_k(i, k); // K/s
                     // Update Potential Temperature (th = T / Pi)
                     // d(th)/dt = (dT/dt) / Pi
-                    th(k + halo, iy + halo, ix + halo) += net_heating_val * dt / pibar(k + halo);
+                    // th(k + halo, iy + halo, ix + halo) += net_heating_val * dt / pibar(k + halo);
 
                     sw_heating(k + halo, iy + halo, ix + halo) = buffer.sw_heating_k(i, k);
                     lw_heating(k + halo, iy + halo, ix + halo) = buffer.lw_heating_k(i, k);
@@ -556,6 +559,25 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                  }
         });
     }
+}
+
+void RRTMGPRadiation::apply_heating(VVM::Core::State& state, const double dt) {
+    const int nz = m_grid.get_local_total_points_z();
+    const int ny = m_grid.get_local_total_points_y();
+    const int nx = m_grid.get_local_total_points_x();
+    const int h = m_grid.get_halo_cells();
+
+    auto& th = state.get_field<3>("th").get_mutable_device_data();
+    
+    const auto& net_heating = state.get_field<3>("net_heating").get_device_data(); 
+    const auto& pibar = state.get_field<1>("pibar").get_device_data();
+
+    Kokkos::parallel_for("Apply_RRTMGP_Heating",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h, ny-h, nx-h}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            th(k, j, i) += (net_heating(k, j, i) / pibar(k)) * dt;
+        }
+    );
 }
 
 } // namespace RRTMGP
