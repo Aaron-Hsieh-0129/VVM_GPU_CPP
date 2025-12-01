@@ -34,19 +34,30 @@ OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VV
     // output_y_stride_ = config.get_value<size_t>("output.output_grid.y_stride");
     // output_z_stride_ = config.get_value<size_t>("output.output_grid.z_stride");
 
+    if (rank_ == 0) std::cout << "  [OutputManager] Config loaded. Creating directory..." << std::endl;
+
     if (rank_ == 0) {
         if (mkdir(output_dir_.c_str(), 0777) != 0 && errno != EEXIST) {
             perror(("Failed to create directory " + output_dir_).c_str());
         }
     }
+
+    if (rank_ == 0) std::cout << "  [OutputManager] Directory created/checked. Waiting for MPI Barrier..." << std::endl;
+
     MPI_Barrier(comm_);
-    grads_ctl_file();
+
+    if (rank_ == 0) std::cout << "  [OutputManager] Barrier passed. Writing ctl file..." << std::endl;
+    if (rank_ == 0) grads_ctl_file();
+
+    if (rank_ == 0) std::cout << "  [OutputManager] ctl file written. Initializing ADIOS2..." << std::endl;
 
     io_ = adios_.DeclareIO("VVM_IO");
     io_.SetEngine("HDF5");
     io_.SetParameter("IdleH5Writer",
                      "true"); // set this if not all ranks are writting
-    io_.SetParameters({{"Threads", "4"}});
+    // io_.SetParameters({{"Threads", "4"}});
+
+    if (rank_ == 0) std::cout << "  [OutputManager] ADIOS2 Initialized." << std::endl;
 }
 
 OutputManager::~OutputManager() {
@@ -116,7 +127,8 @@ void OutputManager::define_variables() {
                     size_t local_output_nz = (actual_output_z_end >= actual_output_z_start) ? (actual_output_z_end - actual_output_z_start + 1) : 0;
                     
                     if constexpr (T::DimValue == 1) {
-                        field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gnz}, {actual_output_z_start}, {local_output_nz});
+                        size_t count = (rank_ == 0) ? local_output_nz : 0;
+                        field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gnz}, {actual_output_z_start}, {count});
                     }
                     else if constexpr (T::DimValue == 2) {
                         field_variables_[field_name] = io_.DefineVariable<double>(field_name, {gny, gnx}, {actual_output_y_start, actual_output_x_start}, {local_output_ny, local_output_nx});
@@ -141,20 +153,29 @@ void OutputManager::write_static_data() {
     const size_t h = grid_.get_halo_cells();
 
     auto var_x = io_.InquireVariable<double>("coordinates/x");
-    std::vector<double> x_coords(gnx);
-    for(size_t i = 0; i < gnx; ++i) { x_coords[i] = i * grid_.get_dx(); }
+    std::vector<double> x_coords;
+    if (rank_ == 0) {
+        x_coords.resize(gnx);
+        for(size_t i = 0; i < gnx; ++i) x_coords[i] = i * grid_.get_dx();
+    }
     writer_.Put<double>(var_x, x_coords.data(), adios2::Mode::Sync);
 
     auto var_y = io_.InquireVariable<double>("coordinates/y");
-    std::vector<double> y_coords(gny);
-    for(size_t i = 0; i < gny; ++i) { y_coords[i] = i * grid_.get_dy(); }
+    std::vector<double> y_coords;
+    if (rank_ == 0) {
+        y_coords.resize(gny);
+        for(size_t i = 0; i < gny; ++i) { y_coords[i] = i * grid_.get_dy(); }
+    }
     writer_.Put<double>(var_y, y_coords.data(), adios2::Mode::Sync);
 
     auto var_z_mid = io_.InquireVariable<double>("coordinates/z_mid");
     auto z_mid_host = params_.z_mid.get_host_data();
-    std::vector<double> z_mid_physical(gnz);
-    for (size_t i = 0; i < gnz; ++i) {
-        z_mid_physical[i] = z_mid_host(i + h);
+    std::vector<double> z_mid_physical;
+    if (rank_ == 0) {
+        z_mid_physical.resize(gnz);
+        for (size_t i = 0; i < gnz; ++i) {
+            z_mid_physical[i] = z_mid_host(i + h);
+        }
     }
     writer_.Put<double>(var_z_mid, z_mid_physical.data(), adios2::Mode::Sync);
 }
@@ -168,14 +189,18 @@ std::string format_to_six_digits(int number) {
 void OutputManager::write(int step, double time) {
     VVM::Utils::Timer advection_x_timer("OUTPUT");
 
+    if (rank_ == 0) std::cout << "  [OutputManager::write] Opening file for step " << step << "..." << std::endl;
     std::string filename = output_dir_ + "/" + filename_prefix_ + "_" + format_to_six_digits((int) (step/output_interval_s_)) + ".h5";
     writer_ = io_.Open(filename, adios2::Mode::Write);
+
+    if (rank_ == 0) std::cout << "  [OutputManager::write] File opened. Defining vars if needed..." << std::endl;
 
     if (!variables_defined_) {
         define_variables();
         variables_defined_ = true;
     }
 
+    if (rank_ == 0) std::cout << "  [OutputManager::write] BeginStep..." << std::endl;
     writer_.BeginStep();
     
     adios2::Variable<double> var_time = io_.InquireVariable<double>("time");
@@ -230,14 +255,20 @@ void OutputManager::write(int step, double time) {
 
                         if constexpr (T::DimValue == 1) {
                             // Only rank 0 outputs 1D global variables
+                            const double* data_ptr = nullptr;
+                            Kokkos::View<double*, Kokkos::HostSpace> host_view;
                             if (rank_ == 0) {
                                 // Create a host mirror for the subview data
                                 auto subview_from_full = Kokkos::subview(full_data_view, 
                                                                          std::make_pair(kokkos_subview_start_z, kokkos_subview_start_z + local_output_nz));
-                                auto phys_data_subview_cpu = Kokkos::create_mirror_view(subview_from_full);
-                                Kokkos::deep_copy(phys_data_subview_cpu, subview_from_full);
-                                writer_.Put<double>(adios_var, phys_data_subview_cpu.data());
+                                host_view = Kokkos::create_mirror_view(subview_from_full);
+                                Kokkos::deep_copy(host_view, subview_from_full);
+                                data_ptr = host_view.data();
+                                // auto phys_data_subview_cpu = Kokkos::create_mirror_view(subview_from_full);
+                                // Kokkos::deep_copy(phys_data_subview_cpu, subview_from_full);
+                                // writer_.Put<double>(adios_var, phys_data_subview_cpu.data());
                             }
+                            writer_.Put<double>(adios_var, data_ptr, adios2::Mode::Sync);
                         }
                         else if constexpr (T::DimValue == 2) {
                             Kokkos::View<double**, Kokkos::LayoutRight> phys_data_subview("phys_data_2d_sub", local_output_ny, local_output_nx);
@@ -279,6 +310,7 @@ void OutputManager::write(int step, double time) {
         }
     }
 
+    if (rank_ == 0) std::cout << "  [OutputManager::write] Puts done. EndStep (Wait for I/O)..." << std::endl;
     writer_.EndStep();
     writer_.Close();
     return;

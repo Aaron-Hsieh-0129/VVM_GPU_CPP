@@ -96,6 +96,9 @@ TxtReader::TxtReader(const std::string& filepath, const VVM::Core::Grid& grid, c
 }
 
 double TxtReader::linear_interpolate(const std::string& field_name, double target_z) const {
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
     const auto& profile_data = all_profiles_.at(field_name);
     
     if (profile_data.empty()) {
@@ -108,14 +111,14 @@ double TxtReader::linear_interpolate(const std::string& field_name, double targe
     // Handle extrapolation
     if (target_z < profile_data.front().first) {
         if (!warned_below[field_name]) {
-            std::cerr << "Warning for field '" << field_name << "': Target Z (" << target_z << "m) is below profile range (" << profile_data.front().first << "m). Extrapolating..." << std::endl;
+            if (rank == 0) std::cerr << "Warning for field '" << field_name << "': Target Z (" << target_z << "m) is below profile range (" << profile_data.front().first << "m). Extrapolating..." << std::endl;
             warned_below[field_name] = true;
         }
         return profile_data.front().second;
     }
     if (target_z > profile_data.back().first) {
         if (!warned_above[field_name]) {
-             std::cerr << "Warning for field '" << field_name << "': Target Z (" << target_z << "m) is above profile range (" << profile_data.back().first << "m). Extrapolating..." << std::endl;
+             if (rank == 0) std::cerr << "Warning for field '" << field_name << "': Target Z (" << target_z << "m) is above profile range (" << profile_data.back().first << "m). Extrapolating..." << std::endl;
             warned_above[field_name] = true;
         }
         return profile_data.back().second;

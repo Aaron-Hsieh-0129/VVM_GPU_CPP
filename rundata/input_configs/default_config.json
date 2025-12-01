@@ -1,7 +1,7 @@
 {
     "grid": {
-        "nx": 256,
-        "ny": 16,
+        "nx": 1024,
+        "ny": 1024,
         "nz": 33,
         "n_halo_cells": 2,
         "dx": 500.0,
@@ -10,7 +10,7 @@
         "dz1": 100.0
     },
     "simulation": {
-        "total_time_s": 1500.0,
+        "total_time_s": 10.0,
         "dt_s": 1.0,
         "output_interval_s": 50.0
     },
@@ -102,7 +102,7 @@
         "solver": {
             "w_solver_method": "tridiagonal",
             "_w_solver_method_options": "Choose 'tridiagonal' (original) or 'jacobi' (3D parallel)",
-            "iteration": 200,
+            "iteration": 50,
             "WRXMU": 2.5e-7
         },
         "prognostic_variables": {
@@ -302,10 +302,12 @@
             "max_total_ni": 740.0e3
         },
         "rrtmgp": {
-            "enable_rrtmgp": false,
+            "enable_rrtmgp": true,
+            "column_chunk_size": 512,
+            "rad_frequency": 120,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
             "fixed_total_solar_irradiance": 340,
-            "fixed_solar_zenith_angle": 0.1,
+            "fixed_solar_zenith_angle": -9999,
             "pool_size_multiplier": 2
         }
     }

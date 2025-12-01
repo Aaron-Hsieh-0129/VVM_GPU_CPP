@@ -112,6 +112,7 @@ void VVM_P3_Interface::allocate_p3_buffers() {
     m_wsm_view_storage = Kokkos::View<Spack*>("P3 WSM Storage", wsm_size_in_spacks);
     m_wsm_data = m_wsm_view_storage.data();
     if (m_wsm_data == nullptr) std::cerr << "ERROR: FAILED TO ALLOCATE WORKSPACE MANAGER MEMORY FOR P3." << std::endl;
+
 }
 
 void VVM_P3_Interface::initialize(VVM::Core::State& state) {
@@ -260,6 +261,8 @@ void VVM_P3_Interface::initialize_constant_buffers(VVM::Core::State& initial_sta
     const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
     const int nx = grid_.get_local_total_points_x();
+    m_pseudo_density = std::make_unique<VVM::Core::Field<3>>("pseudo_density", std::array<int, 3>{nz, ny, nx});
+
     VVM::Core::Field<3> dz_mid_3d_field("dz_mid_3d", {nz, ny, nx});
     // VVM::Core::Field<3> pbar_3d_field("pbar_3d", {nz, ny, nx});
     // VVM::Core::Field<3> dpbar_mid_3d_field("dpbar_mid_3d", {nz, ny, nx});
@@ -452,6 +455,304 @@ void VVM_P3_Interface::pack_2d_to_1d(const VVMViewType& vvm_view, const P3ViewTy
         });
 }
 
+void VVM_P3_Interface::preprocessing_and_packing(VVM::Core::State& state) {
+    const int nz_phys = m_num_levs;
+    const int nx_phys = grid_.get_local_physical_points_x();
+    // const int ny_phys = grid_.get_local_physical_points_y();
+    const int nlev_packs = m_num_lev_packs;
+    const int halo = grid_.get_halo_cells();
+
+    auto qc_3d = state.get_field<3>("qc").get_mutable_device_data();
+    auto nc_3d = state.get_field<3>("nc").get_mutable_device_data();
+    auto qr_3d = state.get_field<3>("qr").get_mutable_device_data();
+    auto nr_3d = state.get_field<3>("nr").get_mutable_device_data();
+    auto qi_3d = state.get_field<3>("qi").get_mutable_device_data();
+    auto qm_3d = state.get_field<3>("qm").get_mutable_device_data();
+    auto ni_3d = state.get_field<3>("ni").get_mutable_device_data();
+    auto bm_3d = state.get_field<3>("bm").get_mutable_device_data();
+    auto th_3d = state.get_field<3>("th").get_device_data();
+    auto qv_3d = state.get_field<3>("qv").get_mutable_device_data();
+
+    auto th_m_3d = state.get_field<3>("th_m").get_device_data();
+    auto qv_m_3d = state.get_field<3>("qv_m").get_device_data();
+
+    
+    auto pibar = state.get_field<1>("pibar").get_device_data();
+    auto pbar = state.get_field<1>("pbar").get_device_data();
+    auto dpbar_mid = state.get_field<1>("dpbar_mid").get_device_data();
+
+    auto qc_p3 = m_qc_view;
+    auto nc_p3 = m_nc_view;
+    auto qr_p3 = m_qr_view;
+    auto nr_p3 = m_nr_view;
+    auto qi_p3 = m_qi_view;
+    auto qm_p3 = m_qm_view;
+    auto ni_p3 = m_ni_view;
+    auto bm_p3 = m_bm_view;
+    auto th_p3 = m_th_view;
+    auto qv_p3 = m_qv_view;
+
+    auto T_p3 = m_T_atm_view;
+    auto Tm_p3 = m_t_prev_view;
+    auto P_wet_p3 = m_pmid_view;
+    auto P_dry_p3 = m_pmid_dry_view;
+    auto Rho_wet_p3 = m_pseudo_density_view;
+    auto Rho_dry_p3 = m_pseudo_density_dry_view;
+    auto qv_prev_p3 = m_qv_prev_view;
+
+    Kokkos::parallel_for("Fused_PreProc_Pack", m_policy,
+        KOKKOS_LAMBDA(const MemberType& team) {
+            const int icol = team.league_rank();
+            const int ix = icol % nx_phys;
+            const int iy = icol / nx_phys;
+            
+            const int ix_vvm = ix + halo;
+            const int iy_vvm = iy + halo;
+
+            Kokkos::parallel_for(Kokkos::TeamThreadRange(team, nlev_packs), [&](const int k_pack) {
+                Spack qc_val, nc_val, qr_val, nr_val, qi_val, qm_val, ni_val, bm_val, th_val, qv_val;
+                Spack T_val, Tm_val, P_wet_val, P_dry_val, Rho_wet_val, qv_prev_val;
+
+                const int k_offset = k_pack * Spack::n;
+
+                Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, (int)Spack::n), [&](const int k_vec) {
+                    const int k_phys = k_offset + k_vec;
+                    
+                    if (k_phys < nz_phys) {
+                        const int k_vvm = k_phys + halo;
+
+                        Real qv_in = qv_3d(k_vvm, iy_vvm, ix_vvm);
+                        if (qv_in < 0) { qv_in = 0; qv_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+                        
+                        Real qc_in = qc_3d(k_vvm, iy_vvm, ix_vvm);
+                        if (qc_in < 0) { qc_in = 0; qc_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+
+                        Real qr_in = qr_3d(k_vvm, iy_vvm, ix_vvm);
+                        if (qr_in < 0) { qr_in = 0; qr_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+
+                        Real qi_in = qi_3d(k_vvm, iy_vvm, ix_vvm);
+                        if (qi_in < 0) { qi_in = 0; qi_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+
+                        Real nc_in = nc_3d(k_vvm, iy_vvm, ix_vvm);
+                        if (nc_in < 0) { nc_in = 0; nc_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+
+                        Real ni_in = ni_3d(k_vvm, iy_vvm, ix_vvm);
+                        if (ni_in < 0) { ni_in = 0; ni_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+
+                        Real nr_in = nr_3d(k_vvm, iy_vvm, ix_vvm);
+                        if (nr_in < 0) { nr_in = 0; nr_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+
+                        Real qm_in = qm_3d(k_vvm, iy_vvm, ix_vvm);
+                        Real bm_in = bm_3d(k_vvm, iy_vvm, ix_vvm);
+                        Real th_in = th_3d(k_vvm, iy_vvm, ix_vvm);
+                        Real th_m_in = th_m_3d(k_vvm, iy_vvm, ix_vvm);
+                        Real qv_m_in = qv_m_3d(k_vvm, iy_vvm, ix_vvm);
+
+                        Real pi_val = pibar(k_vvm);
+                        Real pb_val = pbar(k_vvm);
+                        Real dp_val = dpbar_mid(k_vvm);
+
+                        Real T_calc = th_in * pi_val;
+                        Real Tm_calc = th_m_in * pi_val;
+                        
+                        Real P_wet_calc = pb_val * (1.0 + qv_in);
+                        Real Rho_wet_calc = dp_val * (1.0 + qv_in);
+                        
+                        Real P_dry_calc = pb_val;
+
+                        qc_val[k_vec] = qc_in;
+                        nc_val[k_vec] = nc_in;
+                        qr_val[k_vec] = qr_in;
+                        nr_val[k_vec] = nr_in;
+                        qi_val[k_vec] = qi_in;
+                        qm_val[k_vec] = qm_in;
+                        ni_val[k_vec] = ni_in;
+                        bm_val[k_vec] = bm_in;
+                        th_val[k_vec] = th_in;
+                        qv_val[k_vec] = qv_in;
+
+                        T_val[k_vec] = T_calc;
+                        Tm_val[k_vec] = Tm_calc;
+                        P_wet_val[k_vec] = P_wet_calc;
+                        P_dry_val[k_vec] = P_dry_calc;
+                        Rho_wet_val[k_vec] = Rho_wet_calc;
+                        qv_prev_val[k_vec] = qv_m_in;
+
+                    } 
+                    else {
+                        qc_val[k_vec] = 0.0; nc_val[k_vec] = 0.0;
+                        qr_val[k_vec] = 0.0; nr_val[k_vec] = 0.0;
+                        qi_val[k_vec] = 0.0; qm_val[k_vec] = 0.0;
+                        ni_val[k_vec] = 0.0; bm_val[k_vec] = 0.0;
+                        th_val[k_vec] = 0.0; qv_val[k_vec] = 0.0;
+                        T_val[k_vec] = 0.0;  Tm_val[k_vec] = 0.0;
+                        P_wet_val[k_vec] = 0.0; P_dry_val[k_vec] = 0.0;
+                        Rho_wet_val[k_vec] = 0.0;
+                        qv_prev_val[k_vec] = 0.0;
+                    }
+                });
+
+                qc_p3(icol, k_pack) = qc_val;
+                nc_p3(icol, k_pack) = nc_val;
+                qr_p3(icol, k_pack) = qr_val;
+                nr_p3(icol, k_pack) = nr_val;
+                qi_p3(icol, k_pack) = qi_val;
+                qm_p3(icol, k_pack) = qm_val;
+                ni_p3(icol, k_pack) = ni_val;
+                bm_p3(icol, k_pack) = bm_val;
+                th_p3(icol, k_pack) = th_val;
+                qv_p3(icol, k_pack) = qv_val;
+
+                T_p3(icol, k_pack) = T_val;
+                Tm_p3(icol, k_pack) = Tm_val;
+                P_wet_p3(icol, k_pack) = P_wet_val;
+                P_dry_p3(icol, k_pack) = P_dry_val;
+                Rho_wet_p3(icol, k_pack) = Rho_wet_val;
+                qv_prev_p3(icol, k_pack) = qv_prev_val;
+            });
+        }
+    );
+}
+
+
+void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
+    const int nz_phys = m_num_levs;
+    const int nx_phys = grid_.get_local_physical_points_x();
+    const int nlev_packs = m_num_lev_packs;
+    const int halo = grid_.get_halo_cells();
+
+    auto qc_3d = state.get_field<3>("qc").get_mutable_device_data();
+    auto nc_3d = state.get_field<3>("nc").get_mutable_device_data();
+    auto qr_3d = state.get_field<3>("qr").get_mutable_device_data();
+    auto nr_3d = state.get_field<3>("nr").get_mutable_device_data();
+    auto qi_3d = state.get_field<3>("qi").get_mutable_device_data();
+    auto qm_3d = state.get_field<3>("qm").get_mutable_device_data();
+    auto ni_3d = state.get_field<3>("ni").get_mutable_device_data();
+    auto bm_3d = state.get_field<3>("bm").get_mutable_device_data();
+    auto th_3d = state.get_field<3>("th").get_mutable_device_data();
+    auto qv_3d = state.get_field<3>("qv").get_mutable_device_data();
+    auto qp_3d = state.get_field<3>("qp").get_mutable_device_data(); 
+    auto T_3d  = state.get_field<3>("T").get_mutable_device_data();
+    auto qv_m_3d = state.get_field<3>("qv_m").get_mutable_device_data();
+
+    auto eff_rad_qc_3d = state.get_field<3>("diag_eff_radius_qc").get_mutable_device_data();
+    auto eff_rad_qi_3d = state.get_field<3>("diag_eff_radius_qi").get_mutable_device_data();
+    auto eff_rad_qr_3d = state.get_field<3>("diag_eff_radius_qr").get_mutable_device_data();
+
+    auto precip_liq_surf_2d = state.get_field<2>("precip_liq_surf_mass").get_mutable_device_data();
+    auto precip_ice_surf_2d = state.get_field<2>("precip_ice_surf_mass").get_mutable_device_data();
+
+    auto ITYPEW = state.get_field<3>("ITYPEW").get_device_data();
+    auto thbar  = state.get_field<1>("thbar").get_device_data();
+    auto pibar  = state.get_field<1>("pibar").get_device_data();
+
+    auto qc_p3 = m_qc_view;
+    auto nc_p3 = m_nc_view;
+    auto qr_p3 = m_qr_view;
+    auto nr_p3 = m_nr_view;
+    auto qi_p3 = m_qi_view;
+    auto qm_p3 = m_qm_view;
+    auto ni_p3 = m_ni_view;
+    auto bm_p3 = m_bm_view;
+    auto th_p3 = m_th_view;
+    auto qv_p3 = m_qv_view;
+    auto T_p3  = m_T_atm_view;
+    auto qv_prev_p3 = m_qv_prev_view;
+    
+    auto eff_rad_qc_p3 = m_diag_eff_radius_qc_view;
+    auto eff_rad_qi_p3 = m_diag_eff_radius_qi_view;
+    auto eff_rad_qr_p3 = m_diag_eff_radius_qr_view;
+
+    auto precip_liq_surf_p3 = m_precip_liq_surf_mass_view;
+    auto precip_ice_surf_p3 = m_precip_ice_surf_mass_view;
+
+    Kokkos::parallel_for("Fused_PostProc_Unpack", m_policy,
+        KOKKOS_LAMBDA(const MemberType& team) {
+            const int icol = team.league_rank();
+            const int ix = icol % nx_phys;
+            const int iy = icol / nx_phys;
+            
+            const int ix_vvm = ix + halo;
+            const int iy_vvm = iy + halo;
+
+            Kokkos::single(Kokkos::PerTeam(team), [&]() {
+                precip_liq_surf_2d(iy_vvm, ix_vvm) = precip_liq_surf_p3(icol);
+                precip_ice_surf_2d(iy_vvm, ix_vvm) = precip_ice_surf_p3(icol);
+            });
+
+            Kokkos::parallel_for(Kokkos::TeamThreadRange(team, nlev_packs), [&](const int k_pack) {
+                const int k_offset = k_pack * Spack::n;
+
+                Spack qc_val = qc_p3(icol, k_pack);
+                Spack nc_val = nc_p3(icol, k_pack);
+                Spack qr_val = qr_p3(icol, k_pack);
+                Spack nr_val = nr_p3(icol, k_pack);
+                Spack qi_val = qi_p3(icol, k_pack);
+                Spack qm_val = qm_p3(icol, k_pack);
+                Spack ni_val = ni_p3(icol, k_pack);
+                Spack bm_val = bm_p3(icol, k_pack);
+                Spack th_val = th_p3(icol, k_pack);
+                Spack qv_val = qv_p3(icol, k_pack);
+                Spack T_val  = T_p3(icol, k_pack);
+                Spack qv_prev_val = qv_prev_p3(icol, k_pack);
+                
+                Spack eff_qc_val = eff_rad_qc_p3(icol, k_pack);
+                Spack eff_qi_val = eff_rad_qi_p3(icol, k_pack);
+                Spack eff_qr_val = eff_rad_qr_p3(icol, k_pack);
+
+                Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, (int)Spack::n), [&](const int k_vec) {
+                    const int k_phys = k_offset + k_vec;
+                    if (k_phys < nz_phys) {
+                        const int k_vvm = k_phys + halo;
+                        
+                        if (ITYPEW(k_vvm, iy_vvm, ix_vvm) != 1) {
+                            qc_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
+                            nc_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
+                            qr_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
+                            nr_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
+                            qi_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
+                            qm_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
+                            ni_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
+                            bm_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
+                            qv_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
+                            th_3d(k_vvm, iy_vvm, ix_vvm) = thbar(k_vvm);
+                            
+                            T_3d(k_vvm, iy_vvm, ix_vvm) = thbar(k_vvm) * pibar(k_vvm);
+                            qv_m_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
+                            qp_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
+
+                            eff_rad_qc_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
+                            eff_rad_qi_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
+                            eff_rad_qr_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
+
+                        } 
+                        else {
+                            qc_3d(k_vvm, iy_vvm, ix_vvm) = qc_val[k_vec];
+                            nc_3d(k_vvm, iy_vvm, ix_vvm) = nc_val[k_vec];
+                            qr_3d(k_vvm, iy_vvm, ix_vvm) = qr_val[k_vec];
+                            nr_3d(k_vvm, iy_vvm, ix_vvm) = nr_val[k_vec];
+                            qi_3d(k_vvm, iy_vvm, ix_vvm) = qi_val[k_vec];
+                            qm_3d(k_vvm, iy_vvm, ix_vvm) = qm_val[k_vec];
+                            ni_3d(k_vvm, iy_vvm, ix_vvm) = ni_val[k_vec];
+                            bm_3d(k_vvm, iy_vvm, ix_vvm) = bm_val[k_vec];
+                            th_3d(k_vvm, iy_vvm, ix_vvm) = T_val[k_vec] / pibar(k_vvm);
+                            qv_3d(k_vvm, iy_vvm, ix_vvm) = qv_val[k_vec];
+                            
+                            T_3d(k_vvm, iy_vvm, ix_vvm)  = T_val[k_vec]; 
+                            qv_m_3d(k_vvm, iy_vvm, ix_vvm) = qv_prev_val[k_vec];
+
+                            qp_3d(k_vvm, iy_vvm, ix_vvm) = qc_val[k_vec] + qr_val[k_vec] + qi_val[k_vec];
+
+                            eff_rad_qc_3d(k_vvm, iy_vvm, ix_vvm) = eff_qc_val[k_vec];
+                            eff_rad_qi_3d(k_vvm, iy_vvm, ix_vvm) = eff_qi_val[k_vec];
+                            eff_rad_qr_3d(k_vvm, iy_vvm, ix_vvm) = eff_qr_val[k_vec];
+                        }
+                    }
+                });
+            });
+        }
+    );
+}
 
 
 void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
@@ -464,105 +765,9 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
     const int ny = grid_.get_local_total_points_y();
     const int nx = grid_.get_local_total_points_x();
     const int h = grid_.get_halo_cells();
-    // Get data
-    auto& qc = state.get_field<3>("qc").get_mutable_device_data();
-    auto& nc = state.get_field<3>("nc").get_mutable_device_data();
-    auto& qr = state.get_field<3>("qr").get_mutable_device_data();
-    auto& nr = state.get_field<3>("nr").get_mutable_device_data();
-    auto& qi = state.get_field<3>("qi").get_mutable_device_data();
-    auto& qm = state.get_field<3>("qm").get_mutable_device_data();
-    auto& ni = state.get_field<3>("ni").get_mutable_device_data();
-    auto& bm = state.get_field<3>("bm").get_mutable_device_data();
-    auto& th = state.get_field<3>("th").get_mutable_device_data();
-    auto& qv = state.get_field<3>("qv").get_mutable_device_data();
 
-
-    Kokkos::parallel_for("Data_clipping",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h, ny-h, nx-h}),
-        KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            if (qv(k,j,i) < 0) qv(k,j,i) = 0;
-            if (qc(k,j,i) < 0) qc(k,j,i) = 0;
-            if (qr(k,j,i) < 0) qr(k,j,i) = 0;
-            if (qi(k,j,i) < 0) qi(k,j,i) = 0;
-            if (nc(k,j,i) < 0) nc(k,j,i) = 0;
-            if (ni(k,j,i) < 0) ni(k,j,i) = 0;
-            if (nr(k,j,i) < 0) nr(k,j,i) = 0;
-        }
-    );
-
-
-    // Prognostic State
-    pack_3d_to_2d_packed(state.get_field<3>("qc").get_device_data(), m_qc_view);
-    pack_3d_to_2d_packed(state.get_field<3>("nc").get_device_data(), m_nc_view);
-    pack_3d_to_2d_packed(state.get_field<3>("qr").get_device_data(), m_qr_view);
-    pack_3d_to_2d_packed(state.get_field<3>("nr").get_device_data(), m_nr_view);
-    pack_3d_to_2d_packed(state.get_field<3>("qi").get_device_data(), m_qi_view);
-    pack_3d_to_2d_packed(state.get_field<3>("qm").get_device_data(), m_qm_view);
-    pack_3d_to_2d_packed(state.get_field<3>("ni").get_device_data(), m_ni_view);
-    pack_3d_to_2d_packed(state.get_field<3>("bm").get_device_data(), m_bm_view);
-    pack_3d_to_2d_packed(state.get_field<3>("th").get_device_data(), m_th_view); 
-    pack_3d_to_2d_packed(state.get_field<3>("qv").get_device_data(), m_qv_view);
-
-    // Diagnostic Input
-    // TODO: Calculate T here is a hack that needs to be changed
-    
-    const auto& th_m = state.get_field<3>("th_m").get_device_data();
-    const auto& pibar = state.get_field<1>("pibar").get_device_data();
-    VVM::Core::Field<3> T_field("T", {nz, ny, nx});
-    VVM::Core::Field<3> T_m_field("T_m", {nz, ny, nx});
-    auto& T = T_field.get_mutable_device_data();
-    auto& T_m = T_m_field.get_mutable_device_data();
-
-    VVM::Core::Field<3> P_wet_field("P_wet", {nz, ny, nx});
-    auto& P_wet = P_wet_field.get_mutable_device_data();
-    VVM::Core::Field<3> pseudo_density_field("pseudo_density", {nz, ny, nx});
-    auto& pseudo_density = pseudo_density_field.get_mutable_device_data();
-    // VVM::Core::Field<3> P_dry_field("P_dry", {nz, ny, nx});
-    // auto& P_dry = P_dry_field.get_mutable_device_data();
-    // VVM::Core::Field<3> pseudo_density_dry_field("pseudo_density_dry", {nz, ny, nx});
-    // auto& pseudo_density_dry = pseudo_density_dry_field.get_mutable_device_data();
-
-    const auto& pbar = state.get_field<1>("pbar").get_device_data();
-    const auto& dpbar_mid = state.get_field<1>("dpbar_mid").get_device_data();
-
-    Kokkos::parallel_for("AssignValues",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
-        KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            T(k,j,i) = th(k,j,i) * pibar(k);
-            T_m(k,j,i) = th_m(k,j,i) * pibar(k);
-
-            const Real qv_val = qv(k,j,i);
-            // pseudo_density(k,j,i) = dpbar_mid(k);
-
-            // P_wet(k,j,i) = pbar(k) * (1. + qv(k,j,i));
-            // pseudo_density(k,j,i) = dpbar_mid(k) * (1. + qv(k,j,i));
-
-            // P_wet(k,j,i) = pbar(k);
-
-            // pseudo_density_dry(k,j,i) = dpbar_mid(k) * (1.0 - qv_safe);
-
-            P_wet(k,j,i) = pbar(k) * (1.0 + qv_val);
-            pseudo_density(k,j,i) = dpbar_mid(k) * (1.0 + qv_val);
-            // P_dry(k,j,i) = pbar(k);
-            // pseudo_density_dry(k,j,i) = dpbar_mid(k);
-        }
-    );
-
-    pack_3d_to_2d_packed(P_wet, m_pmid_view);
-    // pack_3d_to_2d_packed(P_dry, m_pmid_dry_view);
-    pack_3d_to_2d_packed(pseudo_density, m_pseudo_density_view);
-    // pack_3d_to_2d_packed(pseudo_density_dry, m_pseudo_density_dry_view);
-    pack_3d_to_2d_packed(T, m_T_atm_view);
-    pack_3d_to_2d_packed(state.get_field<3>("qv_m").get_device_data(), m_qv_prev_view);
-    pack_3d_to_2d_packed(T_m, m_t_prev_view);
-
-    pack_2d_to_1d(state.get_field<2>("precip_liq_surf_mass").get_device_data(), m_precip_liq_surf_mass_view);
-    pack_2d_to_1d(state.get_field<2>("precip_ice_surf_mass").get_device_data(), m_precip_ice_surf_mass_view);
-
-    // int rank;
-    // MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    // if (rank == 0) state.get_field<3>("qc").print_profile(grid_, 0, 8, 64);
-    // if (rank == 0) state.get_field<3>("nc").print_profile(grid_, 0, 8, 64);
+    preprocessing_and_packing(state);
+    Kokkos::fence();
 
     m_p3_postproc.m_dt = dt;
 
@@ -704,61 +909,7 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
         m_p3_postproc
     ); // Kokkos::parallel_for(p3_main_local_vals)
     Kokkos::fence();
-
-    unpack_2d_packed_to_3d(m_qc_view, state.get_field<3>("qc").get_mutable_device_data());
-    unpack_2d_packed_to_3d(m_nc_view, state.get_field<3>("nc").get_mutable_device_data());
-    unpack_2d_packed_to_3d(m_qr_view, state.get_field<3>("qr").get_mutable_device_data());
-    unpack_2d_packed_to_3d(m_nr_view, state.get_field<3>("nr").get_mutable_device_data());
-    unpack_2d_packed_to_3d(m_qi_view, state.get_field<3>("qi").get_mutable_device_data());
-    unpack_2d_packed_to_3d(m_qm_view, state.get_field<3>("qm").get_mutable_device_data());
-    unpack_2d_packed_to_3d(m_ni_view, state.get_field<3>("ni").get_mutable_device_data());
-    unpack_2d_packed_to_3d(m_bm_view, state.get_field<3>("bm").get_mutable_device_data());
-    unpack_2d_packed_to_3d(m_qv_view, state.get_field<3>("qv").get_mutable_device_data());
-    unpack_2d_packed_to_3d(m_T_atm_view, T);
-    Kokkos::parallel_for("AssignValues",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
-        KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            th(k,j,i) = T(k,j,i) / pibar(k);
-        }
-    );
-    unpack_2d_packed_to_3d(m_qv_prev_view, state.get_field<3>("qv_m").get_mutable_device_data());
-
-    unpack_2d_packed_to_3d(m_diag_eff_radius_qc_view, state.get_field<3>("diag_eff_radius_qc").get_mutable_device_data());
-    unpack_2d_packed_to_3d(m_diag_eff_radius_qi_view, state.get_field<3>("diag_eff_radius_qi").get_mutable_device_data());
-    unpack_2d_packed_to_3d(m_diag_eff_radius_qr_view, state.get_field<3>("diag_eff_radius_qr").get_mutable_device_data());
-    unpack_1d_to_2d(m_precip_liq_surf_mass_view, state.get_field<2>("precip_liq_surf_mass").get_mutable_device_data());
-    unpack_1d_to_2d(m_precip_ice_surf_mass_view, state.get_field<2>("precip_ice_surf_mass").get_mutable_device_data());
-
-    // Consider topography
-    const auto& ITYPEW = state.get_field<3>("ITYPEW").get_device_data();
-    const auto& max_topo_idx = params_.max_topo_idx;
-    const auto& thbar = state.get_field<1>("thbar").get_device_data();
-    Kokkos::parallel_for("assign_topo_values",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx, ny-h, nx-h}),
-        KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            if (ITYPEW(k,j,i) != 1) {
-                qc(k,j,i) = 0.;
-                nc(k,j,i) = 0.;
-                qr(k,j,i) = 0.;
-                nr(k,j,i) = 0.;
-                qi(k,j,i) = 0.;
-                qm(k,j,i) = 0.;
-                ni(k,j,i) = 0.;
-                bm(k,j,i) = 0.;
-                qv(k,j,i) = 0.;
-                th(k,j,i) = thbar(k);
-            }
-        }
-    );
-
-    // Update qp (qc+qr+qi)
-    auto& qp = state.get_field<3>("qp").get_mutable_device_data();
-    Kokkos::parallel_for("buoyancy_tendency_x",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h, ny-h, nx-h}),
-        KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            qp(k,j,i) = qc(k,j,i) + qr(k,j,i) + qi(k,j,i);
-        }
-    );
+    postprocessing_and_unpacking(state);
 }
 
 void VVM_P3_Interface::finalize() {

@@ -260,9 +260,11 @@ void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
     const auto& rdx = params_.rdx;
     const auto& rdy = params_.rdy;
 
-    Core::Field<3> rhs_field("rhs_zeta_diag", {nz, ny, nx});
-    scheme->calculate_vorticity_divergence(state, grid_, params_, rhs_field);
+    // WARNING: If RHS needs different scheme, it can be put into scheme for calculate_vorticity_divergence 
+    // Core::Field<3> rhs_field("rhs_zeta_diag", {nz, ny, nx});
+    // scheme->calculate_vorticity_divergence(state, grid_, params_, rhs_field);
     // const auto& rhs_data = rhs_field.get_device_data();
+
     const auto& flex_height_coef_up = params_.flex_height_coef_up.get_device_data();
 
     Kokkos::parallel_for("zeta_downward_integration",

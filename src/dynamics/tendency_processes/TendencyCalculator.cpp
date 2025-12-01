@@ -11,7 +11,7 @@ TendencyCalculator::TendencyCalculator(std::string var_name,
       ab2_tendency_terms_(std::move(ab2_terms)),
       fe_tendency_terms_(std::move(fe_terms)) {}
 
-void TendencyCalculator::calculate_tendencies(Core::State& state, const Core::Grid& grid, const Core::Parameters& params, size_t time_step_count) const {
+void TendencyCalculator::calculate_tendencies(Core::State& state, const Core::Grid& grid, const Core::Parameters& params, size_t time_step_count) {
     if (ab2_tendency_terms_.empty() && fe_tendency_terms_.empty()) {
         return;
     }
@@ -45,12 +45,20 @@ void TendencyCalculator::calculate_tendencies(Core::State& state, const Core::Gr
 
     // Calculate AB2 tendencies
     if (!ab2_tendency_terms_.empty()) {
+        if (!temp_tendency_field_) {
+             temp_tendency_field_ = std::make_unique<Core::Field<3>>(
+                 "temp_ab2_tendency_" + variable_name_, 
+                 std::array<int, 3>{nz, ny, nx}
+             );
+        }
+
+        auto& current_tendency_field = *temp_tendency_field_;
+        current_tendency_field.initialize_to_zero();
+
         size_t now_idx = time_step_count % 2;
         auto& tendency_history = state.get_field<4>("d_" + variable_name_);
         auto total_current_tendency_view = Kokkos::subview(tendency_history.get_mutable_device_data(), now_idx, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
         
-        Core::Field<3> current_tendency_field("temp_ab2_tendency", {nz, ny, nx});
-        current_tendency_field.initialize_to_zero();
         for (const auto& term : ab2_tendency_terms_) {
             term->compute_tendency(state, grid, params, current_tendency_field);
         }

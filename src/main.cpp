@@ -52,9 +52,7 @@ int main(int argc, char *argv[]) {
         }
 
         VVM::Utils::ConfigurationManager config(config_file_path);
-        if (rank == 0) {
-            config.print_config(); // Print loaded configuration
-        }
+        if (rank == 0) config.print_config(); // Print loaded configuration
 
         // Create a VVM model instance and run the simulation
         VVM::Core::Grid grid(config);
@@ -221,9 +219,13 @@ int main(int argc, char *argv[]) {
         // if (rank == 0) parameters.flex_height_coef_mid.print_profile(grid, 0, 0, 0);
 
         VVM::Dynamics::DynamicalCore dynamical_core(config, grid, parameters, state);
+        if (rank == 0) std::cout << "[DEBUG] DynamicalCore init done. Creating OutputManager..." << std::endl;
         VVM::IO::OutputManager output_manager(config, grid, parameters, state, MPI_COMM_WORLD);
-        output_manager.write(0, 0.0);
+        if (rank == 0) std::cout << "[DEBUG] OutputManager created. Writing initial output (step 0)..." << std::endl;
+        // output_manager.write(0, 0.0);
+        if (rank == 0) std::cout << "[DEBUG] Initial output written. Writing static topo..." << std::endl;
         output_manager.write_static_topo_file();
+        if (rank == 0) std::cout << "[DEBUG] Static topo written. Starting simulation loop..." << std::endl;
 
         // Simulation loop parameters
         double total_time = config.get_value<double>("simulation.total_time_s");
@@ -231,6 +233,7 @@ int main(int argc, char *argv[]) {
         double output_interval = config.get_value<double>("simulation.output_interval_s");
         double current_time = 0.0;
         double next_output_time = output_interval;
+        int rad_freq_in_steps = config.get_value<Int>("physics.rrtmgp.rad_frequency", 1);
 
         VVM::Utils::TimingManager::get_instance().stop_timer("initialize");
         // Simulation loop
@@ -240,7 +243,11 @@ int main(int argc, char *argv[]) {
                 p3_interface->run(state, dt);
             }
             if (rrtmgp_interface) {
-                rrtmgp_interface->run(state, dt);
+                // Update net heating
+                if (dynamical_core.time_step_count % rad_freq_in_steps == 0) {
+                     rrtmgp_interface->run(state, dt);
+                }
+                rrtmgp_interface->apply_heating(state, dt);
             }
             halo_exchanger.exchange_halos(state);
             current_time += dt;

@@ -5,6 +5,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <iostream>
+#include <mpi.h>
 
 #include "externals/json/json.hpp"
 

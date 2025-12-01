@@ -140,14 +140,20 @@ void PnetcdfReader::read_variable_2d(int ncid, const std::string& var_name, VVM:
 
     auto field_view_dev = field.get_mutable_device_data();
     auto field_view_host = Kokkos::create_mirror_view(field_view_dev);
-    
+
     const int h = grid_.get_halo_cells();
-    size_t idx = 0;
-    for (size_t j = 0; j < count[0]; ++j) {
-        for (size_t i = 0; i < count[1]; ++i) {
-            field_view_host(j + h, i + h) = host_buffer[idx++];
+    const int ny_in = static_cast<int>(count[0]);
+    const int nx_in = static_cast<int>(count[1]);
+
+    using HostExec = Kokkos::DefaultHostExecutionSpace;
+
+    Kokkos::parallel_for("Init_Host_Buffer_2D",
+        Kokkos::MDRangePolicy<HostExec, Kokkos::Rank<2>>({0, 0}, {ny_in, nx_in}),
+        [=](const int j, const int i) {
+            size_t flat_idx = static_cast<size_t>(j) * nx_in + static_cast<size_t>(i);
+            field_view_host(j + h, i + h) = host_buffer[flat_idx];
         }
-    }
+    );
 
     Kokkos::deep_copy(field_view_dev, field_view_host);
 }
@@ -187,14 +193,22 @@ void PnetcdfReader::read_variable_3d(int ncid, const std::string& var_name, VVM:
     auto field_view_host = Kokkos::create_mirror_view(field_view_dev);
     
     const int h = grid_.get_halo_cells();
-    size_t idx = 0;
-    for (size_t k = 0; k < count[0]; ++k) {
-        for (size_t j = 0; j < count[1]; ++j) {
-            for (size_t i = 0; i < count[2]; ++i) {
-                field_view_host(k + h, j + h, i + h) = host_buffer[idx++];
-            }
+    const int nz_in = static_cast<int>(count[0]);
+    const int ny_in = static_cast<int>(count[1]);
+    const int nx_in = static_cast<int>(count[2]);
+    using HostExec = Kokkos::DefaultHostExecutionSpace;
+
+
+    Kokkos::parallel_for("Init_Host_Buffer_3D",
+        Kokkos::MDRangePolicy<HostExec, Kokkos::Rank<3>>({0, 0, 0}, {nz_in, ny_in, nx_in}),
+        [=](const int k, const int j, const int i) {
+            size_t flat_idx = static_cast<size_t>(k) * ny_in * nx_in + 
+                              static_cast<size_t>(j) * nx_in + 
+                              static_cast<size_t>(i);
+            
+            field_view_host(k + h, j + h, i + h) = host_buffer[flat_idx];
         }
-    }
+    );
 
     Kokkos::deep_copy(field_view_dev, field_view_host);
 }
