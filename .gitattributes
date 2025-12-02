@@ -1,0 +1,5 @@
+rundata/initial_conditions/* linguist-vendored
+rundata/input_configs/* linguist-vendored
+rundata/p3/* linguist-vendored
+rundata/rrtmgp/* linguist-vendored
+rundata/* linguist-vendored
