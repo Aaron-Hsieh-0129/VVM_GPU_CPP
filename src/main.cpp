@@ -222,7 +222,7 @@ int main(int argc, char *argv[]) {
         if (rank == 0) std::cout << "[DEBUG] DynamicalCore init done. Creating OutputManager..." << std::endl;
         VVM::IO::OutputManager output_manager(config, grid, parameters, state, MPI_COMM_WORLD);
         if (rank == 0) std::cout << "[DEBUG] OutputManager created. Writing initial output (step 0)..." << std::endl;
-        // output_manager.write(0, 0.0);
+        output_manager.write(0, 0.0);
         if (rank == 0) std::cout << "[DEBUG] Initial output written. Writing static topo..." << std::endl;
         output_manager.write_static_topo_file();
         if (rank == 0) std::cout << "[DEBUG] Static topo written. Starting simulation loop..." << std::endl;
