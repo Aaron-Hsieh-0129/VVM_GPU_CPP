@@ -767,7 +767,7 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
     const int h = grid_.get_halo_cells();
 
     preprocessing_and_packing(state);
-    Kokkos::fence();
+    // Kokkos::fence();
 
     m_p3_postproc.m_dt = dt;
 
@@ -776,7 +776,7 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
         m_policy,
         m_p3_preproc
     ); // Kokkos::parallel_for(p3_main_local_vals)
-    Kokkos::fence();
+    // Kokkos::fence();
 
     m_infrastructure.dt = dt;
     m_infrastructure.it++;
@@ -849,7 +849,7 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
             });
         }
     );
-    Kokkos::fence();
+    // Kokkos::fence();
 
     P3F::p3_main(
         m_runtime_options, m_prog_state, m_diag_inputs, m_diag_outputs, m_infrastructure,
