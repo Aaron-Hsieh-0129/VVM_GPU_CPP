@@ -22,7 +22,7 @@ enum class WSolverMethod {
 
 class WindSolver {
 public:
-    WindSolver(const Core::Grid& grid, const Utils::ConfigurationManager& config, const Core::Parameters& params);
+    WindSolver(const Core::Grid& grid, const Utils::ConfigurationManager& config, const Core::Parameters& params, VVM::Core::HaloExchanger& halo_exchanger);
 
     void solve_w(Core::State& state);
     void solve_uv(Core::State& state);
@@ -31,7 +31,6 @@ public:
 private:
     const Core::Grid& grid_;
     const Utils::ConfigurationManager& config_;
-    mutable Core::HaloExchanger halo_exchanger_;
     const Core::Parameters& params_;
     WSolverMethod w_solver_method_;
 
@@ -47,6 +46,8 @@ private:
     mutable Core::Field<2> RIP2_field_;
     mutable Core::Field<2> ROP2_field_;
     mutable Core::Field<2> ATEMP_field_;
+
+    Core::HaloExchanger& halo_exchanger_;
 };
 
 } // namespace Dynamics

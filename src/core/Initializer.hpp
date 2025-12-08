@@ -14,7 +14,11 @@ namespace Core {
 
 class Initializer {
 public:
-    Initializer(const Utils::ConfigurationManager& config, const Grid& grid, Parameters& parameters, State &state);
+    Initializer(const Utils::ConfigurationManager& config, 
+                const Grid& grid, 
+                Parameters& parameters, 
+                State &state,
+                HaloExchanger& halo_exchanger);
     void initialize_state() const;
     void initialize_grid() const;
     void initialize_topo() const;
@@ -29,6 +33,7 @@ private:
     const Grid& grid_;
     Parameters& parameters_;
     State& state_;
+    Core::HaloExchanger& halo_exchanger_;
 };
 
 } // namespace Core

@@ -20,13 +20,15 @@ void PnetcdfReader::check_ncmpi_error(int status, const std::string& msg) const 
 PnetcdfReader::PnetcdfReader(const std::string& filepath, 
                              const VVM::Core::Grid& grid, 
                              const VVM::Core::Parameters& params, 
-                             const VVM::Utils::ConfigurationManager& config) 
+                             const VVM::Utils::ConfigurationManager& config, 
+                             Core::HaloExchanger& halo_exchanger) 
     : source_file_(filepath), 
       grid_(grid), 
       params_(params), 
       config_(config),
       comm_(grid.get_cart_comm()),
-      ncid_(-1) {
+      ncid_(-1), 
+      halo_exchanger_(halo_exchanger) {
     MPI_Comm_rank(comm_, &rank_);
 }
 
@@ -299,8 +301,7 @@ void PnetcdfReader::read_and_initialize(VVM::Core::State& state) {
     if (rank_ == 0) {
         std::cout << "Finished loading from NetCDF file." << std::endl;
     }
-    VVM::Core::HaloExchanger halo_exchanger(grid_);
-    halo_exchanger.exchange_halos(state);
+    halo_exchanger_.exchange_halos(state);
 }
 
 } // namespace IO

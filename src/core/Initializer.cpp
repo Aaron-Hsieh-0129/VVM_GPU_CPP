@@ -7,8 +7,8 @@
 namespace VVM {
 namespace Core {
 
-Initializer::Initializer(const Utils::ConfigurationManager& config, const Grid& grid, Parameters& parameters, State &state) 
-    : config_(config), grid_(grid), parameters_(parameters), state_(state) {
+Initializer::Initializer(const Utils::ConfigurationManager& config, const Grid& grid, Parameters& parameters, State &state, HaloExchanger& halo_exchanger) 
+    : config_(config), grid_(grid), parameters_(parameters), state_(state), halo_exchanger_(halo_exchanger) {
     initialize_grid();
 
     if (!config.has_key("initial_conditions") && !config.has_key("netcdf_reader")) {
@@ -22,7 +22,7 @@ Initializer::Initializer(const Utils::ConfigurationManager& config, const Grid& 
     if (format == "txt") {
         reader_ = std::make_unique<VVM::IO::TxtReader>(source_file, grid, parameters_, config_);
     } 
-    pnetcdf_reader_ = std::make_unique<VVM::IO::PnetcdfReader>(pnetcdf_source_file, grid, parameters_, config_);
+    pnetcdf_reader_ = std::make_unique<VVM::IO::PnetcdfReader>(pnetcdf_source_file, grid, parameters_, config_, halo_exchanger_);
     // else if (format == "netcdf") {
     //     // TODO: Netcdf input
     //     // reader_ = std::make_unique<Initializers::NetCDFReader>(source_file, grid);
@@ -175,8 +175,10 @@ void Initializer::initialize_topo() const {
             }
         }
     );
-    VVM::Core::HaloExchanger halo_exchanger(grid_);
-    halo_exchanger.exchange_halos(state_.get_field<3>("ITYPEW"));
+    // VVM::Core::HaloExchanger halo_exchanger(grid_);
+    Kokkos::fence();
+    halo_exchanger_.exchange_halos(state_.get_field<3>("ITYPEW"));
+    cudaDeviceSynchronize();
 
     Kokkos::parallel_for("assign_ITYPE", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,h,h}, {nz-h,ny-h,nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
@@ -186,9 +188,11 @@ void Initializer::initialize_topo() const {
             }
         }
     );
-    halo_exchanger.exchange_halos(state_.get_field<3>("ITYPEU"));
-    halo_exchanger.exchange_halos(state_.get_field<3>("ITYPEV"));
+    Kokkos::fence();
+    halo_exchanger_.exchange_halos(state_.get_field<3>("ITYPEU"));
+    halo_exchanger_.exchange_halos(state_.get_field<3>("ITYPEV"));
       
+    cudaDeviceSynchronize();
     return;
 }
 

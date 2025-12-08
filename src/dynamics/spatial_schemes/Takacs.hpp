@@ -13,7 +13,7 @@ namespace Dynamics {
 
 class Takacs : public SpatialScheme {
 public:
-    explicit Takacs(const Core::Grid& grid);
+    explicit Takacs(const Core::Grid& grid, Core::HaloExchanger& halo_exchanger);
 
     void calculate_flux_convergence_x(
         const Core::Field<3>& scalar, const Core::Field<3>& u,
@@ -66,7 +66,7 @@ public:
         const Core::State& state, const Core::Grid& grid,
         const Core::Parameters& params, Core::Field<3>& out_tendency) const override;
 private:
-    mutable Core::HaloExchanger halo_exchanger_;
+    Core::HaloExchanger& halo_exchanger_;
 };
 
 } // namespace Dynamics

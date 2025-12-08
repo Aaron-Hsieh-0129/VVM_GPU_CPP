@@ -3,8 +3,8 @@
 namespace VVM {
 namespace Dynamics {
 
-StretchingTerm::StretchingTerm(std::unique_ptr<SpatialScheme> scheme, std::string var_name)
-    : scheme_(std::move(scheme)), variable_name_(std::move(var_name)) {}
+StretchingTerm::StretchingTerm(std::unique_ptr<SpatialScheme> scheme, std::string var_name, VVM::Core::HaloExchanger& halo_exchanger)
+    : scheme_(std::move(scheme)), variable_name_(std::move(var_name)), halo_exchanger_(halo_exchanger) {}
 
 StretchingTerm::~StretchingTerm() = default;
 

@@ -3,6 +3,7 @@
 
 #include "TendencyTerm.hpp"
 #include "dynamics/spatial_schemes/SpatialScheme.hpp"
+#include "core/HaloExchanger.hpp"
 #include <string>
 
 namespace VVM {
@@ -10,7 +11,7 @@ namespace Dynamics {
 
 class TwistingTerm : public TendencyTerm {
 public:
-    explicit TwistingTerm(std::unique_ptr<SpatialScheme> scheme, std::string var_name);
+    explicit TwistingTerm(std::unique_ptr<SpatialScheme> scheme, std::string var_name, VVM::Core::HaloExchanger& halo_exchanger);
     ~TwistingTerm() override;
 
     void compute_tendency(
@@ -22,6 +23,8 @@ public:
 private:
     std::unique_ptr<SpatialScheme> scheme_;
     std::string variable_name_;
+
+    Core::HaloExchanger& halo_exchanger_;
 };
 
 } // namespace Dynamics
