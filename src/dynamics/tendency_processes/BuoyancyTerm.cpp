@@ -3,8 +3,8 @@
 namespace VVM {
 namespace Dynamics {
 
-BuoyancyTerm::BuoyancyTerm(std::unique_ptr<SpatialScheme> scheme, std::string var_name)
-    : scheme_(std::move(scheme)), variable_name_(std::move(var_name)) {}
+BuoyancyTerm::BuoyancyTerm(std::unique_ptr<SpatialScheme> scheme, std::string var_name, VVM::Core::HaloExchanger& halo_exchanger)
+    : scheme_(std::move(scheme)), variable_name_(std::move(var_name)), halo_exchanger_(halo_exchanger) {}
 
 BuoyancyTerm::~BuoyancyTerm() = default;
 

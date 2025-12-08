@@ -23,7 +23,8 @@ public:
     PnetcdfReader(const std::string& filepath, 
                   const VVM::Core::Grid& grid, 
                   const VVM::Core::Parameters& params, 
-                  const VVM::Utils::ConfigurationManager& config);
+                  const VVM::Utils::ConfigurationManager& config, 
+                  VVM::Core::HaloExchanger& halo_exchanger);
     
     ~PnetcdfReader() override;
 
@@ -52,6 +53,8 @@ private:
     MPI_Comm comm_;
     int rank_;
     int ncid_; // NetCDF file ID
+    
+    Core::HaloExchanger& halo_exchanger_;
 };
 
 } // namespace IO

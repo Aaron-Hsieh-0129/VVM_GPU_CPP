@@ -93,6 +93,47 @@ else()
 endif()
 
 # ------------------------------
+# NVHPC
+# ------------------------------
+find_library(NVCPUMATH_LIBRARY nvcpumath
+    HINTS /work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/compilers/lib
+)
+if(NOT NVCPUMATH_LIBRARY)
+    message(FATAL_ERROR "Could not find NVIDIA CPU Math Library (libnvcpumath.so)")
+else()
+    message(STATUS "Found NVIDIA CPU Math Library: ${NVCPUMATH_LIBRARY}")
+endif()
+
+find_library(NVTOOLSEXT_LIBRARY nvToolsExt
+    HINTS /work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/cuda/lib64
+)
+if(NOT NVTOOLSEXT_LIBRARY)
+    message(FATAL_ERROR "Could not find NVIDIA Tools Extension Library (libnvToolsExt.so)")
+else()
+    message(STATUS "Found NVIDIA Tools Extension Library: ${NVTOOLSEXT_LIBRARY}")
+endif()
+
+find_path(NCCL_INCLUDE_DIR nccl.h
+    HINTS 
+    /work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/comm_libs/nccl/include
+    /work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/cuda/include
+    /usr/local/cuda/include
+)
+
+find_library(NCCL_LIBRARY nccl
+    HINTS 
+    /work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/comm_libs/nccl/lib
+    /work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/cuda/lib64
+    /usr/local/cuda/lib64
+)
+
+if (NCCL_INCLUDE_DIR AND NCCL_LIBRARY)
+    message(STATUS "Found NCCL: ${NCCL_INCLUDE_DIR}, ${NCCL_LIBRARY}")
+else()
+    message(FATAL_ERROR "Could not find NCCL. Please check hints in Root CMakeLists.txt")
+endif()
+
+# ------------------------------
 # NetCDF
 # ------------------------------
 find_path(NETCDF_C_INCLUDE_DIR NAMES netcdf.h HINTS "/work/aaron900129/netcdf-c_install/include" NO_DEFAULT_PATH)

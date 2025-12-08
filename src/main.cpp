@@ -5,6 +5,8 @@
 #include <mpi.h>
 #include <omp.h>
 #include <memory>
+#include <nccl.h>
+#include <cuda_runtime.h>
 
 #include "core/BoundaryConditionManager.hpp"
 #include "core/Field.hpp"
@@ -20,6 +22,13 @@
 #include "utils/ConfigurationManager.hpp"
 #include "utils/Timer.hpp"
 #include "utils/TimingManager.hpp"
+
+void init_nccl(ncclComm_t* comm, int rank, int size) {
+    ncclUniqueId id;
+    if (rank == 0) ncclGetUniqueId(&id);
+    MPI_Bcast(&id, sizeof(id), MPI_BYTE, 0, MPI_COMM_WORLD);
+    ncclCommInitRank(comm, size, id, rank);
+}
 
 int main(int argc, char *argv[]) {
     MPI_Init(&argc, &argv);
@@ -37,6 +46,15 @@ int main(int argc, char *argv[]) {
     std::unique_ptr<VVM::Physics::VVM_P3_Interface> p3_interface;
     std::unique_ptr<VVM::Physics::RRTMGP::RRTMGPRadiation> rrtmgp_interface;
     Kokkos::initialize(argc, argv);
+
+    ncclComm_t nccl_comm;
+    init_nccl(&nccl_comm, rank, size);
+
+    int device_id;
+    cudaGetDevice(&device_id);
+
+    cudaStream_t halo_stream;
+    cudaStreamCreate(&halo_stream);
     {
         VVM::Utils::Timer total_timer("total vvm");
         VVM::Utils::TimingManager::get_instance().start_timer("initialize");
@@ -59,7 +77,8 @@ int main(int argc, char *argv[]) {
         VVM::Core::Parameters parameters(config, grid);
         grid.print_info();
         VVM::Core::State state(config, parameters, grid);
-        VVM::Core::HaloExchanger halo_exchanger(grid);
+        // VVM::Core::HaloExchanger halo_exchanger(grid);
+        VVM::Core::HaloExchanger halo_exchanger(grid, nccl_comm, halo_stream);
         VVM::Core::BoundaryConditionManager bc_manager(grid);
 
         const int nz = grid.get_local_total_points_z();
@@ -77,6 +96,12 @@ int main(int argc, char *argv[]) {
                 htflx_sfc_mutable(j, i) = static_cast<double>(100 * rank + 10 * j + i);
             }
         );
+
+        // std::cout << "Rank: " << rank << ", before exchange" << std::endl;
+        // if (rank == 3) htflx_sfc.print_slice_z_at_k(grid, 0, 0);
+        // halo_exchanger.exchange_halos(state);
+        // std::cout << "Rank: " << rank << ", after exchange" << std::endl;
+        // if (rank == 3) htflx_sfc.print_slice_z_at_k(grid, 0, 0);
         // if (rank == 0) zeta_field.print_slice_z_at_k(grid, 0, nz-h-1);
         // Kokkos::fence();
         // exit(1);
@@ -85,7 +110,7 @@ int main(int argc, char *argv[]) {
             std::cout << "Average of heat flux is: " << heat_flux_mean << std::endl;
         }
 
-        VVM::Core::Initializer init(config, grid, parameters, state);
+        VVM::Core::Initializer init(config, grid, parameters, state, halo_exchanger);
         init.initialize_state();
         if (config.get_value<bool>("physics.p3.enable_p3")) {
             p3_interface = std::make_unique<VVM::Physics::VVM_P3_Interface>(config, grid, parameters);
@@ -218,14 +243,10 @@ int main(int argc, char *argv[]) {
         // if (rank == 0) parameters.dz_mid.print_profile(grid, 0, 0, 0);
         // if (rank == 0) parameters.flex_height_coef_mid.print_profile(grid, 0, 0, 0);
 
-        VVM::Dynamics::DynamicalCore dynamical_core(config, grid, parameters, state);
-        if (rank == 0) std::cout << "[DEBUG] DynamicalCore init done. Creating OutputManager..." << std::endl;
+        VVM::Dynamics::DynamicalCore dynamical_core(config, grid, parameters, state, halo_exchanger);
         VVM::IO::OutputManager output_manager(config, grid, parameters, state, MPI_COMM_WORLD);
-        if (rank == 0) std::cout << "[DEBUG] OutputManager created. Writing initial output (step 0)..." << std::endl;
         output_manager.write(0, 0.0);
-        if (rank == 0) std::cout << "[DEBUG] Initial output written. Writing static topo..." << std::endl;
         output_manager.write_static_topo_file();
-        if (rank == 0) std::cout << "[DEBUG] Static topo written. Starting simulation loop..." << std::endl;
 
         // Simulation loop parameters
         double total_time = config.get_value<double>("simulation.total_time_s");

@@ -28,7 +28,8 @@ public:
     DynamicalCore(const Utils::ConfigurationManager& config, 
                   const Core::Grid& grid, 
                   const Core::Parameters& params,
-                  Core::State& state);
+                  Core::State& state, 
+                  Core::HaloExchanger& halo_exchanger);
     ~DynamicalCore();
 
     void compute_diagnostic_fields() const;
@@ -50,6 +51,8 @@ private:
     std::vector<IntegrationStep> integration_procedure_;
 
     std::unique_ptr<WindSolver> wind_solver_;
+
+    Core::HaloExchanger& halo_exchanger_;
 };
 
 } // namespace Dynamics

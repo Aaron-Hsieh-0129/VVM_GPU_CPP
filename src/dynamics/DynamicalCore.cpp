@@ -15,9 +15,11 @@ namespace Dynamics {
 DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config, 
                              const Core::Grid& grid, 
                              const Core::Parameters& params,
-                             Core::State& state)
+                             Core::State& state, 
+                             Core::HaloExchanger& halo_exchanger)
     : config_(config), grid_(grid), params_(params), state_(state), 
-      wind_solver_(std::make_unique<WindSolver>(grid, config, params)) {
+      wind_solver_(std::make_unique<WindSolver>(grid, config, params, halo_exchanger)), 
+      halo_exchanger_(halo_exchanger) {
 
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -49,17 +51,17 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
 
                 std::unique_ptr<SpatialScheme> spatial_scheme;
                 if (spatial_scheme_name == "Takacs") {
-                    spatial_scheme = std::make_unique<Takacs>(grid_);
+                    spatial_scheme = std::make_unique<Takacs>(grid_, halo_exchanger_);
                 } 
                 else {
                     throw std::runtime_error("Unknown spatial scheme: " + spatial_scheme_name);
                 }
                 
                 std::unique_ptr<TendencyTerm> term;
-                if (term_name == "advection") term = std::make_unique<AdvectionTerm>(std::move(spatial_scheme), var_name);
-                else if (term_name == "stretching") term = std::make_unique<StretchingTerm>(std::move(spatial_scheme), var_name);
-                else if (term_name == "twisting") term = std::make_unique<TwistingTerm>(std::move(spatial_scheme), var_name);
-                else if (term_name == "buoyancy") term = std::make_unique<BuoyancyTerm>(std::move(spatial_scheme), var_name);
+                if (term_name == "advection") term = std::make_unique<AdvectionTerm>(std::move(spatial_scheme), var_name, halo_exchanger_);
+                else if (term_name == "stretching") term = std::make_unique<StretchingTerm>(std::move(spatial_scheme), var_name, halo_exchanger_);
+                else if (term_name == "twisting") term = std::make_unique<TwistingTerm>(std::move(spatial_scheme), var_name, halo_exchanger_);
+                else if (term_name == "buoyancy") term = std::make_unique<BuoyancyTerm>(std::move(spatial_scheme), var_name, halo_exchanger_);
 
                 if (time_scheme_name == "AdamsBashforth2") {
                     ab2_terms.push_back(std::move(term));
@@ -134,7 +136,6 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
 DynamicalCore::~DynamicalCore() = default;
 
 void DynamicalCore::step(Core::State& state, double dt) {
-    Core::HaloExchanger halo_exchanger(grid_);
     compute_diagnostic_fields();
 
     const int nz = grid_.get_local_total_points_z();
@@ -217,7 +218,7 @@ void DynamicalCore::step(Core::State& state, double dt) {
                 VVM::Core::BoundaryConditionManager bc_manager(grid_, config_, var_name);
                 // if (var_name == "zeta") halo_exchanger.exchange_halos_top_slice(state.get_field<3>(var_name));
                 // else halo_exchanger.exchange_halos(state.get_field<3>(var_name));
-                halo_exchanger.exchange_halos(state.get_field<3>(var_name));
+                halo_exchanger_.exchange_halos(state.get_field<3>(var_name));
                 
                 // if (var_name != "zeta") bc_manager.apply_z_bcs_to_field(state.get_field<3>(var_name));
             }
@@ -231,7 +232,7 @@ void DynamicalCore::step(Core::State& state, double dt) {
 }
 
 void DynamicalCore::compute_diagnostic_fields() const {
-    auto scheme = std::make_unique<Takacs>(grid_);
+    auto scheme = std::make_unique<Takacs>(grid_, halo_exchanger_);
 
     auto& R_xi_field = state_.get_field<3>("R_xi");
     auto& R_eta_field = state_.get_field<3>("R_eta");
@@ -243,7 +244,7 @@ void DynamicalCore::compute_diagnostic_fields() const {
 }
 
 void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
-    auto scheme = std::make_unique<Takacs>(grid_);
+    auto scheme = std::make_unique<Takacs>(grid_, halo_exchanger_);
     auto& zeta_field = state.get_field<3>("zeta");
     auto zeta_data = zeta_field.get_mutable_device_data();
     const auto& xi = state.get_field<3>("xi").get_device_data();
@@ -288,8 +289,7 @@ void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
             // }
         }
     );
-    Core::HaloExchanger halo_exchanger(grid_);
-    halo_exchanger.exchange_halos(zeta_field);
+    halo_exchanger_.exchange_halos(zeta_field);
     // VVM::Core::BoundaryConditionManager bc_manager(grid_, config_, "zeta");
     // bc_manager.apply_z_bcs_to_field(zeta_field);
 }
@@ -353,9 +353,8 @@ void DynamicalCore::compute_wind_fields() {
             }
         }
     );
-    Core::HaloExchanger halo_exchanger(grid_);
-    halo_exchanger.exchange_halos(state_.get_field<3>("xi_topo"));
-    halo_exchanger.exchange_halos(state_.get_field<3>("eta_topo"));
+    halo_exchanger_.exchange_halos(state_.get_field<3>("xi_topo"));
+    halo_exchanger_.exchange_halos(state_.get_field<3>("eta_topo"));
 
 
     wind_solver_->solve_w(state_);

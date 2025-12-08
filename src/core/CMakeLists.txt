@@ -21,29 +21,10 @@ add_library(vvm_core STATIC
     ${VVM_CORE_HEADERS}
 )
 
-find_library(NVTOOLSEXT_LIBRARY nvToolsExt
-    HINTS /work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/cuda/lib64
-)
-find_library(NVCPUMATH_LIBRARY nvcpumath
-    HINTS /work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/compilers/lib
-)
-
-if(NOT NVCPUMATH_LIBRARY)
-    message(FATAL_ERROR "Could not find NVIDIA CPU Math Library (libnvcpumath.so)")
-else()
-    message(STATUS "Found NVIDIA CPU Math Library: ${NVCPUMATH_LIBRARY}")
-endif()
-
-if(NOT NVTOOLSEXT_LIBRARY)
-    message(FATAL_ERROR "Could not find NVIDIA Tools Extension Library (libnvToolsExt.so)")
-else()
-    message(STATUS "Found NVIDIA Tools Extension Library: ${NVTOOLSEXT_LIBRARY}")
-endif()
-
-
 target_include_directories(vvm_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${NCCL_INCLUDE_DIR}
 )
 
 
@@ -53,6 +34,7 @@ target_link_libraries(vvm_core
         MPI::MPI_CXX
 	    ${NVCPUMATH_LIBRARY}
         ${PNETCDF_LIBRARY}
+        ${NCCL_LIBRARY}
     PRIVATE
         Kokkos::kokkos
         ${OpenMP_LIBRARIES}

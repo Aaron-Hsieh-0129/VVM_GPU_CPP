@@ -5,8 +5,8 @@
 namespace VVM {
 namespace Dynamics {
 
-AdvectionTerm::AdvectionTerm(std::unique_ptr<SpatialScheme> scheme, std::string var_name)
-    : scheme_(std::move(scheme)), variable_name_(std::move(var_name)) {}
+AdvectionTerm::AdvectionTerm(std::unique_ptr<SpatialScheme> scheme, std::string var_name, VVM::Core::HaloExchanger& halo_exchanger)
+    : scheme_(std::move(scheme)), variable_name_(std::move(var_name)), halo_exchanger_(halo_exchanger) {}
 
 AdvectionTerm::~AdvectionTerm() = default;
 
@@ -37,11 +37,6 @@ void AdvectionTerm::compute_tendency(
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
     const int h = grid.get_halo_cells();
-
-    VVM::Core::HaloExchanger haloexchanger(grid);
-    VVM::Core::BoundaryConditionManager bc_manager_zerograd(grid, VVM::Core::ZBoundaryType::ZERO_GRADIENT, VVM::Core::ZBoundaryType::ZERO_GRADIENT);
-    VVM::Core::BoundaryConditionManager bc_manager_zero(grid, VVM::Core::ZBoundaryType::ZERO, VVM::Core::ZBoundaryType::ZERO);
-    VVM::Core::BoundaryConditionManager bc_manager_periodic(grid, VVM::Core::ZBoundaryType::PERIODIC, VVM::Core::ZBoundaryType::PERIODIC);
 
     auto& u_mean_data = u_mean_field.get_mutable_device_data();
     auto& v_mean_data = v_mean_field.get_mutable_device_data();
@@ -119,7 +114,7 @@ void AdvectionTerm::compute_tendency(
             }
         );
 
-        haloexchanger.exchange_halos(w_field);
+        halo_exchanger_.exchange_halos(w_field);
         Kokkos::parallel_for("calculate_rhow_for_zeta",
             // The original code adopts Tackas 3rd order difference for boundary zeta, so it needs two w.
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({nz-h-3,h,h}, {nz-h, ny-h, nx-h}),
@@ -155,9 +150,9 @@ void AdvectionTerm::compute_tendency(
     }
 
     // No need of vertical boundary process
-    haloexchanger.exchange_halos(u_mean_field);
-    haloexchanger.exchange_halos(v_mean_field);
-    haloexchanger.exchange_halos(w_mean_field);
+    halo_exchanger_.exchange_halos(u_mean_field);
+    halo_exchanger_.exchange_halos(v_mean_field);
+    halo_exchanger_.exchange_halos(w_mean_field);
 
     scheme_->calculate_flux_convergence_x(advected_field, u_mean_field, grid, params, out_tendency, variable_name_);
     scheme_->calculate_flux_convergence_y(advected_field, v_mean_field, grid, params, out_tendency, variable_name_);

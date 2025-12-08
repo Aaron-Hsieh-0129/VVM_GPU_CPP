@@ -3,8 +3,8 @@
 namespace VVM {
 namespace Dynamics {
 
-TwistingTerm::TwistingTerm(std::unique_ptr<SpatialScheme> scheme, std::string var_name)
-    : scheme_(std::move(scheme)), variable_name_(std::move(var_name)) {}
+TwistingTerm::TwistingTerm(std::unique_ptr<SpatialScheme> scheme, std::string var_name, VVM::Core::HaloExchanger& halo_exchanger)
+    : scheme_(std::move(scheme)), variable_name_(std::move(var_name)), halo_exchanger_(halo_exchanger) {}
 
 TwistingTerm::~TwistingTerm() = default;
 

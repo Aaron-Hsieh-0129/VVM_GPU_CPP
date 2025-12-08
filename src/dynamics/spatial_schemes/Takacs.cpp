@@ -5,8 +5,8 @@
 namespace VVM {
 namespace Dynamics {
 
-Takacs::Takacs(const Core::Grid& grid)
-    : halo_exchanger_(grid) {}
+Takacs::Takacs(const Core::Grid& grid, Core::HaloExchanger& halo_exchanger)
+    : halo_exchanger_(halo_exchanger) {}
 
 void Takacs::calculate_flux_convergence_x(
     const Core::Field<3>& scalar, const Core::Field<3>& u_field,

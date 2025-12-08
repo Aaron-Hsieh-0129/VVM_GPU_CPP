@@ -4,7 +4,7 @@ import os
 
 filename = '../rundata/TOPO.nc' 
 
-nz, ny, nx = 33, 1024, 1024
+nz, ny, nx = 33, 16, 256
 DX = 500.0
 DY = 500.0
 
