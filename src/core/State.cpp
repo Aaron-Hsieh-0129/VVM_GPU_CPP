@@ -4,8 +4,8 @@
 namespace VVM {
 namespace Core {
 
-State::State(const Utils::ConfigurationManager& config, const Parameters& params, const Grid& grid)
-    : config_ref_(config), parameters_(params), grid_(grid) {
+State::State(const Utils::ConfigurationManager& config, const Parameters& params, const Grid& grid, ncclComm_t nccl_comm, cudaStream_t nccl_stream)
+    : config_ref_(config), parameters_(params), grid_(grid), nccl_comm_(nccl_comm), nccl_stream_(nccl_stream) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 

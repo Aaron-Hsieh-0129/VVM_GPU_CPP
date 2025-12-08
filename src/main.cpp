@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
         VVM::Core::Grid grid(config);
         VVM::Core::Parameters parameters(config, grid);
         grid.print_info();
-        VVM::Core::State state(config, parameters, grid);
+        VVM::Core::State state(config, parameters, grid, nccl_comm, halo_stream);
         // VVM::Core::HaloExchanger halo_exchanger(grid);
         VVM::Core::HaloExchanger halo_exchanger(grid, nccl_comm, halo_stream);
         VVM::Core::BoundaryConditionManager bc_manager(grid);
@@ -105,9 +105,12 @@ int main(int argc, char *argv[]) {
         // if (rank == 0) zeta_field.print_slice_z_at_k(grid, 0, nz-h-1);
         // Kokkos::fence();
         // exit(1);
-        double heat_flux_mean = state.calculate_horizontal_mean(htflx_sfc);
+        Kokkos::View<double> heat_flux_mean("heat_flux_mean");
+        state.calculate_horizontal_mean(htflx_sfc, heat_flux_mean);
+        double h_heat_flux_mean = 0;
+        Kokkos::deep_copy(h_heat_flux_mean, heat_flux_mean);
         if (rank == 0) {
-            std::cout << "Average of heat flux is: " << heat_flux_mean << std::endl;
+            std::cout << "Average of heat flux is: " << h_heat_flux_mean << std::endl;
         }
 
         VVM::Core::Initializer init(config, grid, parameters, state, halo_exchanger);

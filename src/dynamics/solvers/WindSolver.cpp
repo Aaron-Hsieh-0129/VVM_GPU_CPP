@@ -237,18 +237,23 @@ void WindSolver::solve_uv(Core::State& state) {
     // calculate u
     auto& u_field = state.get_field<3>("u");
     auto& u = u_field.get_mutable_device_data();
-    double utopm = state.calculate_horizontal_mean(utop_field);
+    // double utopm = state.calculate_horizontal_mean(utop_field);
     auto& v_field = state.get_field<3>("v");
     auto& v = v_field.get_mutable_device_data();
-    double vtopm = state.calculate_horizontal_mean(vtop_field);
+    // double vtopm = state.calculate_horizontal_mean(vtop_field);
+
+    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> utopm("utopm");
+    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> vtopm("vtopm");
+    state.calculate_horizontal_mean(utop_field, utopm);
+    state.calculate_horizontal_mean(vtop_field, vtopm);
 
     auto& utopmn = state.get_field<1>("utopmn").get_device_data();
     auto& vtopmn = state.get_field<1>("vtopmn").get_device_data();
     Kokkos::parallel_for("uvtop_process", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
         KOKKOS_LAMBDA(int j, int i) {
             // TODO: uvtop predict
-            u(nz-h-1,j,i) = utopmn(0) + utop(j,i) - utopm;
-            v(nz-h-1,j,i) = vtopmn(0) + vtop(j,i) - vtopm;
+            u(nz-h-1,j,i) = utopmn(0) + utop(j,i) - utopm();
+            v(nz-h-1,j,i) = vtopmn(0) + vtop(j,i) - vtopm();
             // u(nz-h-1,j,i) = utop(j,i);
             // v(nz-h-1,j,i) = vtop(j,i);
         }

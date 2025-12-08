@@ -11,6 +11,8 @@
 #include <string>
 #include <memory>
 #include <variant>
+#include <nccl.h>
+#include <cuda_runtime.h>
 
 namespace VVM { namespace Dynamics { class AdamsBashforth2; } }
 
@@ -30,7 +32,8 @@ class State {
     friend class VVM::Dynamics::AdamsBashforth2;
 public:
     // Constructor
-    State(const Utils::ConfigurationManager& config, const Parameters& params, const Grid& grid);
+    State(const Utils::ConfigurationManager& config, const Parameters& params, const Grid& grid, ncclComm_t nccl_comm,
+          cudaStream_t nccl_stream);
 
     template<size_t Dim>
     void add_field(const std::string& name, std::initializer_list<int> dims_list) {
@@ -73,6 +76,92 @@ public:
             throw std::runtime_error("Field '" + name + "' has incorrect dimension.");
         }
     }
+
+
+    template<size_t Dim>
+    void calculate_horizontal_mean(
+        const Field<Dim>& field, 
+        Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> d_mean_result, 
+        int k_level = -1) const 
+    {
+        auto view = field.get_device_data();
+
+        const int ny_local = grid_.get_local_physical_points_y();
+        const int nx_local = grid_.get_local_physical_points_x();
+        const int h = grid_.get_halo_cells();
+        const int gnx = grid_.get_global_points_x();
+        const int gny = grid_.get_global_points_y();
+        const double total_points_horizontal = static_cast<double>(gnx * gny);
+
+        if (total_points_horizontal == 0.0) {
+            Kokkos::parallel_for("set_zero_mean", 
+                Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, 1),
+                KOKKOS_LAMBDA(const int) {
+                    d_mean_result() = 0.0;
+                });
+            Kokkos::fence();
+            return;
+        }
+
+        Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> d_local_sum("local_sum");
+
+        if constexpr (Dim == 3) {
+            if (k_level < h || k_level >= grid_.get_local_total_points_z() - h) {
+                Kokkos::parallel_for("set_halo_zero", 
+                    Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, 1),
+                    KOKKOS_LAMBDA(const int) {
+                        d_local_sum() = 0.0;
+                    });
+            } 
+            else {
+                Kokkos::parallel_reduce("calculate_3d_local_sum",
+                    Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h, h}, {ny_local + h, nx_local + h}),
+                    KOKKOS_LAMBDA(const int j, const int i, double& update_sum) {
+                        update_sum += view(k_level, j, i);
+                    }, d_local_sum);
+            }
+        } 
+        else if constexpr (Dim == 2) {
+            Kokkos::parallel_reduce("calculate_2d_local_sum",
+                Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h, h}, {ny_local + h, nx_local + h}),
+                KOKKOS_LAMBDA(const int j, const int i, double& update_sum) {
+                    update_sum += view(j, i);
+                }, d_local_sum);
+        } 
+        else {
+             Kokkos::parallel_for("set_unsupported_zero", 
+                Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, 1),
+                KOKKOS_LAMBDA(const int) {
+                    d_local_sum() = 0.0;
+                });
+        }
+
+        Kokkos::fence();
+
+        ncclResult_t result = ncclAllReduce(
+            d_local_sum.data(), 
+            d_mean_result.data(), 
+            1, 
+            ncclDouble, 
+            ncclSum, 
+            nccl_comm_, 
+            nccl_stream_
+        );
+
+        if (result != ncclSuccess) {
+            printf("NCCL Error: %s\n", ncclGetErrorString(result));
+        }
+
+        cudaStreamSynchronize(nccl_stream_);
+
+        Kokkos::parallel_for("scale_global_mean",
+            Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, 1),
+            KOKKOS_LAMBDA(const int) {
+                d_mean_result() /= total_points_horizontal;
+            });
+    }
+
+
 
     template<size_t Dim>
     double calculate_horizontal_mean(const Field<Dim>& field, int k_level = -1) const {
@@ -141,6 +230,9 @@ private:
     const Grid& grid_;
     const Parameters& parameters_;
     std::map<std::string, AnyField> fields_;
+
+    ncclComm_t nccl_comm_;
+    cudaStream_t nccl_stream_;
 };
 
 } // namespace Core
