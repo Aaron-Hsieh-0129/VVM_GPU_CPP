@@ -392,8 +392,12 @@ void DynamicalCore::compute_uvtopmn() {
                        * (w(nz-h-2,j,i)+w(nz-h-2,j+1,i));
         }
     );
-    double tempumn = state_.calculate_horizontal_mean(tempu_field);
-    double tempvmn = state_.calculate_horizontal_mean(tempv_field);
+    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> tempumn("tempumn");
+    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> tempvmn("tempvmn");
+    state_.calculate_horizontal_mean(tempu_field, tempumn);
+    state_.calculate_horizontal_mean(tempv_field, tempvmn);
+    // double tempumn = state_.calculate_horizontal_mean(tempu_field);
+    // double tempvmn = state_.calculate_horizontal_mean(tempv_field);
 
 
     auto& utopmn_to_update = state_.get_field<1>("utopmn");
@@ -417,8 +421,8 @@ void DynamicalCore::compute_uvtopmn() {
     Kokkos::parallel_for("Cauculate_uvtopmn", 
         1, 
         KOKKOS_LAMBDA(const int i) {
-            d_utopmn(now_idx) = 0.25 * flex_height_coef_mid(nz-h-1) * tempumn * rdz() / rhobar(nz-h-1);
-            d_vtopmn(now_idx) = 0.25 * flex_height_coef_mid(nz-h-1) * tempvmn * rdz() / rhobar(nz-h-1);
+            d_utopmn(now_idx) = 0.25 * flex_height_coef_mid(nz-h-1) * tempumn() * rdz() / rhobar(nz-h-1);
+            d_vtopmn(now_idx) = 0.25 * flex_height_coef_mid(nz-h-1) * tempvmn() * rdz() / rhobar(nz-h-1);
 
             utopmn_new_view(0) = utopmn_old_view(0) 
                     + dt() * (1.5 * d_utopmn(now_idx) - 0.5 * d_utopmn(prev_idx));
