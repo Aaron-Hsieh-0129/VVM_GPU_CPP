@@ -116,15 +116,11 @@ endif()
 find_path(NCCL_INCLUDE_DIR nccl.h
     HINTS 
     /work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/comm_libs/nccl/include
-    /work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/cuda/include
-    /usr/local/cuda/include
 )
 
 find_library(NCCL_LIBRARY nccl
     HINTS 
     /work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/comm_libs/nccl/lib
-    /work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/cuda/lib64
-    /usr/local/cuda/lib64
 )
 
 if (NCCL_INCLUDE_DIR AND NCCL_LIBRARY)
@@ -144,6 +140,8 @@ find_library(NETCDF_FORTRAN_LIBRARY NAMES netcdff HINTS "/work/aaron900129/netcd
 if(NOT NETCDF_C_INCLUDE_DIR OR NOT NETCDF_C_LIBRARY OR NOT NETCDF_FORTRAN_INCLUDE_DIR OR NOT NETCDF_FORTRAN_LIBRARY)
     message(FATAL_ERROR "Can't find NetCDF")
 endif()
+
+set(NETCDF_C "${NETCDF_C_LIBRARY}" CACHE FILEPATH "Path to NetCDF C library" FORCE)
 
 # Create imported targets
 if (NOT TARGET NetCDF::NetCDF_C)

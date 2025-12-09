@@ -32,12 +32,12 @@ target_link_libraries(vvm_core
     PUBLIC
         vvm_utils
         MPI::MPI_CXX
-	    ${NVCPUMATH_LIBRARY}
+        ${NVCPUMATH_LIBRARY}
         ${PNETCDF_LIBRARY}
         ${NCCL_LIBRARY}
     PRIVATE
         Kokkos::kokkos
         ${OpenMP_LIBRARIES}
-	    ${NVTOOLSEXT_LIBRARY}
+	${NVTOOLSEXT_LIBRARY}
         PnetCDF::pnetcdf
 )
