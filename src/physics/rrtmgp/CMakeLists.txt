@@ -31,7 +31,7 @@ target_include_directories(rrtmgp INTERFACE
     ${EAM_RRTMGP_DIR}/external/cpp/rte/kernels
     ${EAM_RRTMGP_DIR}/external/cpp/rrtmgp
     ${EAM_RRTMGP_DIR}/external/cpp/rrtmgp/kernels
-    ${NetCDF_C_PATH}/include
+    ${NETCDF_C_INCLUDE_DIR}
 )
 
 # Build RRTMGP interface; note that we separate the SCREAM-specific RRTMGP interface
@@ -46,13 +46,15 @@ set(SCREAM_RRTMGP_SOURCES_INTERFACE
 
 add_library(eamxx_rrtmgp_interface ${SCREAM_RRTMGP_SOURCES_INTERFACE})
 
-find_library(NETCDF_C netcdf HINTS ${NetCDF_C_PATH} PATH_SUFFIXES lib lib64)
-target_link_libraries(eamxx_rrtmgp_interface PUBLIC ${NETCDF_C} rrtmgp scream_share Kokkos::kokkos)
+target_link_libraries(eamxx_rrtmgp_interface PUBLIC ${NETCDF_C_LIBRARY} rrtmgp scream_share Kokkos::kokkos)
+
 target_include_directories(eamxx_rrtmgp_interface PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(eamxx_rrtmgp_interface SYSTEM PUBLIC
-    ${NetCDF_C_PATH}/include
-    ${EAM_RRTMGP_DIR}/external)
+    ${NETCDF_C_INCLUDE_DIR}
+    ${EAM_RRTMGP_DIR}/external
+    ${NCCL_INCLUDE_DIR})
+
 
 ##################################
 #        SCREAM_RRTMGP           #

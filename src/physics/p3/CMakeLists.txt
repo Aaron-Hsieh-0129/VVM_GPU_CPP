@@ -90,6 +90,7 @@ foreach (P3_LIB IN LISTS P3_LIBS)
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/impl
     ${SCREAM_BASE_DIR}/../eam/src/physics/cam
+    ${NCCL_INCLUDE_DIR}
   )
   target_link_libraries(${P3_LIB} eamxx_physics_share scream_share)
 endforeach()
