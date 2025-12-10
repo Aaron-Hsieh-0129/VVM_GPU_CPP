@@ -55,6 +55,8 @@ OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VV
     io_.SetEngine("HDF5");
     io_.SetParameter("IdleH5Writer",
                      "true"); // set this if not all ranks are writting
+    io_.SetParameter("H5CollectiveMPIO", "yes");
+    io_.SetParameter("H5_DRIVER", "MPIO");
     // io_.SetParameters({{"Threads", "4"}});
 
     if (rank_ == 0) std::cout << "  [OutputManager] ADIOS2 Initialized." << std::endl;
@@ -191,7 +193,7 @@ void OutputManager::write(int step, double time) {
 
     if (rank_ == 0) std::cout << "  [OutputManager::write] Opening file for step " << step << "..." << std::endl;
     std::string filename = output_dir_ + "/" + filename_prefix_ + "_" + format_to_six_digits((int) (step/output_interval_s_)) + ".h5";
-    writer_ = io_.Open(filename, adios2::Mode::Write);
+    writer_ = io_.Open(filename, adios2::Mode::Write, MPI_COMM_WORLD);
 
     if (rank_ == 0) std::cout << "  [OutputManager::write] File opened. Defining vars if needed..." << std::endl;
 
@@ -442,9 +444,11 @@ void OutputManager::write_static_topo_file() {
     adios2::IO topo_io = adios_.DeclareIO("TOPO_IO");
     topo_io.SetEngine("HDF5");
     topo_io.SetParameter("IdleH5Writer", "true");
+    topo_io.SetParameter("H5CollectiveMPIO", "yes");
+    topo_io.SetParameter("H5_DRIVER", "MPIO");
 
     std::string filename = output_dir_ + "/topo.h5";
-    adios2::Engine topo_writer = topo_io.Open(filename, adios2::Mode::Write);
+    adios2::Engine topo_writer = topo_io.Open(filename, adios2::Mode::Write, MPI_COMM_WORLD);
 
     const size_t gnx = grid_.get_global_points_x();
     const size_t gny = grid_.get_global_points_y();

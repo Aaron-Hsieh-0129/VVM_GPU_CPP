@@ -249,7 +249,7 @@ int main(int argc, char *argv[]) {
         VVM::Dynamics::DynamicalCore dynamical_core(config, grid, parameters, state, halo_exchanger);
         VVM::IO::OutputManager output_manager(config, grid, parameters, state, MPI_COMM_WORLD);
         output_manager.write(0, 0.0);
-        output_manager.write_static_topo_file();
+        // output_manager.write_static_topo_file();
 
         // Simulation loop parameters
         double total_time = config.get_value<double>("simulation.total_time_s");
