@@ -51,12 +51,38 @@ OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VV
 
     if (rank_ == 0) std::cout << "  [OutputManager] ctl file written. Initializing ADIOS2..." << std::endl;
 
+
+
+    MPI_Comm nodeComm;
+    MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &nodeComm);
+
+    int node_rank;
+    MPI_Comm_rank(nodeComm, &node_rank);
+
+    int is_node_head = (node_rank == 0) ? 1 : 0;
+    int total_nodes = 0;
+
+    MPI_Allreduce(&is_node_head, &total_nodes, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+
+    MPI_Comm_free(&nodeComm);
+
+    std::string use_collective = "false"; // 預設關閉
+
+    if (total_nodes > 1) {
+        use_collective = "true"; 
+        if (rank_ == 0) std::cout << "[Info] Multi-node detected (" << total_nodes << " nodes). Enabling H5CollectiveMPIO." << std::endl;
+    } 
+    else {
+        use_collective = "false";
+        if (rank_ == 0) std::cout << "[Info] Single-node detected. Disabling H5CollectiveMPIO." << std::endl;
+    }
+
+
     io_ = adios_.DeclareIO("VVM_IO");
     io_.SetEngine("HDF5");
     io_.SetParameter("IdleH5Writer",
                      "true"); // set this if not all ranks are writting
-    io_.SetParameter("H5CollectiveMPIO", "yes");
-    io_.SetParameter("H5_DRIVER", "MPIO");
+    io_.SetParameter("H5CollectiveMPIO", use_collective);
     // io_.SetParameters({{"Threads", "4"}});
 
     if (rank_ == 0) std::cout << "  [OutputManager] ADIOS2 Initialized." << std::endl;
@@ -444,8 +470,7 @@ void OutputManager::write_static_topo_file() {
     adios2::IO topo_io = adios_.DeclareIO("TOPO_IO");
     topo_io.SetEngine("HDF5");
     topo_io.SetParameter("IdleH5Writer", "true");
-    topo_io.SetParameter("H5CollectiveMPIO", "yes");
-    topo_io.SetParameter("H5_DRIVER", "MPIO");
+    topo_io.SetParameter("H5CollectiveMPIO", "no");
 
     std::string filename = output_dir_ + "/topo.h5";
     adios2::Engine topo_writer = topo_io.Open(filename, adios2::Mode::Write, MPI_COMM_WORLD);
