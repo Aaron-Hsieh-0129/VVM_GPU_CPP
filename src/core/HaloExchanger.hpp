@@ -41,7 +41,6 @@ public:
     void exchange_halos_top_slice(Field<3>& field) const {
         const int nz = grid_ref_.get_local_total_points_z();
         const int h = grid_ref_.get_halo_cells();
-        // 確保取的是最後一層物理網格
         exchange_halos_slice(field, nz - h - 1);
     }
 
@@ -81,8 +80,8 @@ inline HaloExchanger::HaloExchanger(const Grid& grid, ncclComm_t nccl_comm, cuda
 
     if (cart_comm_ != MPI_COMM_NULL) {
         int cart_left, cart_right, cart_bottom, cart_top;
-        MPI_Cart_shift(cart_comm_, 1, 1, &cart_left, &cart_right);  // X 方向
-        MPI_Cart_shift(cart_comm_, 0, 1, &cart_bottom, &cart_top);  // Y 方向
+        MPI_Cart_shift(cart_comm_, 1, 1, &cart_left, &cart_right);
+        MPI_Cart_shift(cart_comm_, 0, 1, &cart_bottom, &cart_top);
 
         MPI_Group cart_group, world_group;
         MPI_Comm_group(cart_comm_, &cart_group);
@@ -93,7 +92,6 @@ inline HaloExchanger::HaloExchanger(const Grid& grid, ncclComm_t nccl_comm, cuda
 
         for(int i=0; i<4; ++i) {
             if (cart_ranks[i] != MPI_PROC_NULL) {
-                // 將 Cart Rank 轉為 Global World Rank (NCCL 唯一認得的 ID)
                 MPI_Group_translate_ranks(cart_group, 1, &cart_ranks[i], world_group, &world_ranks[i]);
             }
         }

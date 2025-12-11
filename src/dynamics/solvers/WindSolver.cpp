@@ -163,6 +163,7 @@ void WindSolver::solve_w(Core::State& state) {
         }
     }
     // bc_manager.apply_z_bcs_to_field(state.get_field<3>("w"));
+    halo_exchanger_.exchange_halos(state.get_field<3>("w"));
     return;
 }
 
