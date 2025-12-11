@@ -53,8 +53,6 @@ int main(int argc, char *argv[]) {
     int device_id;
     cudaGetDevice(&device_id);
 
-    cudaStream_t halo_stream;
-    cudaStreamCreate(&halo_stream);
     {
         VVM::Utils::Timer total_timer("total vvm");
         VVM::Utils::TimingManager::get_instance().start_timer("initialize");
@@ -72,13 +70,16 @@ int main(int argc, char *argv[]) {
         VVM::Utils::ConfigurationManager config(config_file_path);
         if (rank == 0) config.print_config(); // Print loaded configuration
 
+
+        cudaStream_t stream = Kokkos::Cuda().cuda_stream();
+
         // Create a VVM model instance and run the simulation
         VVM::Core::Grid grid(config);
         VVM::Core::Parameters parameters(config, grid);
         grid.print_info();
-        VVM::Core::State state(config, parameters, grid, nccl_comm, halo_stream);
+        VVM::Core::State state(config, parameters, grid, nccl_comm, stream);
         // VVM::Core::HaloExchanger halo_exchanger(grid);
-        VVM::Core::HaloExchanger halo_exchanger(grid, nccl_comm, halo_stream);
+        VVM::Core::HaloExchanger halo_exchanger(grid, nccl_comm, stream);
         VVM::Core::BoundaryConditionManager bc_manager(grid);
 
         const int nz = grid.get_local_total_points_z();
