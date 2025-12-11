@@ -2,11 +2,11 @@
 #SBATCH --account=MST114418
 #SBATCH --partition=normal
 #SBATCH --job-name=VVM_GPU_CPP
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=3
-#SBATCH --gpus-per-node=3
-#SBATCH --cpus-per-task=1
-#SBATCH --time=00:30:00
+#SBATCH --nodes=2
+#SBATCH --ntasks-per-node=1
+#SBATCH --gpus-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --time=00:10:00
 #SBATCH --output=log//%j.out
 #SBATCH --error=log/%j.err
 #SBATCH --mail-type=END,FAIL
@@ -32,7 +32,7 @@ echo $OMP_NUM_THREADS
 cd build/
 # cmake .. -DCMAKE_C_COMPILER=mpicc -DCMAKE_CXX_COMPILER=mpic++ -DCMAKE_Fortran_COMPILER=mpifort
 # && mpirun -np 4 --bind-to core ./vvm
-make -j16
+make -j32
 # mpirun -np 2 --bind-to none ./vvm
 
 # mpirun -np 2 -x NCCL_SOCKET_IFNAME=ib0 -x NCCL_DEBUG=INFO --mca btl_tcp_if_include ib0 --mca btl_base_verbose 30 ./vvm
@@ -40,38 +40,37 @@ make -j16
 export MY_PLUGIN_PATH=/work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/comm_libs/12.6/hpcx/hpcx-2.20/nccl_rdma_sharp_plugin/lib
 export SHARP_LIB_PATH=/work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/comm_libs/12.6/hpcx/hpcx-2.20/sharp/lib
 
+export HPCX_HOME=/work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/comm_libs/12.6/hpcx/hpcx-2.20
+source $HPCX_HOME/hpcx-init.sh
+hpcx_load
+export PATH=$HPCX_HOME/ompi/bin:$PATH
+export LD_LIBRARY_PATH=$HPCX_HOME/ompi/lib:$HPCX_HOME/ucx/lib:$HPCX_HOME/sharp/lib:$HPCX_HOME/nccl_rdma_sharp_plugin/lib:$LD_LIBRARY_PATH
+
+
 # mpirun -np 4 \
 #   -x LD_LIBRARY_PATH=$MY_PLUGIN_PATH:$SHARP_LIB_PATH:$LD_LIBRARY_PATH \
 #   -x NCCL_SOCKET_IFNAME=ib0 \
 #   -x NCCL_IB_HCA=mlx5_0,mlx5_2 \
+#   -x UCX_NET_DEVICES=mlx5_0,mlx5_2 \
 #   -x NCCL_DEBUG=INFO \
 #   -x OMP_PROC_BIND=spread \
 #   -x OMP_PLACES=threads \
 #   -x HDF5_USE_FILE_LOCKING=FALSE \
+#   -x NCCL_NET_GDR_LEVEL=1 \
 #   --mca io ompio \
 #   --mca sharedfp ^lockedfile,individual \
-#   --mca btl_tcp_if_include ib0 \
-#   --mca oob_tcp_if_include ib0 \
+#   --mca btl_tcp_if_include 10.210.0.0/16 \
+#   --mca oob_tcp_if_include 10.210.0.0/16 \
 #   --mca btl_base_warn_component_unused 0 \
+#   --bind-to socket \
 #   ./vvm
 
-mpirun -np 3 \
-  -x LD_LIBRARY_PATH=$MY_PLUGIN_PATH:$SHARP_LIB_PATH:$LD_LIBRARY_PATH \
-  -x NCCL_SOCKET_IFNAME=ib0 \
-  -x NCCL_IB_HCA=mlx5_0,mlx5_2 \
-  -x UCX_NET_DEVICES=mlx5_0,mlx5_2 \
+
+mpirun -np 2 \
   -x NCCL_DEBUG=INFO \
-  -x OMP_PROC_BIND=spread \
-  -x OMP_PLACES=threads \
   -x HDF5_USE_FILE_LOCKING=FALSE \
-  -x NCCL_NET_GDR_LEVEL=1 \
   --mca io ompio \
   --mca sharedfp ^lockedfile,individual \
-  --mca btl_tcp_if_include 10.210.0.0/16 \
-  --mca oob_tcp_if_include 10.210.0.0/16 \
-  --mca btl_base_warn_component_unused 0 \
-  --bind-to socket \
   ./vvm
-
 
 # mpirun -np 16 --mca pml ob1 --mca btl tcp,self --mca btl_tcp_if_include ib0 --bind-to core ./vvm

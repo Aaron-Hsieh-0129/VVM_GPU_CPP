@@ -36,7 +36,7 @@ set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
 # ------------------------------
 # HDF5
 # ------------------------------
-set(HDF5_DIR "/work/aaron900129/hdf5_install/lib/cmake/hdf5")
+set(HDF5_DIR "/work/aaron900129/hdf5_install_hpcx/lib/cmake/hdf5")
 
 # ------------------------------
 # Kokkos
@@ -132,10 +132,10 @@ endif()
 # ------------------------------
 # NetCDF
 # ------------------------------
-find_path(NETCDF_C_INCLUDE_DIR NAMES netcdf.h HINTS "/work/aaron900129/netcdf-c_install/include" NO_DEFAULT_PATH)
-find_library(NETCDF_C_LIBRARY NAMES netcdf HINTS "/work/aaron900129/netcdf-c_install/lib" NO_DEFAULT_PATH)
-find_path(NETCDF_FORTRAN_INCLUDE_DIR NAMES netcdf.mod HINTS "/work/aaron900129/netcdf-fortran_install/include" NO_DEFAULT_PATH)
-find_library(NETCDF_FORTRAN_LIBRARY NAMES netcdff HINTS "/work/aaron900129/netcdf-fortran_install/lib" NO_DEFAULT_PATH)
+find_path(NETCDF_C_INCLUDE_DIR NAMES netcdf.h HINTS "/work/aaron900129/netcdf-c_install_hpcx/include" NO_DEFAULT_PATH)
+find_library(NETCDF_C_LIBRARY NAMES netcdf HINTS "/work/aaron900129/netcdf-c_install_hpcx/lib" NO_DEFAULT_PATH)
+find_path(NETCDF_FORTRAN_INCLUDE_DIR NAMES netcdf.mod HINTS "/work/aaron900129/netcdf-fortran_install_hpcx/include" NO_DEFAULT_PATH)
+find_library(NETCDF_FORTRAN_LIBRARY NAMES netcdff HINTS "/work/aaron900129/netcdf-fortran_install_hpcx/lib" NO_DEFAULT_PATH)
 
 if(NOT NETCDF_C_INCLUDE_DIR OR NOT NETCDF_C_LIBRARY OR NOT NETCDF_FORTRAN_INCLUDE_DIR OR NOT NETCDF_FORTRAN_LIBRARY)
     message(FATAL_ERROR "Can't find NetCDF")
@@ -219,8 +219,8 @@ endif()
 # ------------------------------
 # HDF5
 # ------------------------------
-find_path(HDF5_INCLUDE_DIR hdf5.h HINTS /work/aaron900129/hdf5_install/include NO_DEFAULT_PATH)
-find_library(HDF5_LIBRARY NAMES hdf5 HINTS /work/aaron900129/hdf5_install/lib NO_DEFAULT_PATH)
+find_path(HDF5_INCLUDE_DIR hdf5.h HINTS /work/aaron900129/hdf5_install_hpcx/include NO_DEFAULT_PATH)
+find_library(HDF5_LIBRARY NAMES hdf5 HINTS /work/aaron900129/hdf5_install_hpcx/lib NO_DEFAULT_PATH)
 
 if(HDF5_INCLUDE_DIR AND HDF5_LIBRARY)
     add_library(HDF5::HDF5 UNKNOWN IMPORTED)
@@ -239,7 +239,7 @@ endif()
 include_directories(${CMAKE_SOURCE_DIR}/src)
 add_subdirectory(src)
 
-set(PNETCDF_INSTALL_DIR "/work/aaron900129/pnetcdf_install" CACHE PATH "Path to PnetCDF installation")
+set(PNETCDF_INSTALL_DIR "/work/aaron900129/pnetcdf_install_hpcx" CACHE PATH "Path to PnetCDF installation")
 find_path(PNETCDF_INCLUDE_DIR pnetcdf.h
           HINTS ${PNETCDF_INSTALL_DIR}/include
           NO_DEFAULT_PATH)
@@ -261,7 +261,7 @@ else()
 endif()
 
 # Find netcdf-c
-set(NETCDF_C_INSTALL_DIR "/work/aaron900129/netcdf-c_install" CACHE PATH "Path to NetCDF-C installation")
+set(NETCDF_C_INSTALL_DIR "/work/aaron900129/netcdf-c_install_hpcx" CACHE PATH "Path to NetCDF-C installation")
 find_path(NETCDF_C_INCLUDE_DIR netcdf.h
           HINTS ${NETCDF_C_INSTALL_DIR}/include
           NO_DEFAULT_PATH)
