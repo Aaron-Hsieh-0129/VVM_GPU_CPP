@@ -249,7 +249,7 @@ int main(int argc, char *argv[]) {
 
         VVM::Dynamics::DynamicalCore dynamical_core(config, grid, parameters, state, halo_exchanger);
         VVM::IO::OutputManager output_manager(config, grid, parameters, state, MPI_COMM_WORLD);
-        // output_manager.write(0, 0.0);
+        output_manager.write(0, 0.0);
         // output_manager.write_static_topo_file();
 
         // Simulation loop parameters
@@ -274,7 +274,7 @@ int main(int argc, char *argv[]) {
                 }
                 rrtmgp_interface->apply_heating(state, dt);
             }
-            halo_exchanger.exchange_halos(state);
+            // halo_exchanger.exchange_halos(state);
             current_time += dt;
 
             std::cout << current_time << std::endl;
