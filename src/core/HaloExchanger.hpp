@@ -4,11 +4,15 @@
 #include "Grid.hpp"
 #include "Field.hpp"
 #include "State.hpp"
+#include "utils/ConfigurationManager.hpp"
 #include <nccl.h>
 #include <cuda_runtime.h>
 #include <Kokkos_Core.hpp>
 #include <algorithm>
 #include <vector>
+#include <map>
+#include <string>
+#include <set>
 
 namespace VVM {
 namespace Core {
@@ -17,7 +21,7 @@ using ExecSpace = Kokkos::Cuda;
 
 class HaloExchanger {
 public:
-    explicit HaloExchanger(const Grid& grid, ncclComm_t nccl_comm, cudaStream_t stream);
+    explicit HaloExchanger(const Utils::ConfigurationManager& config, const Grid& grid, ncclComm_t nccl_comm, cudaStream_t stream);
     ~HaloExchanger();
 
     HaloExchanger(const HaloExchanger&) = delete;
@@ -28,7 +32,10 @@ public:
     template<size_t Dim>
     void exchange_halos(Field<Dim>& field, int depth = -1) const {
         exchange_halos_impl(field, depth);
-        if (depth == -1 && !is_graph_created_) {
+        
+        cudaStreamCaptureStatus capture_status;
+        cudaStreamIsCapturing(stream_, &capture_status);
+        if (depth == -1 && capture_status == cudaStreamCaptureStatusNone) {
              cudaStreamSynchronize(stream_);
         }
     }
@@ -54,8 +61,9 @@ private:
     int neighbor_left_, neighbor_right_;
     int neighbor_bottom_, neighbor_top_;
 
-    bool is_graph_created_ = false;
-    cudaGraphExec_t graph_exec_ = nullptr;
+    std::set<std::string> enabled_graph_vars_;
+
+    std::map<std::string, cudaGraphExec_t> graph_map_;
 
     mutable Kokkos::View<double*, ExecSpace> send_x_left_, recv_x_left_;
     mutable Kokkos::View<double*, ExecSpace> send_x_right_, recv_x_right_;
@@ -68,15 +76,26 @@ private:
     size_t buffer_size_slice_x_, buffer_size_slice_y_;
 };
 
-inline HaloExchanger::HaloExchanger(const Grid& grid, ncclComm_t nccl_comm, cudaStream_t stream)
+inline HaloExchanger::HaloExchanger(const Utils::ConfigurationManager& config, const Grid& grid, ncclComm_t nccl_comm, cudaStream_t stream)
     : grid_ref_(grid), 
       cart_comm_(grid.get_cart_comm()), 
       nccl_comm_(nccl_comm), 
       stream_(stream),
       exec_space_(stream)
 {
+    if (config.has_key("optimization.cuda_graph_halo_exchange")) {
+        auto vars = config.get_value<std::vector<std::string>>("optimization.cuda_graph_halo_exchange");
+        enabled_graph_vars_.insert(vars.begin(), vars.end());
+    }
+
     int world_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    
+    if (world_rank == 0 && !enabled_graph_vars_.empty()) {
+        std::cout << "HaloExchanger: CUDA Graph enabled for fields: ";
+        for (const auto& var : enabled_graph_vars_) std::cout << var << " ";
+        std::cout << std::endl;
+    }
 
     if (cart_comm_ != MPI_COMM_NULL) {
         int cart_left, cart_right, cart_bottom, cart_top;
@@ -144,36 +163,55 @@ inline HaloExchanger::HaloExchanger(const Grid& grid, ncclComm_t nccl_comm, cuda
 }
 
 inline HaloExchanger::~HaloExchanger() {
-    if (is_graph_created_ && graph_exec_) {
-        cudaGraphExecDestroy(graph_exec_);
+    for (auto& pair : graph_map_) {
+        if (pair.second) {
+            cudaGraphExecDestroy(pair.second);
+        }
     }
 }
 
 inline void HaloExchanger::exchange_halos(State& state) {
     Kokkos::fence(); 
 
-    if (!is_graph_created_) {
-        cudaStreamBeginCapture(stream_, cudaStreamCaptureModeGlobal);
-        
-        for (auto& field_pair : state) {
-            std::visit([this](auto& field) {
-                using T = std::decay_t<decltype(field)>;
-                if constexpr (!std::is_same_v<T, std::monostate>) {
+    for (auto& field_pair : state) {
+        std::visit([this](auto& field) {
+            using T = std::decay_t<decltype(field)>;
+            if constexpr (!std::is_same_v<T, std::monostate>) {
+                const std::string name = field.get_name();
+                
+                if (enabled_graph_vars_.count(name)) {
+                    auto it = graph_map_.find(name);
+                    
+                    if (it == graph_map_.end()) {
+                        cudaStreamBeginCapture(stream_, cudaStreamCaptureModeGlobal);
+                        
+                        this->exchange_halos_impl(field);
+                        
+                        cudaGraph_t graph;
+                        cudaStreamEndCapture(stream_, &graph);
+                        
+                        cudaGraphExec_t instance;
+                        cudaGraphInstantiate(&instance, graph, nullptr, nullptr, 0);
+                        cudaGraphDestroy(graph);
+                        
+                        graph_map_[name] = instance;
+                        it = graph_map_.find(name);
+                    }
+                    
+                    cudaGraphLaunch(it->second, stream_);
+                } 
+                else {
                     this->exchange_halos_impl(field);
                 }
-            }, field_pair.second);
-        }
-        
-        cudaGraph_t graph;
-        cudaStreamEndCapture(stream_, &graph);
-        cudaGraphInstantiate(&graph_exec_, graph, nullptr, nullptr, 0);
-        cudaGraphDestroy(graph);
-        is_graph_created_ = true;
+            }
+        }, field_pair.second);
     }
-
-    cudaGraphLaunch(graph_exec_, stream_);
     
-    cudaStreamSynchronize(stream_);
+    cudaStreamCaptureStatus capture_status;
+    cudaStreamIsCapturing(stream_, &capture_status);
+    if (capture_status == cudaStreamCaptureStatusNone) {
+        cudaStreamSynchronize(stream_);
+    }
 }
 
 template<size_t Dim>
@@ -369,7 +407,12 @@ void HaloExchanger::exchange_halos_impl(Field<Dim>& field, int depth) const {
             });
         }
     }
-    cudaStreamSynchronize(stream_);
+    
+    cudaStreamCaptureStatus capture_status;
+    cudaStreamIsCapturing(stream_, &capture_status);
+    if (capture_status == cudaStreamCaptureStatusNone) {
+        cudaStreamSynchronize(stream_);
+    }
 }
 
 inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) const {
