@@ -4,6 +4,17 @@ project(VVM LANGUAGES CXX C Fortran)
 
 cmake_policy(SET CMP0135 NEW)
 
+
+# -----------------------------
+# NVHPC and Library Path
+# -----------------------------
+set(NVHPC_DIR "/work/aaron900129/nvhpc_24_9")
+set(HDF5_DIR "/work/aaron900129/hdf5_install_hpcx")
+set(NETCDF_C_DIR "/work/aaron900129/netcdf-c_install_hpcx")
+set(NETCDF_Fortran_DIR "/work/aaron900129/netcdf-fortran_install_hpcx")
+set(PNETCDF_DIR "/work/aaron900129/pnetcdf_install_hpcx")
+
+
 # ------------------------------
 # Compiler-specific settings
 # ------------------------------
@@ -20,9 +31,15 @@ endif()
 add_compile_definitions(EAMXX_ENABLE_GPU)
 add_compile_definitions(SCREAM_DOUBLE_PRECISION)
 add_compile_definitions(RRTMGP_ENABLE_KOKKOS)
-add_definitions(-DEAMXX_ENABLE_GPU)
-add_definitions(-DSCREAM_DOUBLE_PRECISION)
-add_definitions(-DRRTMGP_ENABLE_KOKKOS)
+option(ENABLE_NCCL "Enable NCCL for communication" ON)
+if(ENABLE_NCCL)
+    add_compile_definitions(-DENABLE_NCCL)
+    message(STATUS "Building with NCCL support")
+else()
+    message(STATUS "Building with Standard MPI support")
+endif()
+
+
 
 
 # ------------------------------
@@ -34,11 +51,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
 
 # ------------------------------
-# HDF5
-# ------------------------------
-set(HDF5_DIR "/work/aaron900129/hdf5_install_hpcx/lib/cmake/hdf5")
-
-# ------------------------------
 # Kokkos
 # ------------------------------
 set(Kokkos_ENABLE_CUDA ON CACHE BOOL "Enable CUDA backend for Kokkos" FORCE)
@@ -48,7 +60,7 @@ set(Kokkos_ENABLE_OPENMP ON CACHE BOOL "Enable OpenMP backend for Kokkos" FORCE)
 
 # NVHPC + Kokkos CUDA arch
 if(CMAKE_CXX_COMPILER_ID STREQUAL "NVHPC")
-    set(Kokkos_CUDA_OPTIONS "enable_lambda;enable_ldg;cuda_arch=70" CACHE STRING "Kokkos CUDA options" FORCE)
+    set(Kokkos_CUDA_OPTIONS "enable_lambda;enable_ldg" CACHE STRING "Kokkos CUDA options" FORCE)
 endif()
 
 set(SCREAM_DOUBLE_PRECISIION ON CACHE BOOL "Enable scream double precision" FORCE)
@@ -96,7 +108,7 @@ endif()
 # NVHPC
 # ------------------------------
 find_library(NVCPUMATH_LIBRARY nvcpumath
-    HINTS /work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/compilers/lib
+    HINTS ${NVHPC_DIR}/Linux_x86_64/24.9/compilers/lib
 )
 if(NOT NVCPUMATH_LIBRARY)
     message(FATAL_ERROR "Could not find NVIDIA CPU Math Library (libnvcpumath.so)")
@@ -105,7 +117,7 @@ else()
 endif()
 
 find_library(NVTOOLSEXT_LIBRARY nvToolsExt
-    HINTS /work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/cuda/lib64
+    HINTS ${NVHPC_DIR}/Linux_x86_64/24.9/cuda/lib64
 )
 if(NOT NVTOOLSEXT_LIBRARY)
     message(FATAL_ERROR "Could not find NVIDIA Tools Extension Library (libnvToolsExt.so)")
@@ -113,43 +125,49 @@ else()
     message(STATUS "Found NVIDIA Tools Extension Library: ${NVTOOLSEXT_LIBRARY}")
 endif()
 
-find_path(NCCL_INCLUDE_DIR nccl.h
-    HINTS 
-    /work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/comm_libs/nccl/include
-)
+if(ENABLE_NCCL)
+    find_path(NCCL_INCLUDE_DIR nccl.h
+        HINTS 
+        ${NVHPC_DIR}/Linux_x86_64/24.9/comm_libs/nccl/include
+    )
+    find_library(NCCL_LIBRARY nccl
+        HINTS 
+        ${NVHPC_DIR}/Linux_x86_64/24.9/comm_libs/nccl/lib
+    )
+    if (NCCL_INCLUDE_DIR AND NCCL_LIBRARY)
+        message(STATUS "Found NCCL: ${NCCL_INCLUDE_DIR}, ${NCCL_LIBRARY}")
+    else()
+        message(FATAL_ERROR "Could not find NCCL. Please check hints in Root CMakeLists.txt")
+    endif()
+endif()
 
-find_library(NCCL_LIBRARY nccl
-    HINTS 
-    /work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/comm_libs/nccl/lib
-)
 
-if (NCCL_INCLUDE_DIR AND NCCL_LIBRARY)
-    message(STATUS "Found NCCL: ${NCCL_INCLUDE_DIR}, ${NCCL_LIBRARY}")
+# ------------------------------
+# NetCDF-C
+# ------------------------------
+find_path(NETCDF_C_INCLUDE_DIR netcdf.h
+          HINTS ${NETCDF_C_DIR}/include
+          NO_DEFAULT_PATH)
+find_library(NETCDF_C_LIBRARY NAMES netcdf
+             HINTS ${NETCDF_C_DIR}/lib
+             NO_DEFAULT_PATH)
+
+if (NETCDF_C_INCLUDE_DIR AND NETCDF_C_LIBRARY)
+    add_library(NetCDF::netcdf UNKNOWN IMPORTED GLOBAL)
+    set_target_properties(NetCDF::netcdf PROPERTIES
+                          IMPORTED_LOCATION "${NETCDF_C_LIBRARY}"
+                          INTERFACE_INCLUDE_DIRECTORIES "${NETCDF_C_INCLUDE_DIR}")
+    set(NETCDF_C_FOUND TRUE)
+    message(STATUS "NetCDF-C (for fallback) found manually at: ${NETCDF_C_LIBRARY}")
 else()
-    message(FATAL_ERROR "Could not find NCCL. Please check hints in Root CMakeLists.txt")
+    message(FATAL_ERROR "NetCDF-C library or includes not found at the specified path: ${NETCDF_C_INSTALL_DIR}")
 endif()
 
 # ------------------------------
-# NetCDF
+# NetCDF-Fortran
 # ------------------------------
-find_path(NETCDF_C_INCLUDE_DIR NAMES netcdf.h HINTS "/work/aaron900129/netcdf-c_install_hpcx/include" NO_DEFAULT_PATH)
-find_library(NETCDF_C_LIBRARY NAMES netcdf HINTS "/work/aaron900129/netcdf-c_install_hpcx/lib" NO_DEFAULT_PATH)
-find_path(NETCDF_FORTRAN_INCLUDE_DIR NAMES netcdf.mod HINTS "/work/aaron900129/netcdf-fortran_install_hpcx/include" NO_DEFAULT_PATH)
-find_library(NETCDF_FORTRAN_LIBRARY NAMES netcdff HINTS "/work/aaron900129/netcdf-fortran_install_hpcx/lib" NO_DEFAULT_PATH)
-
-if(NOT NETCDF_C_INCLUDE_DIR OR NOT NETCDF_C_LIBRARY OR NOT NETCDF_FORTRAN_INCLUDE_DIR OR NOT NETCDF_FORTRAN_LIBRARY)
-    message(FATAL_ERROR "Can't find NetCDF")
-endif()
-
-set(NETCDF_C "${NETCDF_C_LIBRARY}" CACHE FILEPATH "Path to NetCDF C library" FORCE)
-
-# Create imported targets
-if (NOT TARGET NetCDF::NetCDF_C)
-    add_library(NetCDF::NetCDF_C UNKNOWN IMPORTED)
-    set_property(TARGET NetCDF::NetCDF_C PROPERTY
-        INTERFACE_INCLUDE_DIRECTORIES "${NETCDF_C_INCLUDE_DIR}"
-        IMPORTED_LOCATION "${NETCDF_C_LIBRARY}")
-endif()
+find_path(NETCDF_FORTRAN_INCLUDE_DIR NAMES netcdf.mod HINTS "${NETCDF_Fortran_DIR}/include" NO_DEFAULT_PATH)
+find_library(NETCDF_FORTRAN_LIBRARY NAMES netcdff HINTS "${NETCDF_Fortran_DIR}/lib" NO_DEFAULT_PATH)
 
 if (NOT TARGET NetCDF::NetCDF_Fortran)
     add_library(NetCDF::NetCDF_Fortran UNKNOWN IMPORTED)
@@ -219,8 +237,8 @@ endif()
 # ------------------------------
 # HDF5
 # ------------------------------
-find_path(HDF5_INCLUDE_DIR hdf5.h HINTS /work/aaron900129/hdf5_install_hpcx/include NO_DEFAULT_PATH)
-find_library(HDF5_LIBRARY NAMES hdf5 HINTS /work/aaron900129/hdf5_install_hpcx/lib NO_DEFAULT_PATH)
+find_path(HDF5_INCLUDE_DIR hdf5.h HINTS ${HDF5_DIR}/include NO_DEFAULT_PATH)
+find_library(HDF5_LIBRARY NAMES hdf5 HINTS ${HDF5_DIR}/lib NO_DEFAULT_PATH)
 
 if(HDF5_INCLUDE_DIR AND HDF5_LIBRARY)
     add_library(HDF5::HDF5 UNKNOWN IMPORTED)
@@ -234,17 +252,13 @@ if(HDF5_INCLUDE_DIR AND HDF5_LIBRARY)
 endif()
 
 # ------------------------------
-# Project sources
+# pnetcdf
 # ------------------------------
-include_directories(${CMAKE_SOURCE_DIR}/src)
-add_subdirectory(src)
-
-set(PNETCDF_INSTALL_DIR "/work/aaron900129/pnetcdf_install_hpcx" CACHE PATH "Path to PnetCDF installation")
 find_path(PNETCDF_INCLUDE_DIR pnetcdf.h
-          HINTS ${PNETCDF_INSTALL_DIR}/include
+          HINTS ${PNETCDF_DIR}/include
           NO_DEFAULT_PATH)
 find_library(PNETCDF_LIBRARY NAMES pnetcdf
-             HINTS ${PNETCDF_INSTALL_DIR}/lib
+             HINTS ${PNETCDF_DIR}/lib
              NO_DEFAULT_PATH)
 
 if (PNETCDF_INCLUDE_DIR AND PNETCDF_LIBRARY)
@@ -257,28 +271,15 @@ if (PNETCDF_INCLUDE_DIR AND PNETCDF_LIBRARY)
     set(PNETCDF_FOUND TRUE)
     message(STATUS "PnetCDF found manually at: ${PNETCDF_LIBRARY}")
 else()
-    message(FATAL_ERROR "PnetCDF library or includes not found at the specified path: ${PNETCDF_INSTALL_DIR}")
+    message(FATAL_ERROR "PnetCDF library or includes not found at the specified path: ${PNETCDF_DIR}")
 endif()
 
-# Find netcdf-c
-set(NETCDF_C_INSTALL_DIR "/work/aaron900129/netcdf-c_install_hpcx" CACHE PATH "Path to NetCDF-C installation")
-find_path(NETCDF_C_INCLUDE_DIR netcdf.h
-          HINTS ${NETCDF_C_INSTALL_DIR}/include
-          NO_DEFAULT_PATH)
-find_library(NETCDF_C_LIBRARY NAMES netcdf
-             HINTS ${NETCDF_C_INSTALL_DIR}/lib
-             NO_DEFAULT_PATH)
 
-if (NETCDF_C_INCLUDE_DIR AND NETCDF_C_LIBRARY)
-    add_library(NetCDF::netcdf UNKNOWN IMPORTED GLOBAL)
-    set_target_properties(NetCDF::netcdf PROPERTIES
-                          IMPORTED_LOCATION "${NETCDF_C_LIBRARY}"
-                          INTERFACE_INCLUDE_DIRECTORIES "${NETCDF_C_INCLUDE_DIR}")
-    set(NETCDF_C_FOUND TRUE)
-    message(STATUS "NetCDF-C (for fallback) found manually at: ${NETCDF_C_LIBRARY}")
-else()
-    message(FATAL_ERROR "NetCDF-C library or includes not found at the specified path: ${NETCDF_C_INSTALL_DIR}")
-endif()
+# ------------------------------
+# Project sources
+# ------------------------------
+include_directories(${CMAKE_SOURCE_DIR}/src)
+add_subdirectory(src)
 
 
 # Build tests if requested
