@@ -310,5 +310,8 @@
             "fixed_solar_zenith_angle": -9999,
             "pool_size_multiplier": 2
         }
+    },
+    "optimization": {
+        "cuda_graph_halo_exchange": ["u", "w", "xi", "eta", "zeta", "th", "qv", "qc", "qi", "qr", "qm", "nc", "ni", "nr", "bm"]
     }
 }

@@ -79,7 +79,7 @@ int main(int argc, char *argv[]) {
         grid.print_info();
         VVM::Core::State state(config, parameters, grid, nccl_comm, stream);
         // VVM::Core::HaloExchanger halo_exchanger(grid);
-        VVM::Core::HaloExchanger halo_exchanger(grid, nccl_comm, stream);
+        VVM::Core::HaloExchanger halo_exchanger(config, grid, nccl_comm, stream);
         VVM::Core::BoundaryConditionManager bc_manager(grid);
 
         const int nz = grid.get_local_total_points_z();
