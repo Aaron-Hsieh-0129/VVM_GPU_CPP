@@ -66,7 +66,7 @@ OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VV
 
     MPI_Comm_free(&nodeComm);
 
-    std::string use_collective = "false"; // 預設關閉
+    std::string use_collective = "false";
 
     if (total_nodes > 1) {
         use_collective = "true"; 

@@ -230,7 +230,7 @@ int main(int argc, char *argv[]) {
         // if (rank == 0) {
         //     std::cout << "\n--- Field State BEFORE Halo Exchange ---" << std::endl; state.get_field<3>("v").print_slice_z_at_k(grid, 0, 18);
         // }
-        halo_exchanger.exchange_halos(state);
+        // halo_exchanger.exchange_halos(state);
         Kokkos::parallel_for("th_init_with_perturbation", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, nx}),
             KOKKOS_LAMBDA(int j, int i) {
                 th(0,j,i) = th(1,j,i);
