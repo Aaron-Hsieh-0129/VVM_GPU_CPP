@@ -7,7 +7,7 @@
   },
   "configurePresets": [
     {
-      "name": "nvhpc-blaze",
+      "name": "blaze",
       "displayName": "NVHPC 24.9 on blaze",
       "description": "Custom environment NVHPC on blaze",
       "generator": "Unix Makefiles",

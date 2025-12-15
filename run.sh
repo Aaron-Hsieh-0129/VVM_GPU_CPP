@@ -14,7 +14,7 @@
 
 
 cmake --list-presets
-CMAKE_PRESET_NAME="nvhpc-blaze"
+CMAKE_PRESET_NAME="blaze"
 BUILD_DIR="build"
 
 
