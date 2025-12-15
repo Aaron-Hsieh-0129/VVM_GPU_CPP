@@ -7,7 +7,7 @@
 #include <iostream>
 #include <mpi.h>
 
-#include "externals/json/json.hpp"
+#include "../../externals/json/json.hpp"
 
 namespace VVM {
 namespace Utils {

@@ -1,19 +1,8 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.20)
 
 project(VVM LANGUAGES CXX C Fortran)
 
 cmake_policy(SET CMP0135 NEW)
-
-
-# -----------------------------
-# NVHPC and Library Path
-# -----------------------------
-set(NVHPC_DIR "/work/aaron900129/nvhpc_24_9")
-set(HDF5_DIR "/work/aaron900129/hdf5_install_hpcx")
-set(NETCDF_C_DIR "/work/aaron900129/netcdf-c_install_hpcx")
-set(NETCDF_Fortran_DIR "/work/aaron900129/netcdf-fortran_install_hpcx")
-set(PNETCDF_DIR "/work/aaron900129/pnetcdf_install_hpcx")
-
 
 # ------------------------------
 # Compiler-specific settings
@@ -108,7 +97,7 @@ endif()
 # NVHPC
 # ------------------------------
 find_library(NVCPUMATH_LIBRARY nvcpumath
-    HINTS ${NVHPC_DIR}/Linux_x86_64/24.9/compilers/lib
+    HINTS ${NVHPC_DIR}/compilers/lib
 )
 if(NOT NVCPUMATH_LIBRARY)
     message(FATAL_ERROR "Could not find NVIDIA CPU Math Library (libnvcpumath.so)")
@@ -117,7 +106,7 @@ else()
 endif()
 
 find_library(NVTOOLSEXT_LIBRARY nvToolsExt
-    HINTS ${NVHPC_DIR}/Linux_x86_64/24.9/cuda/lib64
+    HINTS ${NVHPC_DIR}/cuda/lib64
 )
 if(NOT NVTOOLSEXT_LIBRARY)
     message(FATAL_ERROR "Could not find NVIDIA Tools Extension Library (libnvToolsExt.so)")
@@ -128,11 +117,11 @@ endif()
 if(ENABLE_NCCL)
     find_path(NCCL_INCLUDE_DIR nccl.h
         HINTS 
-        ${NVHPC_DIR}/Linux_x86_64/24.9/comm_libs/nccl/include
+        ${NVHPC_DIR}/comm_libs/nccl/include
     )
     find_library(NCCL_LIBRARY nccl
         HINTS 
-        ${NVHPC_DIR}/Linux_x86_64/24.9/comm_libs/nccl/lib
+        ${NVHPC_DIR}/comm_libs/nccl/lib
     )
     if (NCCL_INCLUDE_DIR AND NCCL_LIBRARY)
         message(STATUS "Found NCCL: ${NCCL_INCLUDE_DIR}, ${NCCL_LIBRARY}")

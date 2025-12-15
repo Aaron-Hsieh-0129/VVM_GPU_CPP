@@ -1,0 +1,34 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "nvhpc-blaze",
+      "displayName": "NVHPC 24.9 on blaze",
+      "description": "Custom environment NVHPC on blaze",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+
+        "NVHPC_DIR": "/home/mog/nvhpc_24_9/Linux_x86_64/24.9",
+
+        "CMAKE_CXX_COMPILER": "/home/mog/nvhpc_24_9/Linux_x86_64/24.9/comm_libs/12.6/hpcx/hpcx-2.20/ompi/bin/mpic++",
+        "CMAKE_C_COMPILER":   "/home/mog/nvhpc_24_9/Linux_x86_64/24.9/comm_libs/12.6/hpcx/hpcx-2.20/ompi/bin/mpicc",
+        "CMAKE_Fortran_COMPILER": "/home/mog/nvhpc_24_9/Linux_x86_64/24.9/comm_libs/12.6/hpcx/hpcx-2.20/ompi/bin/mpifort",
+
+        "HDF5_DIR": "/home/mog/libs_GPUVVM",
+        "NETCDF_C_DIR": "/home/mog/libs_GPUVVM",
+        "NETCDF_Fortran_DIR": "/home/mog/libs_GPUVVM",
+        "PNETCDF_DIR": "/home/mog/libs_GPUVVM",
+
+        "ENABLE_NCCL": "ON",
+        "Kokkos_ENABLE_CUDA": "ON"
+      }
+    }
+  ]
+}
