@@ -4,8 +4,13 @@
 namespace VVM {
 namespace Core {
 
+#if defined(ENABLE_NCCL)
 State::State(const Utils::ConfigurationManager& config, const Parameters& params, const Grid& grid, ncclComm_t nccl_comm, cudaStream_t nccl_stream)
     : config_ref_(config), parameters_(params), grid_(grid), nccl_comm_(nccl_comm), nccl_stream_(nccl_stream) {
+#else
+State::State(const Utils::ConfigurationManager& config, const Parameters& params, const Grid& grid)
+    : config_ref_(config), parameters_(params), grid_(grid) {
+#endif
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
@@ -14,8 +19,8 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     int ny_total = grid.get_local_total_points_y();
     int nz_total = grid.get_local_total_points_z();
     // 0D field
-    add_field<1>("utopmn", {1});
-    add_field<1>("vtopmn", {1});
+    add_field<0>("utopmn", {});
+    add_field<0>("vtopmn", {});
 
     // 1D field
     add_field<1>("Tbar", {nz_total});

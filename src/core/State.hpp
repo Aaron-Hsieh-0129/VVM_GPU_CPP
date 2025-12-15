@@ -11,8 +11,10 @@
 #include <string>
 #include <memory>
 #include <variant>
-#include <nccl.h>
 #include <cuda_runtime.h>
+#if defined(ENABLE_NCCL)
+    #include <nccl.h>
+#endif
 
 namespace VVM { namespace Dynamics { class AdamsBashforth2; } }
 
@@ -22,6 +24,7 @@ namespace Core {
 // A variant that can hold a field of any supported dimension
 using AnyField = std::variant<
     std::monostate, // default state
+    Field<0>,
     Field<1>,
     Field<2>,
     Field<3>,
@@ -32,8 +35,12 @@ class State {
     friend class VVM::Dynamics::AdamsBashforth2;
 public:
     // Constructor
+#if defined(ENABLE_NCCL)
     State(const Utils::ConfigurationManager& config, const Parameters& params, const Grid& grid, ncclComm_t nccl_comm,
           cudaStream_t nccl_stream);
+#else
+    State(const Utils::ConfigurationManager& config, const Parameters& params, const Grid& grid);
+#endif
 
     template<size_t Dim>
     void add_field(const std::string& name, std::initializer_list<int> dims_list) {
@@ -78,6 +85,7 @@ public:
     }
 
 
+#if defined(ENABLE_NCCL)
     template<size_t Dim>
     void calculate_horizontal_mean(
         const Field<Dim>& field, 
@@ -160,11 +168,12 @@ public:
                 d_mean_result() /= total_points_horizontal;
             });
     }
-
-
+#endif
 
     template<size_t Dim>
-    double calculate_horizontal_mean(const Field<Dim>& field, int k_level = -1) const {
+    Kokkos::View<double> calculate_horizontal_mean(const Field<Dim>& field, int k_level = -1) const {
+        Kokkos::View<double> ans("ans");
+        Kokkos::deep_copy(ans, 0);
         auto view = field.get_device_data();
 
         const int ny_local = grid_.get_local_physical_points_y();
@@ -175,7 +184,7 @@ public:
         const double total_points_horizontal = static_cast<double>(gnx * gny);
 
         if (total_points_horizontal == 0) {
-            return 0.0;
+            return ans;
         }
 
         double local_sum = 0.0;
@@ -187,7 +196,7 @@ public:
                 if (rank == 0) {
                     std::cerr << "Warning: k_level " << k_level << " is in the halo region for the 3D field '" << field.get_name() << "'. Returning 0." << std::endl;
                 }
-                return 0.0;
+                return ans;
             }
 
             Kokkos::parallel_reduce("calculate_3d_local_sum",
@@ -210,13 +219,15 @@ public:
             if (rank == 0) {
                 std::cerr << "Warning: calculate_horizontal_mean does not support " << Dim << "D fields. Returning 0." << std::endl;
             }
-            return 0.0;
+            return ans;
         }
 
         double global_sum = 0.0;
         MPI_Allreduce(&local_sum, &global_sum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-        return global_sum / total_points_horizontal;
+        Kokkos::deep_copy(ans, global_sum / total_points_horizontal);
+
+        return ans;
     }
 
     // Provide iterators to loop over all fields
@@ -231,8 +242,10 @@ private:
     const Parameters& parameters_;
     std::map<std::string, AnyField> fields_;
 
+#if defined(ENABLE_NCCL)
     ncclComm_t nccl_comm_;
     cudaStream_t nccl_stream_;
+#endif
 };
 
 } // namespace Core

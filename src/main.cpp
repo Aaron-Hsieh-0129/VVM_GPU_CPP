@@ -23,12 +23,14 @@
 #include "utils/Timer.hpp"
 #include "utils/TimingManager.hpp"
 
+#if defined(ENABLE_NCCL)
 void init_nccl(ncclComm_t* comm, int rank, int size) {
     ncclUniqueId id;
     if (rank == 0) ncclGetUniqueId(&id);
     MPI_Bcast(&id, sizeof(id), MPI_BYTE, 0, MPI_COMM_WORLD);
     ncclCommInitRank(comm, size, id, rank);
 }
+#endif
 
 int main(int argc, char *argv[]) {
     MPI_Init(&argc, &argv);
@@ -47,11 +49,13 @@ int main(int argc, char *argv[]) {
     std::unique_ptr<VVM::Physics::RRTMGP::RRTMGPRadiation> rrtmgp_interface;
     Kokkos::initialize(argc, argv);
 
+#if defined(ENABLE_NCCL)
     ncclComm_t nccl_comm;
     init_nccl(&nccl_comm, rank, size);
 
     int device_id;
     cudaGetDevice(&device_id);
+#endif
 
     {
         VVM::Utils::Timer total_timer("total vvm");
@@ -77,10 +81,17 @@ int main(int argc, char *argv[]) {
         VVM::Core::Grid grid(config);
         VVM::Core::Parameters parameters(config, grid);
         grid.print_info();
+
+#if defined(ENABLE_NCCL)
         VVM::Core::State state(config, parameters, grid, nccl_comm, stream);
-        // VVM::Core::HaloExchanger halo_exchanger(grid);
         VVM::Core::HaloExchanger halo_exchanger(config, grid, nccl_comm, stream);
+#else
+        VVM::Core::State state(config, parameters, grid);
+        VVM::Core::HaloExchanger halo_exchanger(grid);
+#endif
+        // VVM::Core::HaloExchanger halo_exchanger(grid);
         VVM::Core::BoundaryConditionManager bc_manager(grid);
+
 
         const int nz = grid.get_local_total_points_z();
         const int ny = grid.get_local_total_points_y();
@@ -106,12 +117,17 @@ int main(int argc, char *argv[]) {
         // if (rank == 0) zeta_field.print_slice_z_at_k(grid, 0, nz-h-1);
         // Kokkos::fence();
         // exit(1);
+#ifdef NCCL
         Kokkos::View<double> heat_flux_mean("heat_flux_mean");
         state.calculate_horizontal_mean(htflx_sfc, heat_flux_mean);
-        double h_heat_flux_mean = 0;
+#else
+        auto heat_flux_mean = state.calculate_horizontal_mean(htflx_sfc);
+#endif
+        Kokkos::View<double, Kokkos::HostSpace> h_heat_flux_mean("h_heat_flux_mean");
         Kokkos::deep_copy(h_heat_flux_mean, heat_flux_mean);
+        
         if (rank == 0) {
-            std::cout << "Average of heat flux is: " << h_heat_flux_mean << std::endl;
+            std::cout << "Average of heat flux is: " << h_heat_flux_mean() << std::endl;
         }
 
         VVM::Core::Initializer init(config, grid, parameters, state, halo_exchanger);

@@ -280,10 +280,25 @@ void Initializer::assign_vars() const {
     );
 
     // utop predict
-    double utopmn_h = state_.calculate_horizontal_mean(state_.get_field<3>("u"), nz-h-1);
-    double vtopmn_h = state_.calculate_horizontal_mean(state_.get_field<3>("v"), nz-h-1);
-    Kokkos::deep_copy(state_.get_field<1>("utopmn").get_mutable_device_data(), utopmn_h);
-    Kokkos::deep_copy(state_.get_field<1>("vtopmn").get_mutable_device_data(), vtopmn_h);
+#if defined(ENABLE_NCCL)
+    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> utopmn("utopmn");
+    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> vtopmn("vtopmn");
+    state_.calculate_horizontal_mean(state_.get_field<3>("u"), utopmn);
+    state_.calculate_horizontal_mean(state_.get_field<3>("v"), vtopmn);
+    auto utopmn_view = state_.get_field<0>("vtopmn").get_mutable_device_data();
+    auto vtopmn_view = state_.get_field<0>("vtopmn").get_mutable_device_data();
+    Kokkos::parallel_for("assign_uvtopmn", Kokkos::RangePolicy<>(0, 1),
+        KOKKOS_LAMBDA(const int k) {
+            utopmn_view() = utopmn();
+            vtopmn_view() = vtopmn();
+        }
+    );
+#else
+    const auto utopmn = state_.calculate_horizontal_mean(state_.get_field<3>("u"), nz-h-1);
+    const auto vtopmn = state_.calculate_horizontal_mean(state_.get_field<3>("v"), nz-h-1);
+    Kokkos::deep_copy(state_.get_field<0>("utopmn").get_mutable_device_data(), utopmn);
+    Kokkos::deep_copy(state_.get_field<0>("vtopmn").get_mutable_device_data(), vtopmn);
+#endif
 
     auto& eta = state_.get_field<3>("eta").get_mutable_device_data();
     auto& xi = state_.get_field<3>("xi").get_mutable_device_data();

@@ -6,7 +6,7 @@
 #define VVM_CORE_FIELD_HPP
 
 #include <Kokkos_Core.hpp>
-#include "Grid.hpp"        // Field depends on Grid information
+#include "Grid.hpp"
 
 namespace VVM {
 namespace Core {
@@ -15,6 +15,7 @@ namespace Core {
 template<size_t Dim, typename ScalarType = double>
 struct ViewTypeHelper;
 
+template<typename ScalarType> struct ViewTypeHelper<0, ScalarType> { using type = Kokkos::View<ScalarType>; };
 template<typename ScalarType> struct ViewTypeHelper<1, ScalarType> { using type = Kokkos::View<ScalarType*>; };
 template<typename ScalarType> struct ViewTypeHelper<2, ScalarType> { using type = Kokkos::View<ScalarType**>; };
 template<typename ScalarType> struct ViewTypeHelper<3, ScalarType> { using type = Kokkos::View<ScalarType***>; };
@@ -36,7 +37,8 @@ public:
     explicit Field(const std::string& field_name, const std::array<int, Dim>& dims)
         : name_(field_name) {
         
-        if constexpr (Dim == 1) data_ = ViewType(name_, dims[0]);
+        if constexpr (Dim == 0) data_ = ViewType(name_);
+        else if constexpr (Dim == 1) data_ = ViewType(name_, dims[0]);
         else if constexpr (Dim == 2) data_ = ViewType(name_, dims[0], dims[1]);
         else if constexpr (Dim == 3) data_ = ViewType(name_, dims[0], dims[1], dims[2]);
         else if constexpr (Dim == 4) data_ = ViewType(name_, dims[0], dims[1], dims[2], dims[3]);

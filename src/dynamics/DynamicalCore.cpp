@@ -94,8 +94,8 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
         // This is for predict utopmn and vtopmn
         state_.add_field<1>("d_utopmn", {2});
         state_.add_field<1>("d_vtopmn", {2});
-        state_.add_field<1>("utopmn_m", {1});
-        state_.add_field<1>("vtopmn_m", {1});
+        state_.add_field<0>("utopmn_m", {});
+        state_.add_field<0>("vtopmn_m", {});
     }
 
     auto integration_config = config_.get_value<nlohmann::json>("dynamics.time_integration.procedure");
@@ -380,8 +380,8 @@ void DynamicalCore::compute_uvtopmn() {
     auto& tempu = tempu_field.get_mutable_device_data();
     auto& tempv = tempv_field.get_mutable_device_data();
 
-    auto &utopmn = state_.get_field<1>("utopmn");
-    auto &vtopmn = state_.get_field<1>("vtopmn");
+    auto &utopmn = state_.get_field<0>("utopmn");
+    auto &vtopmn = state_.get_field<0>("vtopmn");
 
     Kokkos::parallel_for("calculate_utopmn",
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h, nx-h}),
@@ -392,20 +392,23 @@ void DynamicalCore::compute_uvtopmn() {
                        * (w(nz-h-2,j,i)+w(nz-h-2,j+1,i));
         }
     );
+#if defined(ENABLE_NCCL)
     Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> tempumn("tempumn");
     Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> tempvmn("tempvmn");
     state_.calculate_horizontal_mean(tempu_field, tempumn);
     state_.calculate_horizontal_mean(tempv_field, tempvmn);
-    // double tempumn = state_.calculate_horizontal_mean(tempu_field);
-    // double tempvmn = state_.calculate_horizontal_mean(tempv_field);
+#else
+    auto tempumn = state_.calculate_horizontal_mean(tempu_field);
+    auto tempvmn = state_.calculate_horizontal_mean(tempv_field);
+#endif
 
 
-    auto& utopmn_to_update = state_.get_field<1>("utopmn");
+    auto& utopmn_to_update = state_.get_field<0>("utopmn");
     auto& utopmn_new_view = utopmn_to_update.get_mutable_device_data();
-    auto& utopmn_prev_step = state_.get_field<1>("utopmn_m");
-    auto& vtopmn_to_update = state_.get_field<1>("vtopmn");
+    auto& utopmn_prev_step = state_.get_field<0>("utopmn_m");
+    auto& vtopmn_to_update = state_.get_field<0>("vtopmn");
     auto& vtopmn_new_view = vtopmn_to_update.get_mutable_device_data();
-    auto& vtopmn_prev_step = state_.get_field<1>("vtopmn_m");
+    auto& vtopmn_prev_step = state_.get_field<0>("vtopmn_m");
 
     // update utopmn, vtopmn
     Kokkos::deep_copy(utopmn_prev_step.get_mutable_device_data(), utopmn_to_update.get_device_data());
@@ -424,9 +427,9 @@ void DynamicalCore::compute_uvtopmn() {
             d_utopmn(now_idx) = 0.25 * flex_height_coef_mid(nz-h-1) * tempumn() * rdz() / rhobar(nz-h-1);
             d_vtopmn(now_idx) = 0.25 * flex_height_coef_mid(nz-h-1) * tempvmn() * rdz() / rhobar(nz-h-1);
 
-            utopmn_new_view(0) = utopmn_old_view(0) 
+            utopmn_new_view() = utopmn_old_view() 
                     + dt() * (1.5 * d_utopmn(now_idx) - 0.5 * d_utopmn(prev_idx));
-            vtopmn_new_view(0) = vtopmn_old_view(0) 
+            vtopmn_new_view() = vtopmn_old_view() 
                     + dt() * (1.5 * d_vtopmn(now_idx) - 0.5 * d_vtopmn(prev_idx));
         }
     );
