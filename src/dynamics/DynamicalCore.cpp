@@ -462,6 +462,15 @@ void DynamicalCore::calculate_thermo_tendencies() {
     compute_diagnostic_fields(); 
 
     for (const auto& var_name : thermo_vars_) {
+        std::string fe_name = "fe_tendency_" + var_name;
+        if (state_.has_field(fe_name)) {
+            auto& field = state_.get_field<3>(fe_name);
+            auto data = field.get_mutable_device_data();
+            Kokkos::deep_copy(data, 0.0);
+        }
+    }
+
+    for (const auto& var_name : thermo_vars_) {
         if (tendency_calculators_.count(var_name)) {
             tendency_calculators_.at(var_name)->calculate_tendencies(state_, grid_, params_, step_count);
         }

@@ -47,16 +47,16 @@
     },
     "initial_conditions": {
         "format": "txt",
-        "source_file": "/home/mog/VVM_GPU_CPP/rundata/initial_conditions/profile_p3.txt"
+        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/initial_conditions/profile_p3.txt"
     },
     "netcdf_reader": {
-        "source_file": "/home/mog/VVM_GPU_CPP/rundata/TOPO.nc",
+        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/TOPO.nc",
         "variables_to_read": {
             "2d": []
         }
     },
     "output": {
-        "output_dir": "/home/mog/VVM_GPU_CPP/output/p3",
+        "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/p3_refactor",
         "enable_netcdf": true,
         "output_filename_prefix": "vvm_output",
         "fields_to_output": [
@@ -246,7 +246,7 @@
                     }
                 }
             }
-        },
+        }
     },
     "physics": {
         "p3": {
@@ -262,7 +262,7 @@
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
             "fixed_total_solar_irradiance": 340,
             "fixed_solar_zenith_angle": -9999,
-            "pool_size_multiplier": 1.98
+            "pool_size_multiplier": 1.935
         }
     },
     "optimization": {
