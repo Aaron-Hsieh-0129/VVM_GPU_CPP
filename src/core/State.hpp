@@ -241,6 +241,10 @@ public:
     double get_time() const { return time_; }
     void advance_time(double dt) { time_ += dt; }
 
+    bool has_field(const std::string& name) const {
+        return fields_.find(name) != fields_.end();
+    }
+
 private:
     const Utils::ConfigurationManager& config_ref_;
     const Grid& grid_;
