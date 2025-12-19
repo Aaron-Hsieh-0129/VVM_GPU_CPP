@@ -26,23 +26,6 @@ void TendencyCalculator::calculate_tendencies(Core::State& state, const Core::Gr
     auto& field_to_update = state.get_field<3>(variable_name_);
     auto& field_current_view = field_to_update.get_mutable_device_data();
 
-    // if (variable_name_ == "xi" || variable_name_ == "eta") {
-    //     Kokkos::parallel_for("divide_by_density",
-    //         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz-h, ny, nx}),
-    //         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-    //             field_current_view(k, j, i) /= rhobar_up(k);
-    //         }
-    //     );
-    // }
-    // else if (variable_name_ == "zeta") {
-    //     Kokkos::parallel_for("divide_by_density",
-    //         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz, ny, nx}),
-    //         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-    //             field_current_view(k, j, i) /= rhobar(k);
-    //         }
-    //     );
-    // }
-
     // Calculate AB2 tendencies
     if (!ab2_tendency_terms_.empty()) {
         if (!temp_tendency_field_) {
@@ -73,25 +56,6 @@ void TendencyCalculator::calculate_tendencies(Core::State& state, const Core::Gr
             term->compute_tendency(state, grid, params, fe_tendency_field);
         }
     }
-
-     // Divide rho for xi, eta, zeta
-    // if (variable_name_ == "xi" || variable_name_ == "eta") {
-    //     Kokkos::parallel_for("divide_by_density",
-    //         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz-h, ny, nx}),
-    //         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-    //             field_current_view(k, j, i) *= rhobar_up(k);
-    //         }
-    //     );
-    // }
-    // else if (variable_name_ == "zeta") {
-    //     Kokkos::parallel_for("divide_by_density",
-    //         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz, ny, nx}),
-    //         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-    //             field_current_view(k, j, i) *= rhobar(k);
-    //         }
-    //     );
-    // }
-
 }
 
 } // namespace Dynamics

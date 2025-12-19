@@ -236,11 +236,19 @@ public:
     auto begin() const { return fields_.cbegin(); } // First key
     auto end() const { return fields_.cend(); } // Last key
 
+    size_t get_step() const { return step_; }
+    void increment_step() { step_++; }
+    double get_time() const { return time_; }
+    void advance_time(double dt) { time_ += dt; }
+
 private:
     const Utils::ConfigurationManager& config_ref_;
     const Grid& grid_;
     const Parameters& parameters_;
     std::map<std::string, AnyField> fields_;
+
+    size_t step_ = 0;
+    double time_ = 0.0;
 
 #if defined(ENABLE_NCCL)
     ncclComm_t nccl_comm_;

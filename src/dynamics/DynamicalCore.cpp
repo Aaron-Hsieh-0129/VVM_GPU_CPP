@@ -21,25 +21,43 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
       wind_solver_(std::make_unique<WindSolver>(grid, config, params, halo_exchanger)), 
       halo_exchanger_(halo_exchanger) {
 
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    if (rank == 0) {
-        std::cout << "\n--- Initializing Dynamical Core ---" << std::endl;
-    }
+    int rank = grid_.get_mpi_rank();
+    if (rank == 0) std::cout << "\n--- Initializing Dynamical Core ---" << std::endl;
     
     auto prognostic_config = config_.get_value<nlohmann::json>("dynamics.prognostic_variables");
+    std::vector<std::string> common_thermo = {"th", "qv", "qc", "qr", "qi", "nc", "nr", "ni", "qm", "bm"};
     
     for (auto& [var_name, var_conf] : prognostic_config.items()) {
         if (rank == 0) {
             std::cout << "  * Loading prognostic variable: " << var_name << std::endl;
         }
-        std::vector<std::unique_ptr<TendencyTerm>> ab2_terms;
-        std::vector<std::unique_ptr<TendencyTerm>> fe_terms;
         bool has_ab2 = false;
         bool has_fe = false;
 
+        bool is_thermo = std::find(common_thermo.begin(), common_thermo.end(), var_name) != common_thermo.end();
+
+        if (is_thermo) thermo_vars_.push_back(var_name);
+        else vorticity_vars_.push_back(var_name);
+
+        std::vector<std::unique_ptr<TendencyTerm>> ab2_terms;
+        std::vector<std::unique_ptr<TendencyTerm>> fe_terms;
+
         if (var_conf.contains("tendency_terms")) {
             for (auto& [term_name, term_conf] : var_conf.at("tendency_terms").items()) {
+                if (term_name == "forcing") {
+                    std::string time_scheme = term_conf.value("temporal_scheme", "ForwardEuler");
+                    
+                    if (time_scheme == "ForwardEuler") {
+                        has_fe = true; 
+                    } 
+
+                    if (rank == 0) {
+                        std::cout << "    - Enabled external forcing container (ForwardEuler) for " << term_name << std::endl;
+                    }
+                    continue; 
+                }
+
+
                 std::string spatial_scheme_name = term_conf.at("spatial_scheme");
                 std::string time_scheme_name = term_conf.value("temporal_scheme", "AdamsBashforth2");
 
@@ -90,14 +108,14 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
         if (has_fe) {
              state_.add_field<3>("fe_tendency_" + var_name, {nz, ny, nx});
         }
-
-        // This is for predict utopmn and vtopmn
-        state_.add_field<1>("d_utopmn", {2});
-        state_.add_field<1>("d_vtopmn", {2});
-        state_.add_field<0>("utopmn_m", {});
-        state_.add_field<0>("vtopmn_m", {});
     }
+    // This is for predict utopmn and vtopmn
+    state_.add_field<1>("d_utopmn", {2});
+    state_.add_field<1>("d_vtopmn", {2});
+    state_.add_field<0>("utopmn_m", {});
+    state_.add_field<0>("vtopmn_m", {});
 
+    /*
     auto integration_config = config_.get_value<nlohmann::json>("dynamics.time_integration.procedure");
     for (const auto& step_conf : integration_config) {
         IntegrationStep step;
@@ -130,11 +148,13 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
         }
         std::cout << "------------------------------------" << std::endl;
     }
+    */
 
 }
 
 DynamicalCore::~DynamicalCore() = default;
 
+/*
 void DynamicalCore::step(Core::State& state, double dt) {
     compute_diagnostic_fields();
 
@@ -166,7 +186,7 @@ void DynamicalCore::step(Core::State& state, double dt) {
     for (const auto& procedure_step : integration_procedure_) {
         for (const auto& var_name : procedure_step.vars_to_calculate_tendency) {
             if (tendency_calculators_.count(var_name)) {
-                tendency_calculators_.at(var_name)->calculate_tendencies(state, grid_, params_, time_step_count);
+                tendency_calculators_.at(var_name)->calculate_tendencies(state, grid_, params_, state.get_step());
             }
         }
 
@@ -228,8 +248,8 @@ void DynamicalCore::step(Core::State& state, double dt) {
     compute_zeta_vertical_structure(state);
     compute_uvtopmn();
     compute_wind_fields();
-    time_step_count++;
 }
+*/
 
 void DynamicalCore::compute_diagnostic_fields() const {
     auto scheme = std::make_unique<Takacs>(grid_, halo_exchanger_);
@@ -419,8 +439,8 @@ void DynamicalCore::compute_uvtopmn() {
     auto& d_utopmn = state_.get_field<1>("d_utopmn").get_mutable_device_data();
     auto& d_vtopmn = state_.get_field<1>("d_vtopmn").get_mutable_device_data();
 
-    size_t now_idx = time_step_count % 2;
-    size_t prev_idx = (time_step_count + 1) % 2;
+    size_t now_idx = state_.get_step() % 2;
+    size_t prev_idx = (state_.get_step() + 1) % 2;
     Kokkos::parallel_for("Cauculate_uvtopmn", 
         1, 
         KOKKOS_LAMBDA(const int i) {
@@ -435,6 +455,131 @@ void DynamicalCore::compute_uvtopmn() {
     );
     return;
 }
+
+
+void DynamicalCore::calculate_thermo_tendencies() {
+    size_t step_count = state_.get_step();
+    compute_diagnostic_fields(); 
+
+    for (const auto& var_name : thermo_vars_) {
+        if (tendency_calculators_.count(var_name)) {
+            tendency_calculators_.at(var_name)->calculate_tendencies(state_, grid_, params_, step_count);
+        }
+    }
+}
+
+void DynamicalCore::update_thermodynamics(double dt) {
+    const int h = grid_.get_halo_cells();
+    const auto& max_topo_idx = params_.max_topo_idx;
+    const int ny = grid_.get_local_total_points_y();
+    const int nx = grid_.get_local_total_points_x();
+
+    for (const auto& var_name : thermo_vars_) {
+        if (time_integrators_.count(var_name)) {
+            // var += dt * (AB2 + FE)
+            time_integrators_.at(var_name)->step(state_, grid_, params_, dt);
+            
+            // Topography for theta
+            if (var_name == "th") {
+                const auto& ITYPEW = state_.get_field<3>("ITYPEW").get_device_data();
+                auto& th = state_.get_field<3>("th").get_mutable_device_data();
+                const auto& thbar = state_.get_field<1>("thbar").get_device_data();
+                
+                Kokkos::parallel_for("topo_bc_th",
+                    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
+                    KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                        if (ITYPEW(k,j,i) != 1) {
+                            th(k,j,i) = thbar(k);
+                        }
+                    }
+                );
+            }
+            halo_exchanger_.exchange_halos(state_.get_field<3>(var_name));
+        }
+    }
+}
+
+void DynamicalCore::calculate_vorticity_tendencies() {
+    size_t step_count = state_.get_step();
+    const int nz = grid_.get_local_total_points_z();
+    const int ny = grid_.get_local_total_points_y();
+    const int nx = grid_.get_local_total_points_x();
+    const int h = grid_.get_halo_cells();
+    const auto& rhobar_up = state_.get_field<1>("rhobar_up").get_device_data();
+    const auto& rhobar = state_.get_field<1>("rhobar").get_device_data();
+
+    auto& xi = state_.get_field<3>("xi").get_mutable_device_data();
+    auto& eta = state_.get_field<3>("eta").get_mutable_device_data();
+    auto& zeta = state_.get_field<3>("zeta").get_mutable_device_data();
+    
+    // Divide by density
+    Kokkos::parallel_for("divide_by_density_xi_eta",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz-h, ny, nx}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            xi(k, j, i) /= rhobar_up(k);
+            eta(k, j, i) /= rhobar_up(k);
+        }
+    );
+    Kokkos::parallel_for("divide_by_density_zeta",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz, ny, nx}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            zeta(k, j, i) /= rhobar(k);
+        }
+    );
+
+    // Calculate vorticity tendency
+    for (const auto& var_name : vorticity_vars_) {
+        if (tendency_calculators_.count(var_name)) {
+            tendency_calculators_.at(var_name)->calculate_tendencies(state_, grid_, params_, step_count);
+        }
+    }
+}
+
+void DynamicalCore::update_vorticity(double dt) {
+    const int nz = grid_.get_local_total_points_z();
+    const int ny = grid_.get_local_total_points_y();
+    const int nx = grid_.get_local_total_points_x();
+    const int h = grid_.get_halo_cells();
+    const auto& rhobar_up = state_.get_field<1>("rhobar_up").get_device_data();
+    const auto& rhobar = state_.get_field<1>("rhobar").get_device_data();
+
+    auto& xi = state_.get_field<3>("xi").get_mutable_device_data();
+    auto& eta = state_.get_field<3>("eta").get_mutable_device_data();
+    auto& zeta = state_.get_field<3>("zeta").get_mutable_device_data();
+
+    Kokkos::parallel_for("multiply_density_xi",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz-h, ny, nx}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            xi(k, j, i) *= rhobar_up(k);
+        }
+    );
+    Kokkos::parallel_for("multiply_density_eta",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz-h, ny, nx}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            eta(k, j, i) *= rhobar_up(k);
+        }
+    );
+    Kokkos::parallel_for("multiply_density_zeta",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz, ny, nx}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            zeta(k, j, i) *= rhobar(k);
+        }
+    );
+
+    for (const auto& var_name : vorticity_vars_) {
+        if (time_integrators_.count(var_name)) {
+            time_integrators_.at(var_name)->step(state_, grid_, params_, dt);
+            halo_exchanger_.exchange_halos(state_.get_field<3>(var_name));
+        }
+    }
+}
+
+void DynamicalCore::diagnose_wind_fields(Core::State& state) {
+    compute_zeta_vertical_structure(state);
+    compute_uvtopmn(); 
+    compute_wind_fields();
+}
+
 
 } // namespace Dynamics
 } // namespace VVM
