@@ -458,7 +458,6 @@ void DynamicalCore::compute_uvtopmn() {
 
 
 void DynamicalCore::calculate_thermo_tendencies() {
-    size_t step_count = state_.get_step();
     compute_diagnostic_fields(); 
 
     for (const auto& var_name : thermo_vars_) {
@@ -472,7 +471,7 @@ void DynamicalCore::calculate_thermo_tendencies() {
 
     for (const auto& var_name : thermo_vars_) {
         if (tendency_calculators_.count(var_name)) {
-            tendency_calculators_.at(var_name)->calculate_tendencies(state_, grid_, params_, step_count);
+            tendency_calculators_.at(var_name)->calculate_tendencies(state_, grid_, params_);
         }
     }
 }
@@ -509,7 +508,6 @@ void DynamicalCore::update_thermodynamics(double dt) {
 }
 
 void DynamicalCore::calculate_vorticity_tendencies() {
-    size_t step_count = state_.get_step();
     const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
     const int nx = grid_.get_local_total_points_x();
@@ -539,7 +537,7 @@ void DynamicalCore::calculate_vorticity_tendencies() {
     // Calculate vorticity tendency
     for (const auto& var_name : vorticity_vars_) {
         if (tendency_calculators_.count(var_name)) {
-            tendency_calculators_.at(var_name)->calculate_tendencies(state_, grid_, params_, step_count);
+            tendency_calculators_.at(var_name)->calculate_tendencies(state_, grid_, params_);
         }
     }
 }
