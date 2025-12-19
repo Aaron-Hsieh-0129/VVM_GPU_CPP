@@ -18,7 +18,7 @@ public:
                                 std::vector<std::unique_ptr<TendencyTerm>> ab2_terms,
                                 std::vector<std::unique_ptr<TendencyTerm>> fe_terms);
 
-    void calculate_tendencies(Core::State& state, const Core::Grid& grid, const Core::Parameters& params, size_t time_step_count);
+    void calculate_tendencies(Core::State& state, const Core::Grid& grid, const Core::Parameters& params);
 
 private:
     std::string variable_name_;
