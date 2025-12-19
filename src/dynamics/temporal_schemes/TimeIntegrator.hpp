@@ -29,7 +29,6 @@ private:
     std::string variable_name_;
     bool has_ab2_terms_;
     bool has_fe_terms_;
-    mutable size_t time_step_count_ = 0;
 };
 
 } // namespace Dynamics

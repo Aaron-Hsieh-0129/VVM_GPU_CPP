@@ -23,6 +23,8 @@
 #include "utils/Timer.hpp"
 #include "utils/TimingManager.hpp"
 
+#include "driver/Model.hpp"
+
 #if defined(ENABLE_NCCL)
 void init_nccl(ncclComm_t* comm, int rank, int size) {
     ncclUniqueId id;
@@ -45,8 +47,6 @@ int main(int argc, char *argv[]) {
         std::cout << "OpenMP Proc Bind: " << omp_get_proc_bind() << std::endl;
     }
 
-    std::unique_ptr<VVM::Physics::VVM_P3_Interface> p3_interface;
-    std::unique_ptr<VVM::Physics::RRTMGP::RRTMGPRadiation> rrtmgp_interface;
     Kokkos::initialize(argc, argv);
 
 #if defined(ENABLE_NCCL)
@@ -130,16 +130,8 @@ int main(int argc, char *argv[]) {
             std::cout << "Average of heat flux is: " << h_heat_flux_mean() << std::endl;
         }
 
-        VVM::Core::Initializer init(config, grid, parameters, state, halo_exchanger);
-        init.initialize_state();
-        if (config.get_value<bool>("physics.p3.enable_p3")) {
-            p3_interface = std::make_unique<VVM::Physics::VVM_P3_Interface>(config, grid, parameters);
-            p3_interface->initialize(state);
-        }
-        if (config.get_value<bool>("physics.rrtmgp.enable_rrtmgp")) {
-            rrtmgp_interface = std::make_unique<VVM::Physics::RRTMGP::RRTMGPRadiation>(config, grid, parameters);
-            rrtmgp_interface->initialize(state);
-        }
+        VVM::Driver::Model model(config, parameters, grid, state, halo_exchanger);
+        model.init();
 
         // B.C. process
         bc_manager.apply_z_bcs_to_field(state.get_field<1>("thbar"));
@@ -272,44 +264,28 @@ int main(int argc, char *argv[]) {
         double total_time = config.get_value<double>("simulation.total_time_s");
         double dt = parameters.get_value_host(parameters.dt);
         double output_interval = config.get_value<double>("simulation.output_interval_s");
-        double current_time = 0.0;
         double next_output_time = output_interval;
-        int rad_freq_in_steps = config.get_value<Int>("physics.rrtmgp.rad_frequency", 1);
 
         VVM::Utils::TimingManager::get_instance().stop_timer("initialize");
         // Simulation loop
-        while (current_time < total_time) {
-            dynamical_core.step(state, dt);
-            if (p3_interface) {
-                p3_interface->run(state, dt);
-            }
-            if (rrtmgp_interface) {
-                // Update net heating
-                if (dynamical_core.time_step_count % rad_freq_in_steps == 0) {
-                     rrtmgp_interface->run(state, dt);
-                }
-                rrtmgp_interface->apply_heating(state, dt);
-            }
-            // halo_exchanger.exchange_halos(state);
-            current_time += dt;
+        while (state.get_time() < total_time) {
+            // dynamical_core.step(state, dt);
 
-            std::cout << current_time << std::endl;
+            model.run_step(dt);
+
+            state.increment_step();
+            state.advance_time(dt);
+
+            std::cout << state.get_time() << std::endl;
 
              // Output data at specified intervals
-            if (current_time >= next_output_time) {
-                output_manager.write(dynamical_core.time_step_count, current_time);
+            if (state.get_time() >= next_output_time) {
+                output_manager.write(state.get_step(), state.get_time());
                 next_output_time += output_interval;
             }
         }
-    }
-    VVM::Utils::TimingManager::get_instance().print_timings(MPI_COMM_WORLD);
-
-    if (p3_interface) {
-        p3_interface->finalize();
-        p3_interface.reset();
-    }
-    if (rrtmgp_interface) {
-        rrtmgp_interface->finalize();
+        VVM::Utils::TimingManager::get_instance().print_timings(MPI_COMM_WORLD);
+        model.finalize();
     }
     Kokkos::finalize();
     MPI_Finalize();

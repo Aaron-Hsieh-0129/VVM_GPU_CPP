@@ -37,8 +37,8 @@ void TimeIntegrator::step(
         Kokkos::deep_copy(field_prev_step.get_mutable_device_data(), field_to_update.get_device_data());
         auto& field_old_view = field_prev_step.get_device_data();
         
-        size_t now_idx = time_step_count_ % 2;
-        size_t prev_idx = (time_step_count_ + 1) % 2;
+        size_t now_idx = state.get_step() % 2;
+        size_t prev_idx = (state.get_step() + 1) % 2;
         
         auto& tendency_history = state.get_field<4>("d_" + variable_name_);
         auto tendency_now_view = Kokkos::subview(tendency_history.get_device_data(), now_idx, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
@@ -68,7 +68,7 @@ void TimeIntegrator::step(
             );
         }
 
-        if (time_step_count_ == 0) {
+        if (state.get_step() == 0) {
             if (variable_name_ == "zeta") {
                 Kokkos::parallel_for("AB2_Forward_Step", 
                     Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h, h}, {ny-h, nx-h}),
@@ -138,8 +138,6 @@ void TimeIntegrator::step(
             }
         );
     }
-
-    time_step_count_++;
 }
 
 } // namespace Dynamics

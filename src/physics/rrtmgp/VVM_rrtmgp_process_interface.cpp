@@ -561,24 +561,47 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
     }
 }
 
-void RRTMGPRadiation::apply_heating(VVM::Core::State& state, const double dt) {
+// void RRTMGPRadiation::apply_heating(VVM::Core::State& state, const double dt) {
+//     const int nz = m_grid.get_local_total_points_z();
+//     const int ny = m_grid.get_local_total_points_y();
+//     const int nx = m_grid.get_local_total_points_x();
+//     const int h = m_grid.get_halo_cells();
+//
+//     auto& th = state.get_field<3>("th").get_mutable_device_data();
+//     
+//     const auto& net_heating = state.get_field<3>("net_heating").get_device_data(); 
+//     const auto& pibar = state.get_field<1>("pibar").get_device_data();
+//
+//     Kokkos::parallel_for("Apply_RRTMGP_Heating",
+//         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h, ny-h, nx-h}),
+//         KOKKOS_LAMBDA(const int k, const int j, const int i) {
+//             th(k, j, i) += (net_heating(k, j, i) / pibar(k)) * dt;
+//         }
+//     );
+// }
+
+void RRTMGPRadiation::apply_heating(VVM::Core::State& state) {
     const int nz = m_grid.get_local_total_points_z();
     const int ny = m_grid.get_local_total_points_y();
     const int nx = m_grid.get_local_total_points_x();
     const int h = m_grid.get_halo_cells();
 
-    auto& th = state.get_field<3>("th").get_mutable_device_data();
+    auto& fe_tend_field = state.get_field<3>("fe_tendency_th");
+    auto fe_tend = fe_tend_field.get_mutable_device_data();
     
     const auto& net_heating = state.get_field<3>("net_heating").get_device_data(); 
     const auto& pibar = state.get_field<1>("pibar").get_device_data();
 
-    Kokkos::parallel_for("Apply_RRTMGP_Heating",
+    Kokkos::parallel_for("Apply_RRTMGP_Heating_FE",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            th(k, j, i) += (net_heating(k, j, i) / pibar(k)) * dt;
+            fe_tend(k, j, i) += net_heating(k, j, i) / pibar(k);
         }
     );
 }
+
+
+
 
 } // namespace RRTMGP
 } // namespace Physics

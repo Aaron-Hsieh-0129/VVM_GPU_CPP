@@ -1,7 +1,7 @@
 {
     "grid": {
-        "nx": 1950,
-        "ny": 1950,
+        "nx": 256,
+        "ny": 16,
         "nz": 33,
         "n_halo_cells": 2,
         "dx": 500.0,
@@ -10,7 +10,7 @@
         "dz1": 100.0
     },
     "simulation": {
-        "total_time_s": 10.0,
+        "total_time_s": 1500.0,
         "dt_s": 1.0,
         "output_interval_s": 50.0
     },
@@ -111,6 +111,10 @@
                     "advection": {
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
+                    },
+                    "forcing": {
+                        "temporal_scheme": "ForwardEuler",
+                        "spatial_scheme": "Radiation"
                     }
                 }
             },
@@ -243,56 +247,6 @@
                 }
             }
         },
-        "time_integration": {
-            "procedure": [
-                {
-                    "step": 1,
-                    "description": "Calculate theta tendency and update theta to t+1",
-                    "calculate_tendencies": [
-                        "th",
-                        "qv",
-                        "qc",
-                        "qr",
-                        "qi",
-                        "qm",
-                        "nc",
-                        "nr",
-                        "ni",
-                        "bm"
-                    ],
-                    "update_states": [
-                        "th",
-                        "qv",
-                        "qc",
-                        "qr",
-                        "qi",
-                        "qm",
-                        "nc",
-                        "nr",
-                        "ni",
-                        "bm"
-                    ]
-                },
-                {
-                    "step": 2,
-                    "description": "Calculate all other tendencies (including buoyancy using new theta)",
-                    "calculate_tendencies": [
-                        "xi",
-                        "eta",
-                        "zeta"
-                    ]
-                },
-                {
-                    "step": 3,
-                    "description": "Update all other prognostic variables to t+1",
-                    "update_states": [
-                        "xi",
-                        "eta",
-                        "zeta"
-                    ]
-                }
-            ]
-        }
     },
     "physics": {
         "p3": {
@@ -308,7 +262,7 @@
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
             "fixed_total_solar_irradiance": 340,
             "fixed_solar_zenith_angle": -9999,
-            "pool_size_multiplier": 2
+            "pool_size_multiplier": 1.98
         }
     },
     "optimization": {

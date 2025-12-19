@@ -5,6 +5,7 @@ set(SCREAM_POSSIBLY_NO_PACK_SIZE 1 CACHE STRING "The number of scalars in a poss
 set(SCREAM_NUM_VERTICAL_LEV 33 CACHE STRING "Default number of vertical levels")
 
 
+add_subdirectory(driver)
 add_subdirectory(utils)
 add_subdirectory(core)
 add_subdirectory(io)
@@ -27,6 +28,7 @@ target_link_libraries(vvm
         MPI::MPI_CXX
         Kokkos::kokkos
 
+        vvm_driver
         vvm_utils
         vvm_core
         vvm_io
