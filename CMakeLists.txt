@@ -105,14 +105,14 @@ else()
     message(STATUS "Found NVIDIA CPU Math Library: ${NVCPUMATH_LIBRARY}")
 endif()
 
-find_library(NVTOOLSEXT_LIBRARY nvToolsExt
-    HINTS ${NVHPC_DIR}/cuda/lib64
-)
-if(NOT NVTOOLSEXT_LIBRARY)
-    message(FATAL_ERROR "Could not find NVIDIA Tools Extension Library (libnvToolsExt.so)")
-else()
-    message(STATUS "Found NVIDIA Tools Extension Library: ${NVTOOLSEXT_LIBRARY}")
-endif()
+# find_library(NVTOOLSEXT_LIBRARY nvToolsExt
+#     HINTS ${NVHPC_DIR}/cuda/lib64
+# )
+# if(NOT NVTOOLSEXT_LIBRARY)
+#     message(FATAL_ERROR "Could not find NVIDIA Tools Extension Library (libnvToolsExt.so)")
+# else()
+#     message(STATUS "Found NVIDIA Tools Extension Library: ${NVTOOLSEXT_LIBRARY}")
+# endif()
 
 if(ENABLE_NCCL)
     find_path(NCCL_INCLUDE_DIR nccl.h
