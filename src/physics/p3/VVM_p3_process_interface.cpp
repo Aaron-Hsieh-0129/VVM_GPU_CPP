@@ -13,8 +13,8 @@ using Constants = scream::physics::Constants<Real>;
 namespace VVM {
 namespace Physics {
 
-VVM_P3_Interface::VVM_P3_Interface(const VVM::Utils::ConfigurationManager &config, const VVM::Core::Grid &grid, const VVM::Core::Parameters &params)
-    : config_(config), grid_(grid), params_(params), 
+VVM_P3_Interface::VVM_P3_Interface(const VVM::Utils::ConfigurationManager &config, const VVM::Core::Grid &grid, const VVM::Core::Parameters &params, Core::HaloExchanger& halo_exchanger)
+    : config_(config), grid_(grid), params_(params), halo_exchanger_(halo_exchanger), 
     m_num_cols(grid_.get_local_physical_points_x() * grid_.get_local_physical_points_y()),
     m_num_levs(grid_.get_local_physical_points_z()),
     m_num_lev_packs(ekat::npack<Spack>(m_num_levs))
@@ -103,9 +103,13 @@ void VVM_P3_Interface::allocate_p3_buffers() {
     m_precip_liq_surf_mass_view = view_1d("precip_liq_surf_mass_acc", m_num_cols);
     m_precip_ice_surf_mass_view = view_1d("precip_ice_surf_mass_acc", m_num_cols);
 
-    m_unused = view_2d("unused", m_num_cols);
+    m_unused = view_2d("unused", m_num_cols, nk_pack_p1);
+    m_unused = view_2d("unused", m_num_cols, nk_pack_p1);                                                            
+    m_dummy_input = view_2d("dummy_input_zeros", m_num_cols, nk_pack_p1);                                            
+    Kokkos::deep_copy(m_unused, 0.0);                                                                                
+    Kokkos::deep_copy(m_dummy_input, 0.0);   
 
-    const int num_wsm_vars = 52;
+    const int num_wsm_vars = 64;
 
     const size_t wsm_size_in_bytes = WSM::get_total_bytes_needed(nk_pack_p1, num_wsm_vars, m_policy);
     const size_t wsm_size_in_spacks = (wsm_size_in_bytes + sizeof(Spack) - 1) / sizeof(Spack);
@@ -252,7 +256,7 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
     );
     
     const int nk_pack_p1 = ekat::npack<Spack>(m_num_levs+1);
-    workspace_mgr.setup(m_wsm_data, nk_pack_p1, 52, m_policy);
+    workspace_mgr.setup(m_wsm_data, nk_pack_p1, 64, m_policy);
 
     this->initialize_constant_buffers(state);
 }
@@ -752,6 +756,21 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
             });
         }
     );
+
+
+    halo_exchanger_.exchange_halos(state.get_field<3>("qc"));
+    halo_exchanger_.exchange_halos(state.get_field<3>("nc"));
+    halo_exchanger_.exchange_halos(state.get_field<3>("qr"));
+    halo_exchanger_.exchange_halos(state.get_field<3>("nr"));
+    halo_exchanger_.exchange_halos(state.get_field<3>("qi"));
+    halo_exchanger_.exchange_halos(state.get_field<3>("qm"));
+    halo_exchanger_.exchange_halos(state.get_field<3>("ni"));
+    halo_exchanger_.exchange_halos(state.get_field<3>("bm"));
+    halo_exchanger_.exchange_halos(state.get_field<3>("th"));
+    halo_exchanger_.exchange_halos(state.get_field<3>("qv"));
+    halo_exchanger_.exchange_halos(state.get_field<3>("qp"));
+    halo_exchanger_.exchange_halos(state.get_field<3>("T"));
+    halo_exchanger_.exchange_halos(state.get_field<3>("qv_m"));
 }
 
 
@@ -968,6 +987,7 @@ void VVM_P3_Interface::finalize() {
     m_precip_ice_surf_mass_view = {};
 
     m_unused = {};
+    m_dummy_input = {};
 
     m_col_location_view = {};
 }

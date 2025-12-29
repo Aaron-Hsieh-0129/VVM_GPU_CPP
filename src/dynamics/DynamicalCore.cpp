@@ -114,142 +114,11 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
     state_.add_field<1>("d_vtopmn", {2});
     state_.add_field<0>("utopmn_m", {});
     state_.add_field<0>("vtopmn_m", {});
-
-    /*
-    auto integration_config = config_.get_value<nlohmann::json>("dynamics.time_integration.procedure");
-    for (const auto& step_conf : integration_config) {
-        IntegrationStep step;
-        step.step = step_conf.at("step");
-        step.description = step_conf.value("description", "");
-        if (step_conf.contains("calculate_tendencies")) {
-            step.vars_to_calculate_tendency = step_conf.at("calculate_tendencies").get<std::vector<std::string>>();
-        }
-        if (step_conf.contains("update_states")) {
-            step.vars_to_update = step_conf.at("update_states").get<std::vector<std::string>>();
-        }
-        integration_procedure_.push_back(step);
-    }
-
-    if (rank == 0) {
-        std::cout << "\n--- Time Integration Procedure ---" << std::endl;
-        for (const auto& step : integration_procedure_) {
-            std::cout << "  Step " << step.step << ": " << step.description << std::endl;
-            
-            if (!step.vars_to_calculate_tendency.empty()) {
-                std::cout << "    Calculate Tendencies for: ";
-                for(const auto& v : step.vars_to_calculate_tendency) std::cout << v << " ";
-                std::cout << std::endl;
-            }
-            if (!step.vars_to_update.empty()) {
-                std::cout << "    Update States for: ";
-                for(const auto& v : step.vars_to_update) std::cout << v << " ";
-                std::cout << std::endl;
-            }
-        }
-        std::cout << "------------------------------------" << std::endl;
-    }
-    */
-
+    Kokkos::deep_copy(state_.get_field<0>("utopmn_m").get_mutable_device_data(), state_.get_field<0>("utopmn").get_mutable_device_data());
+    Kokkos::deep_copy(state_.get_field<0>("vtopmn_m").get_mutable_device_data(), state_.get_field<0>("vtopmn").get_mutable_device_data());
 }
 
 DynamicalCore::~DynamicalCore() = default;
-
-/*
-void DynamicalCore::step(Core::State& state, double dt) {
-    compute_diagnostic_fields();
-
-    const int nz = grid_.get_local_total_points_z();
-    const int ny = grid_.get_local_total_points_y();
-    const int nx = grid_.get_local_total_points_x();
-    const int h = grid_.get_halo_cells();
-    const auto& rhobar = state_.get_field<1>("rhobar").get_device_data();
-    const auto& rhobar_up = state_.get_field<1>("rhobar_up").get_device_data();
-
-    auto& xi = state.get_field<3>("xi").get_mutable_device_data();
-    auto& eta = state.get_field<3>("eta").get_mutable_device_data();
-    auto& zeta = state.get_field<3>("zeta").get_mutable_device_data();
-    Kokkos::parallel_for("divide_by_density",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz-h, ny, nx}),
-        KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            xi(k, j, i) /= rhobar_up(k);
-            eta(k, j, i) /= rhobar_up(k);
-        }
-    );
-    Kokkos::parallel_for("divide_by_density",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz, ny, nx}),
-        KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            zeta(k, j, i) /= rhobar(k);
-        }
-    );
-
-
-    for (const auto& procedure_step : integration_procedure_) {
-        for (const auto& var_name : procedure_step.vars_to_calculate_tendency) {
-            if (tendency_calculators_.count(var_name)) {
-                tendency_calculators_.at(var_name)->calculate_tendencies(state, grid_, params_, state.get_step());
-            }
-        }
-
-        for (const auto& var_name : procedure_step.vars_to_update) {
-            if (var_name == "xi") {
-                Kokkos::parallel_for("divide_by_density",
-                    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz-h, ny, nx}),
-                    KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                        xi(k, j, i) *= rhobar_up(k);
-                    }
-                );
-            }
-            else if (var_name == "eta") {
-                Kokkos::parallel_for("divide_by_density",
-                    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz-h, ny, nx}),
-                    KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                        eta(k, j, i) *= rhobar_up(k);
-                    }
-                );
-            }
-            else if (var_name == "zeta") {
-                Kokkos::parallel_for("divide_by_density",
-                    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz, ny, nx}),
-                    KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                        zeta(k, j, i) *= rhobar(k);
-                    }
-                );
-            }
-
-
-            if (time_integrators_.count(var_name)) {
-                time_integrators_.at(var_name)->step(state, grid_, params_, dt);
-                if (var_name == "th") {
-                    const auto& ITYPEW = state.get_field<3>("ITYPEW").get_device_data();
-                    const auto& max_topo_idx = params_.max_topo_idx;
-                    auto& th = state_.get_field<3>("th").get_mutable_device_data();
-                    const auto& thbar = state_.get_field<1>("thbar").get_device_data();
-                    Kokkos::parallel_for("topo",
-                        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
-                        KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                            // Set tendency to 0 if ITYPEV = 0
-                            if (ITYPEW(k,j,i) != 1) {
-                                th(k,j,i) = thbar(k);
-                            }
-                        }
-                    );
-                }
-                
-                VVM::Core::BoundaryConditionManager bc_manager(grid_, config_, var_name);
-                // if (var_name == "zeta") halo_exchanger.exchange_halos_top_slice(state.get_field<3>(var_name));
-                // else halo_exchanger.exchange_halos(state.get_field<3>(var_name));
-                halo_exchanger_.exchange_halos(state.get_field<3>(var_name));
-                
-                // if (var_name != "zeta") bc_manager.apply_z_bcs_to_field(state.get_field<3>(var_name));
-            }
-        }
-    }
-
-    compute_zeta_vertical_structure(state);
-    compute_uvtopmn();
-    compute_wind_fields();
-}
-*/
 
 void DynamicalCore::compute_diagnostic_fields() const {
     auto scheme = std::make_unique<Takacs>(grid_, halo_exchanger_);
@@ -441,18 +310,33 @@ void DynamicalCore::compute_uvtopmn() {
 
     size_t now_idx = state_.get_step() % 2;
     size_t prev_idx = (state_.get_step() + 1) % 2;
-    Kokkos::parallel_for("Cauculate_uvtopmn", 
-        1, 
-        KOKKOS_LAMBDA(const int i) {
-            d_utopmn(now_idx) = 0.25 * flex_height_coef_mid(nz-h-1) * tempumn() * rdz() / rhobar(nz-h-1);
-            d_vtopmn(now_idx) = 0.25 * flex_height_coef_mid(nz-h-1) * tempvmn() * rdz() / rhobar(nz-h-1);
 
-            utopmn_new_view() = utopmn_old_view() 
-                    + dt() * (1.5 * d_utopmn(now_idx) - 0.5 * d_utopmn(prev_idx));
-            vtopmn_new_view() = vtopmn_old_view() 
-                    + dt() * (1.5 * d_vtopmn(now_idx) - 0.5 * d_vtopmn(prev_idx));
-        }
-    );
+    if (state_.get_step() == 0) {
+        Kokkos::parallel_for("Cauculate_uvtopmn", 
+            1, 
+            KOKKOS_LAMBDA(const int i) {
+                d_utopmn(now_idx) = 0.25 * flex_height_coef_mid(nz-h-1) * tempumn() * rdz() / rhobar(nz-h-1);
+                d_vtopmn(now_idx) = 0.25 * flex_height_coef_mid(nz-h-1) * tempvmn() * rdz() / rhobar(nz-h-1);
+
+                utopmn_new_view() = utopmn_old_view() + dt() * d_utopmn(now_idx);
+                vtopmn_new_view() = vtopmn_old_view() + dt() * d_vtopmn(now_idx);
+            }
+        );
+    }
+    else {
+        Kokkos::parallel_for("Cauculate_uvtopmn", 
+            1, 
+            KOKKOS_LAMBDA(const int i) {
+                d_utopmn(now_idx) = 0.25 * flex_height_coef_mid(nz-h-1) * tempumn() * rdz() / rhobar(nz-h-1);
+                d_vtopmn(now_idx) = 0.25 * flex_height_coef_mid(nz-h-1) * tempvmn() * rdz() / rhobar(nz-h-1);
+
+                utopmn_new_view() = utopmn_old_view() 
+                        + dt() * (1.5 * d_utopmn(now_idx) - 0.5 * d_utopmn(prev_idx));
+                vtopmn_new_view() = vtopmn_old_view() 
+                        + dt() * (1.5 * d_vtopmn(now_idx) - 0.5 * d_vtopmn(prev_idx));
+            }
+        );
+    }
     return;
 }
 

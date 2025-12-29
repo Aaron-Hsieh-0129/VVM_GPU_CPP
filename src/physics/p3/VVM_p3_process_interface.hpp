@@ -9,6 +9,7 @@
 #include "core/Grid.hpp"
 #include "core/State.hpp"
 #include "core/Parameters.hpp"
+#include "core/HaloExchanger.hpp"
 #include "utils/ConfigurationManager.hpp"
 
 #include "share/core/eamxx_types.hpp" 
@@ -349,7 +350,8 @@ class VVM_P3_Interface {
 public:
     VVM_P3_Interface(const VVM::Utils::ConfigurationManager& config, 
                      const VVM::Core::Grid& grid, 
-                     const VVM::Core::Parameters& params);
+                     const VVM::Core::Parameters& params, 
+                     Core::HaloExchanger& halo_exchanger);
 
     void preprocessing_and_packing(VVM::Core::State& state);
     void postprocessing_and_unpacking(VVM::Core::State& state);
@@ -389,6 +391,7 @@ protected:
     const VVM::Core::Grid& grid_;
     const VVM::Utils::ConfigurationManager& config_;
     const VVM::Core::Parameters& params_;
+    Core::HaloExchanger& halo_exchanger_;
 
     int m_num_cols; // nx * ny
     int m_num_levs; // nz
@@ -471,6 +474,7 @@ protected:
     view_2d m_diag_equiv_reflectivity_view;
 
     view_2d m_unused;
+    view_2d m_dummy_input;
 
     sview_2d m_col_location_view;
 
