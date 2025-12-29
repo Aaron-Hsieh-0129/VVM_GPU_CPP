@@ -10,9 +10,9 @@
         "dz1": 100.0
     },
     "simulation": {
-        "total_time_s": 1500.0,
+        "total_time_s": 10.0,
         "dt_s": 1.0,
-        "output_interval_s": 50.0
+        "output_interval_s": 1.0
     },
     "boundary_conditions": {
         "default": {
@@ -47,7 +47,8 @@
     },
     "initial_conditions": {
         "format": "txt",
-        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/initial_conditions/profile_p3.txt"
+        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/initial_conditions/profile_p3.txt",
+        "perturbation": "none"
     },
     "netcdf_reader": {
         "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/TOPO.nc",
@@ -262,7 +263,7 @@
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
             "fixed_total_solar_irradiance": 340,
             "fixed_solar_zenith_angle": -9999,
-            "pool_size_multiplier": 1.935
+            "pool_size_multiplier": 1.933
         }
     },
     "optimization": {

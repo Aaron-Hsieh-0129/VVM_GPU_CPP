@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH --account=MST114418
-#SBATCH --partition=normal
+#SBATCH --partition=normal2
 #SBATCH --job-name=VVM_GPU_CPP
-#SBATCH --nodes=2
-#SBATCH --ntasks-per-node=2
-#SBATCH --gpus-per-node=2
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --time=00:15:00
 #SBATCH --output=log//%j.out
@@ -14,7 +14,7 @@
 
 
 cmake --list-presets
-CMAKE_PRESET_NAME="blaze"
+CMAKE_PRESET_NAME="nano5"
 BUILD_DIR="build"
 
 
@@ -52,7 +52,7 @@ cmake --build build -j32
 
 # Run
 cd build
-mpirun -np 4 \
+mpirun -np 1 \
   -x NCCL_DEBUG=INFO \
   -x HDF5_USE_FILE_LOCKING=FALSE \
   --mca io ompio \

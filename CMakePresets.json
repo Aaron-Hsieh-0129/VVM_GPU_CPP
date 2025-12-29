@@ -53,6 +53,30 @@
         "ENABLE_NCCL": "ON",
         "Kokkos_ENABLE_CUDA": "ON"
       }
+    },
+    {
+      "name": "spark",
+      "displayName": "NVHPC 25.9 on spark",
+      "description": "Custom environment NVHPC on spark",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+
+        "NVHPC_DIR": "/home/mog/nvhpc_25_9/Linux_aarch64/25.9",
+
+        "CMAKE_CXX_COMPILER": "/home/mog/nvhpc_25_9/Linux_aarch64/25.9/comm_libs/13.0/hpcx/hpcx-2.24/ompi/bin/mpic++",
+        "CMAKE_C_COMPILER":   "/home/mog/nvhpc_25_9/Linux_aarch64/25.9/comm_libs/13.0/hpcx/hpcx-2.24/ompi/bin/mpicc",
+        "CMAKE_Fortran_COMPILER": "/home/mog/nvhpc_25_9/Linux_aarch64/25.9/comm_libs/13.0/hpcx/hpcx-2.24/ompi/bin/mpifort",
+
+        "HDF5_DIR": "/home/mog/Aaron/libs_GPUVVM",
+        "NETCDF_C_DIR": "/home/mog/Aaron/libs_GPUVVM",
+        "NETCDF_Fortran_DIR": "/home/mog/Aaron/libs_GPUVVM",
+        "PNETCDF_DIR": "/home/mog/Aaron/libs_GPUVVM",
+
+        "ENABLE_NCCL": "ON",
+        "Kokkos_ENABLE_CUDA": "ON"
+      }
     }
   ]
 }

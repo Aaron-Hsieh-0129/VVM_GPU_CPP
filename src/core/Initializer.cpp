@@ -1,5 +1,4 @@
 #include "Initializer.hpp"
-#include "BoundaryConditionManager.hpp"
 #include "io/TxtReader.hpp"
 #include "io/PnetcdfReader.hpp"
 #include <Kokkos_Core.hpp>
@@ -46,6 +45,7 @@ void Initializer::initialize_state() const {
     initialize_topo();
     initialize_poisson();
     assign_vars();
+    initialize_perturbation();
 }
 
 void Initializer::initialize_grid() const {
@@ -104,26 +104,6 @@ void Initializer::initialize_grid() const {
             fact2_xi_eta_mutable(k) = flex_height_coef_up_mutable(k) / flex_height_coef_mid_mutable(k);
         }
     );
-
-    // DEBUG output
-    // int rank;
-    // MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    // if (rank == 0) parameters_.z_mid.print_profile(grid_, 0, 3, 3);
-    // if (rank == 0) parameters_.z_up.print_profile(grid_, 0, 3, 3);
-    // if (rank == 0) parameters_.flex_height_coef_mid.print_profile(grid_, 0, 3, 3);
-    // if (rank == 0) parameters_.flex_height_coef_up.print_profile(grid_, 0, 3, 3);
-    // if (rank == 0) parameters_.fact1_xi_eta.print_profile(grid_, 0, 3, 3);
-    // if (rank == 0) parameters_.fact2_xi_eta.print_profile(grid_, 0, 3, 3);
-
-    // auto fact1_data = parameters_.fact1_xi_eta.get_host_data();
-    // auto fact2_data = parameters_.fact2_xi_eta.get_host_data();
-    //
-    // if (rank == 0) {
-    //     for (int k = 0; k < grid_.get_local_total_points_z(); k++) {
-    //         std::cout << fact1_data(k) + fact2_data(k) << " ";
-    //     }
-    // }
-    // std::cout << std::endl;
     return;
 }
 
@@ -243,15 +223,6 @@ void Initializer::initialize_poisson() const {
     }
     Kokkos::deep_copy(bn_new, h_bn_new);
     Kokkos::deep_copy(cn_new, h_cn_new);
-
-    // int rank;
-    // MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    // if (rank == 0) {
-    //     for (int k = 0; k <= nz; k++) {
-    //         std::cout << "K = " << k << ", AGAU: " << h_AGAU(k) << ", BGAU: " << h_BGAU(k) << ", CGAU: " << h_CGAU(k) << ", bn_new: " << h_bn_new(k) << ", cn_new: " << h_cn_new(k) << std::endl; 
-    //     }
-    // }
-
     return;
 }
 
@@ -260,6 +231,35 @@ void Initializer::assign_vars() const {
     const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
     const int nx = grid_.get_local_total_points_x();
+
+    // Vertical B.C. process
+    // WARNING: This causes errors in P3
+    // VVM::Core::BoundaryConditionManager bc_manager(grid_);
+    // bc_manager.apply_z_bcs_to_field(state_.get_field<1>("thbar"));
+    // bc_manager.apply_z_bcs_to_field(state_.get_field<1>("qvbar"));
+    // bc_manager.apply_z_bcs_to_field(state_.get_field<1>("Tbar"));
+    // bc_manager.apply_z_bcs_to_field(state_.get_field<1>("Tvbar"));
+    // bc_manager.apply_z_bcs_to_field(state_.get_field<1>("rhobar"));
+    // bc_manager.apply_z_bcs_to_field(state_.get_field<1>("rhobar_up"));
+    // bc_manager.apply_z_bcs_to_field(state_.get_field<1>("pbar"));
+    // bc_manager.apply_z_bcs_to_field(state_.get_field<1>("pibar"));
+    // bc_manager.apply_z_bcs_to_field(state_.get_field<1>("U"));
+    // bc_manager.apply_z_bcs_to_field(state_.get_field<1>("V"));
+
+
+    int rank = grid_.get_mpi_rank();
+    if (rank == 0) state_.get_field<1>("qvbar").print_profile(grid_, 0, 0, 0);
+    if (rank == 0) state_.get_field<1>("rhobar_up").print_profile(grid_, 0, 0, 0);
+    if (rank == 0) state_.get_field<1>("rhobar").print_profile(grid_, 0, 0, 0);
+    if (rank == 0) state_.get_field<1>("thbar").print_profile(grid_, 0, 0, 0);
+    if (rank == 0) state_.get_field<1>("Tbar").print_profile(grid_, 0, 0, 0);
+    if (rank == 0) state_.get_field<1>("Tvbar").print_profile(grid_, 0, 0, 0);
+    if (rank == 0) state_.get_field<1>("pibar").print_profile(grid_, 0, 0, 0);
+    if (rank == 0) state_.get_field<1>("pbar").print_profile(grid_, 0, 0, 0);
+    if (rank == 0) parameters_.z_mid.print_profile(grid_, 0, 0, 0);
+    if (rank == 0) parameters_.z_up.print_profile(grid_, 0, 0, 0);
+    if (rank == 0) parameters_.flex_height_coef_mid.print_profile(grid_, 0, 0, 0);
+    if (rank == 0) parameters_.flex_height_coef_up.print_profile(grid_, 0, 0, 0);
 
     const auto& rdx = parameters_.rdx;
     const auto& rdy = parameters_.rdy;
@@ -278,14 +278,14 @@ void Initializer::assign_vars() const {
             v(k,j,i) = V(k);
         }
     );
-
-    // utop predict
+    Kokkos::deep_copy(w, 0.);
+// utop predict
 #if defined(ENABLE_NCCL)
     Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> utopmn("utopmn");
     Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> vtopmn("vtopmn");
     state_.calculate_horizontal_mean(state_.get_field<3>("u"), utopmn);
     state_.calculate_horizontal_mean(state_.get_field<3>("v"), vtopmn);
-    auto utopmn_view = state_.get_field<0>("vtopmn").get_mutable_device_data();
+    auto utopmn_view = state_.get_field<0>("utopmn").get_mutable_device_data();
     auto vtopmn_view = state_.get_field<0>("vtopmn").get_mutable_device_data();
     Kokkos::parallel_for("assign_uvtopmn", Kokkos::RangePolicy<>(0, 1),
         KOKKOS_LAMBDA(const int k) {
@@ -335,11 +335,82 @@ void Initializer::assign_vars() const {
     );
 
 
+    // Assign th
+    const auto& thbar = state_.get_field<1>("thbar").get_device_data();
+    auto& th = state_.get_field<3>("th").get_mutable_device_data();
+    Kokkos::parallel_for("assign_th", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz,ny,nx}),
+        KOKKOS_LAMBDA(int k, int j, int i) {
+            th(k,j,i) = thbar(k);
+        }
+    );
+
     auto& lon = state_.get_field<1>("lon").get_mutable_device_data();
     Kokkos::deep_copy(lon, 121.);
 
     auto& lat = state_.get_field<1>("lat").get_mutable_device_data();
     Kokkos::deep_copy(lat, 23.5);
+
+    // WARNING: This is the test of horizontal mean
+    auto& htflx_sfc = state_.get_field<2>("htflx_sfc");
+    auto htflx_sfc_mutable = htflx_sfc.get_mutable_device_data();
+
+    Kokkos::parallel_for("InitHeatFluxField",
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, nx}),
+        KOKKOS_LAMBDA(const int j, const int i) {
+            htflx_sfc_mutable(j, i) = static_cast<double>(100 * rank + 10 * j + i);
+        }
+    );
+
+#ifdef NCCL
+    Kokkos::View<double> heat_flux_mean("heat_flux_mean");
+    state_.calculate_horizontal_mean(htflx_sfc, heat_flux_mean);
+#else
+    auto heat_flux_mean = state_.calculate_horizontal_mean(htflx_sfc);
+#endif
+    Kokkos::View<double, Kokkos::HostSpace> h_heat_flux_mean("h_heat_flux_mean");
+    Kokkos::deep_copy(h_heat_flux_mean, heat_flux_mean);
+    
+    if (rank == 0) {
+        std::cout << "Average of heat flux is: " << h_heat_flux_mean() << std::endl;
+    }
+    return;
+}
+
+void Initializer::initialize_perturbation() const {
+    std::string perturbation = config_.get_value<std::string>("initial_conditions.perturbation", "none");
+    const int global_start_j = grid_.get_local_physical_start_y();
+    const int global_start_i = grid_.get_local_physical_start_x();
+    const auto& dx = parameters_.dx;
+    const auto& dy = parameters_.dy;
+    const auto& z_mid = parameters_.z_mid.get_device_data();
+
+    const int h = grid_.get_halo_cells();
+    const int nz = grid_.get_local_total_points_z();
+    const int ny = grid_.get_local_total_points_y();
+    const int nx = grid_.get_local_total_points_x();
+
+    if (perturbation == "none") return;
+    else if (perturbation == "bubble") {
+        auto& th = state_.get_field<3>("th").get_mutable_device_data();
+        Kokkos::parallel_for("init_perturbation", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
+            KOKKOS_LAMBDA(int k, int j, int i) {
+                const int local_j = j - h;
+                const int local_i = i - h;
+
+                const int global_j = global_start_j + local_j;
+                const int global_i = global_start_i + local_i;
+
+                double radius_norm = std::sqrt(
+                                      std::pow(((global_i + 1) - nx/2.) * dx() / 2000., 2) +
+                                      // std::pow(((global_j + 1) - 32. / 2.) * dy() / 2000., 2) +
+                                      std::pow((z_mid(k) - 3000.) / 2000., 2)
+                                     );
+                if (radius_norm <= 1) {
+                    th(k, j, i) += 5. * (std::cos(3.14159265 * 0.5 * radius_norm));
+                }
+            }
+        );
+    }
     return;
 }
 

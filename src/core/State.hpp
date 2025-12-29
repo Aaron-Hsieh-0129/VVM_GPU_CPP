@@ -49,12 +49,14 @@ public:
         }
         std::array<int, Dim> dims;
         std::copy(dims_list.begin(), dims_list.end(), dims.begin());
-        fields_.try_emplace(name, std::in_place_type_t<Field<Dim>>(), name, dims);
+        auto [it, inserted] = fields_.try_emplace(name, std::in_place_type_t<Field<Dim>>(), name, dims);
+        if (inserted) std::get<Field<Dim>>(it->second).initialize_to_zero();
     }
 
     template<size_t Dim>
     void add_field(const std::string& name, const std::array<int, Dim>& dims) {
-        fields_.try_emplace(name, std::in_place_type_t<Field<Dim>>(), name, dims);
+        auto [it, inserted] = fields_.try_emplace(name, std::in_place_type_t<Field<Dim>>(), name, dims);
+        if (inserted) std::get<Field<Dim>>(it->second).initialize_to_zero();
     }
 
     // Get a field by name
@@ -100,6 +102,10 @@ public:
         const int gnx = grid_.get_global_points_x();
         const int gny = grid_.get_global_points_y();
         const double total_points_horizontal = static_cast<double>(gnx * gny);
+
+        const int nz = grid_.get_local_total_points_z();
+        if (k_level == -1) k_level = nz-h-1;
+
 
         if (total_points_horizontal == 0.0) {
             Kokkos::parallel_for("set_zero_mean", 

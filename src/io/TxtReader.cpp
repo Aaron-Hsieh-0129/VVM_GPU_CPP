@@ -1,4 +1,5 @@
 #include "TxtReader.hpp"
+#include "core/BoundaryConditionManager.hpp"
 #include <fstream>
 #include <stdexcept>
 #include <iostream>
@@ -96,8 +97,7 @@ TxtReader::TxtReader(const std::string& filepath, const VVM::Core::Grid& grid, c
 }
 
 double TxtReader::linear_interpolate(const std::string& field_name, double target_z) const {
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    int rank = grid_.get_mpi_rank();
 
     const auto& profile_data = all_profiles_.at(field_name);
     
@@ -147,8 +147,7 @@ double TxtReader::linear_interpolate(const std::string& field_name, double targe
 }
 
 void TxtReader::read_and_initialize(VVM::Core::State& state) {
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    int rank = grid_.get_mpi_rank();
 
     if (all_profiles_.empty() || all_profiles_.at("pbar").empty()) {
         std::cout << "No profile data loaded. Skipping file-based initialization." << std::endl;

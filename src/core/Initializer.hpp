@@ -24,6 +24,7 @@ public:
     void initialize_topo() const;
     void initialize_poisson() const;
     void assign_vars() const;
+    void initialize_perturbation() const;
 
 private:
     std::unique_ptr<VVM::IO::Reader> reader_;
