@@ -130,7 +130,7 @@ void Initializer::initialize_topo() const {
     Kokkos::parallel_reduce("FindMax", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
         KOKKOS_LAMBDA(const int j, const int i, double& local_max) {
             if (topo(j, i) > local_max) {
-                local_max = topo(i, j);
+                local_max = topo(j, i);
             }
         },
         Kokkos::Max<double>(local_maxtopo_h)

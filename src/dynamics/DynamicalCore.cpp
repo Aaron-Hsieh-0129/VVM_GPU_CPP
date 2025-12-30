@@ -196,6 +196,9 @@ void DynamicalCore::compute_wind_fields() {
     const auto& v = state_.get_field<3>("v").get_device_data();
     auto& w_topo = state_.get_field<3>("w_topo").get_mutable_device_data();
     const auto& w = state_.get_field<3>("w").get_device_data();
+    Kokkos::deep_copy(u_topo, u);
+    Kokkos::deep_copy(v_topo, v);
+    Kokkos::deep_copy(w_topo, w);
 
     const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
