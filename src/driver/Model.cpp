@@ -19,9 +19,9 @@ Model::Model(const Utils::ConfigurationManager& config,
         microphysics_ = std::make_unique<Physics::VVM_P3_Interface>(config_, grid_, params_, halo_exchanger_);
     }
 
-    // if (config_.get_value<bool>("physics.turbulence.enable", false)) {
-    //     turbulence_ = std::make_unique<Physics::TurbulenceProcess>(config_, grid_, params_, halo_exchanger_);
-    // }
+    if (config_.get_value<bool>("physics.turbulence.enable_turbulence", false)) {
+        turbulence_ = std::make_unique<Physics::TurbulenceProcess>(config_, grid_, params_, halo_exchanger_, state_);
+    }
 
     if (config_.get_value<bool>("physics.rrtmgp.enable_rrtmgp", false)) {
         radiation_ = std::make_unique<Physics::RRTMGP::RRTMGPRadiation>(config_, grid_, params_);
@@ -38,6 +38,7 @@ void Model::init() {
     initializer.initialize_state();
 
     if (microphysics_) microphysics_->initialize(state_);
+    if (turbulence_) turbulence_->initialize(state_);
     if (radiation_) radiation_->initialize(state_);
     
     halo_exchanger_.exchange_halos(state_);
@@ -71,9 +72,10 @@ void Model::run_step(double dt) {
     }
 
     // Turbulence diffusion on thermodynamics variables
-    // if (turbulence_) {
-    //     turbulence_->process_thermodynamics(state_, dt);
-    // }
+    if (turbulence_) {
+        turbulence_->compute_coefficients(state_, dt);
+        turbulence_->process_thermodynamics(state_, dt);
+    }
 
     // Calculate buoyancy based on thermodynamics variables at t+1
     // dycore_->update_buoyancy_term(state_);
@@ -85,9 +87,9 @@ void Model::run_step(double dt) {
     dycore_->update_vorticity(dt);
 
     // Vorticity diffusion
-    // if (turbulence_) {
-    //     turbulence_->process_vorticity(state_, dt);
-    // }
+    if (turbulence_) {
+        turbulence_->process_dynamics(state_, dt);
+    }
 
     dycore_->diagnose_wind_fields(state_);
 }

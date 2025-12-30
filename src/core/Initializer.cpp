@@ -108,6 +108,13 @@ void Initializer::initialize_grid() const {
 }
 
 void Initializer::initialize_topo() const {
+    auto dims = std::array<int, 2>{
+        grid_.get_local_total_points_y(), 
+        grid_.get_local_total_points_x()
+    };
+    if (!state_.has_field("topou")) state_.add_field<2>("topou", dims);
+    if (!state_.has_field("topov")) state_.add_field<2>("topov", dims);
+
     const auto& topo = state_.get_field<2>("topo").get_device_data();
     auto& ITYPEU = state_.get_field<3>("ITYPEU").get_mutable_device_data();
     auto& ITYPEV = state_.get_field<3>("ITYPEV").get_mutable_device_data();
@@ -173,6 +180,27 @@ void Initializer::initialize_topo() const {
     halo_exchanger_.exchange_halos(state_.get_field<3>("ITYPEV"));
       
     cudaDeviceSynchronize();
+
+
+    // Assign topou, topov
+    auto& topou = state_.get_field<2>("topou").get_mutable_device_data();
+    auto& topov = state_.get_field<2>("topov").get_mutable_device_data();
+    Kokkos::parallel_for("assign_topou_topov", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
+        KOKKOS_LAMBDA(const int j, const int i) {
+            if (topo(j,i+1)-topo(j,i) > 0) topou(j,i) = topo(j,i+1);
+            if (topo(j+1,i)-topo(j,i) > 0) topov(j,i) = topo(j+1,i);
+        }
+    );
+
+    Kokkos::parallel_for("modifyTopo", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
+        KOKKOS_LAMBDA(const int j, const int i) {
+            if (topo(j,i) == 0) topo(j,i) = 1;
+        }
+    );
+      
+    cudaDeviceSynchronize();
+    return;
+
     return;
 }
 

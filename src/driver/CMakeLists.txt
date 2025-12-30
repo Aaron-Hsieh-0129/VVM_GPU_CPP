@@ -11,6 +11,7 @@ target_link_libraries(vvm_driver
     eamxx_physics
     vvm_io
     vvm_utils
+    vvm_turbulence
 )
 
 target_include_directories(vvm_driver PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

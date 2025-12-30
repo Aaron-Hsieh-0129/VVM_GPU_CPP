@@ -2,7 +2,7 @@
 #include "dynamics/DynamicalCore.hpp"
 #include "physics/p3/VVM_p3_process_interface.hpp"
 #include "physics/rrtmgp/VVM_rrtmgp_process_interface.hpp"
-// #include "physics/turbulence/TurbulenceProcess.hpp"
+#include "physics/turbulence/TurbulenceProcess.hpp"
 #include "core/Initializer.hpp"
 
 namespace VVM {
@@ -30,7 +30,7 @@ private:
 
     std::unique_ptr<Dynamics::DynamicalCore> dycore_;
     std::unique_ptr<Physics::VVM_P3_Interface> microphysics_;
-    // std::unique_ptr<Physics::TurbulenceProcess> turbulence_;
+    std::unique_ptr<Physics::TurbulenceProcess> turbulence_;
     std::unique_ptr<Physics::RRTMGP::RRTMGPRadiation> radiation_;
 
     int rad_freq_in_steps_;

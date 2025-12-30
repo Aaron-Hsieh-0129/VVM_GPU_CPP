@@ -87,7 +87,6 @@ int main(int argc, char *argv[]) {
 
         VVM::Utils::TimingManager::get_instance().stop_timer("initialize");
 
-        VVM::Dynamics::DynamicalCore dynamical_core(config, grid, parameters, state, halo_exchanger);
         VVM::IO::OutputManager output_manager(config, grid, parameters, state, MPI_COMM_WORLD);
         output_manager.write(0, 0.0);
         // output_manager.write_static_topo_file();

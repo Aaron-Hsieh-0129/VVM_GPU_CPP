@@ -264,6 +264,9 @@
             "fixed_total_solar_irradiance": 340,
             "fixed_solar_zenith_angle": -9999,
             "pool_size_multiplier": 1.933
+        },
+        "turbulence": {
+            "enable_turbulence": true
         }
     },
     "optimization": {
