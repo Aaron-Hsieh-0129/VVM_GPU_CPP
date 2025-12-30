@@ -10,9 +10,9 @@
         "dz1": 100.0
     },
     "simulation": {
-        "total_time_s": 10.0,
+        "total_time_s": 1500.0,
         "dt_s": 1.0,
-        "output_interval_s": 1.0
+        "output_interval_s": 50.0
     },
     "boundary_conditions": {
         "default": {
@@ -53,7 +53,7 @@
     "netcdf_reader": {
         "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/TOPO.nc",
         "variables_to_read": {
-            "2d": []
+            "2d": ["topo"]
         }
     },
     "output": {
@@ -266,7 +266,7 @@
             "pool_size_multiplier": 1.933
         },
         "turbulence": {
-            "enable_turbulence": true
+            "enable_turbulence": false
         }
     },
     "optimization": {

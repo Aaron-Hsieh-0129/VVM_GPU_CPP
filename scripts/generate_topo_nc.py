@@ -30,7 +30,7 @@ x = np.arange(nx)
 xx, yy = np.meshgrid(x, y)
 
 topo_index = np.zeros((ny, nx))
-# topo_index[center_y-16:center_y+16, center_x-16:center_x+16] = 15
+topo_index[center_y-6:center_y+6, center_x-15:center_x+15] = 15
 
 try:
     with netCDF4.Dataset(filename, 'w', format='NETCDF4') as ncfile:
