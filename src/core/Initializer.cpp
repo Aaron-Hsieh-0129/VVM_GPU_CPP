@@ -43,9 +43,11 @@ void Initializer::initialize_state() const {
         pnetcdf_reader_->read_and_initialize(state_);
     }
     initialize_topo();
-    initialize_poisson();
     assign_vars();
     initialize_perturbation();
+    // init poisson should be placed after assign variables 
+    // because the density would affect height factors.
+    initialize_poisson();
 }
 
 void Initializer::initialize_grid() const {
@@ -194,7 +196,7 @@ void Initializer::initialize_topo() const {
 
     Kokkos::parallel_for("modifyTopo", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
         KOKKOS_LAMBDA(const int j, const int i) {
-            if (topo(j,i) == 0) topo(j,i) = 1;
+            if (topo(j,i) == 0) topo(j,i) = h;
         }
     );
       
@@ -251,6 +253,14 @@ void Initializer::initialize_poisson() const {
     }
     Kokkos::deep_copy(bn_new, h_bn_new);
     Kokkos::deep_copy(cn_new, h_cn_new);
+
+    // DEBUG output
+    Kokkos::deep_copy(state_.get_field<1>("AGAU").get_mutable_device_data(), AGAU);
+    Kokkos::deep_copy(state_.get_field<1>("BGAU").get_mutable_device_data(), BGAU);
+    Kokkos::deep_copy(state_.get_field<1>("CGAU").get_mutable_device_data(), CGAU);
+    Kokkos::deep_copy(state_.get_field<1>("bn").get_mutable_device_data(), bn_new);
+    Kokkos::deep_copy(state_.get_field<1>("cn").get_mutable_device_data(), cn_new);
+
     return;
 }
 
@@ -263,9 +273,7 @@ void Initializer::assign_vars() const {
     // Vertical B.C. process
     // WARNING: This causes errors in P3
     // VVM::Core::BoundaryConditionManager bc_manager(grid_);
-    // bc_manager.apply_z_bcs_to_field(state_.get_field<1>("thbar"));
-    // bc_manager.apply_z_bcs_to_field(state_.get_field<1>("qvbar"));
-    // bc_manager.apply_z_bcs_to_field(state_.get_field<1>("Tbar"));
+    // bc_manager.apply_z_bcs_to_field(state_.get_field<1>("thbar")); bc_manager.apply_z_bcs_to_field(state_.get_field<1>("qvbar")); bc_manager.apply_z_bcs_to_field(state_.get_field<1>("Tbar"));
     // bc_manager.apply_z_bcs_to_field(state_.get_field<1>("Tvbar"));
     // bc_manager.apply_z_bcs_to_field(state_.get_field<1>("rhobar"));
     // bc_manager.apply_z_bcs_to_field(state_.get_field<1>("rhobar_up"));
@@ -364,13 +372,20 @@ void Initializer::assign_vars() const {
 
 
     // Assign th
-    const auto& thbar = state_.get_field<1>("thbar").get_device_data();
+    auto& thbar = state_.get_field<1>("thbar").get_mutable_device_data();
     auto& th = state_.get_field<3>("th").get_mutable_device_data();
+    auto& rhobar = state_.get_field<1>("rhobar").get_mutable_device_data();
+    auto& rhobar_up = state_.get_field<1>("rhobar_up").get_mutable_device_data();
     Kokkos::parallel_for("assign_th", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz,ny,nx}),
         KOKKOS_LAMBDA(int k, int j, int i) {
             th(k,j,i) = thbar(k);
         }
     );
+    // FIXME: Test
+    // auto& zeta = state_.get_field<3>("zeta").get_mutable_device_data();
+    // Kokkos::deep_copy(xi, th);
+    // Kokkos::deep_copy(eta, th);
+    // Kokkos::deep_copy(zeta, th);
 
     auto& lon = state_.get_field<1>("lon").get_mutable_device_data();
     Kokkos::deep_copy(lon, 121.);

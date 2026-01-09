@@ -1,7 +1,7 @@
 {
     "grid": {
-        "nx": 256,
-        "ny": 16,
+        "nx": 10,
+        "ny": 10,
         "nz": 33,
         "n_halo_cells": 2,
         "dx": 500.0,
@@ -10,9 +10,9 @@
         "dz1": 100.0
     },
     "simulation": {
-        "total_time_s": 1500.0,
+        "total_time_s": 400.0,
         "dt_s": 1.0,
-        "output_interval_s": 50.0
+        "output_interval_s": 1.0
     },
     "boundary_conditions": {
         "default": {
@@ -47,7 +47,7 @@
     },
     "initial_conditions": {
         "format": "txt",
-        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/initial_conditions/profile_p3.txt",
+        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/initial_conditions/profile.txt",
         "perturbation": "none"
     },
     "netcdf_reader": {
@@ -62,6 +62,7 @@
         "output_filename_prefix": "vvm_output",
         "fields_to_output": [
             "thbar",
+            "pibar",
             "rhobar",
             "rhobar_up",
             "htflx_sfc",
@@ -80,7 +81,33 @@
             "lw_heating",
             "net_heating",
             "net_sw_flux",
-            "net_lw_flux"
+            "net_lw_flux",
+            "DHWU1",
+            "DHWU2",
+            "DHWV1",
+            "DHWV2",
+            "DHWW1",
+            "DHWW2",
+            "DHVU1",
+            "DHVU2",
+            "DHVV1",
+            "DHVV2",
+            "DHVW1",
+            "DHVW2",
+            "DHUU1",
+            "DHUU2",
+            "DHUV1",
+            "DHUV2",
+            "DHUW1",
+            "DHUW2",
+            "ITYPEU",
+            "ITYPEV",
+            "ITYPEW",
+            "AGAU",
+            "BGAU",
+            "CGAU",
+            "bn",
+            "cn"
         ],
         "output_grid": {
             "x_start": 0,
@@ -103,7 +130,7 @@
         "solver": {
             "w_solver_method": "tridiagonal",
             "_w_solver_method_options": "Choose 'tridiagonal' (original) or 'jacobi' (3D parallel)",
-            "iteration": 50,
+            "iteration": 200,
             "WRXMU": 2.5e-7
         },
         "prognostic_variables": {
@@ -251,13 +278,13 @@
     },
     "physics": {
         "p3": {
-            "enable_p3": true,
+            "enable_p3": false,
             "do_predict_nc": true,
             "do_prescribed_ccn": false,
             "max_total_ni": 740.0e3
         },
         "rrtmgp": {
-            "enable_rrtmgp": true,
+            "enable_rrtmgp": false,
             "column_chunk_size": 512,
             "rad_frequency": 120,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
@@ -266,7 +293,7 @@
             "pool_size_multiplier": 1.933
         },
         "turbulence": {
-            "enable_turbulence": false
+            "enable_turbulence": true
         }
     },
     "optimization": {

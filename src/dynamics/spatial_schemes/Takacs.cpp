@@ -256,25 +256,8 @@ void Takacs::calculate_flux_convergence_z(
             }
         );
     }
-    // VVM::Core::BoundaryConditionManager bc_manager(grid);
-    // bc_manager.apply_z_bcs_to_field(flux_field);
     // No need of x-y halo exchanges because this is z direction tendency
     // No need of vertical boundary process because it's supposed to be 0 in ghost points and it's been processed during initialization
-
-    // DEBUG print
-    // Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {ny,nx}),
-    //     KOKKOS_LAMBDA(int j, int i) {
-    //         // flux(0,j,i) = flux(nz-2,j,i);
-    //         // flux(nz-1,j,i) = flux(1,j,i);
-    //         flux(2,j,i) = 100.;
-    //         flux(3,j,i) = 200.;
-    //         flux(nz-4,j,i) = 300.;
-    //         flux(nz-3,j,i) = 400.;
-    //     }
-    // );
-    // int rank;
-    // MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    // if (rank == 0 && var_name == "th") w_field.print_xz_cross_at_j(grid, 0, 3);
 
     auto rdz_view = params.rdz;
     const auto& flex_height_coef_mid = params.flex_height_coef_mid.get_device_data();
@@ -302,13 +285,7 @@ void Takacs::calculate_flux_convergence_z(
         Kokkos::parallel_for("flux_convergence_tendency", 
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                tendency(k,j,i) += -0.5*(flux(k,j,i) - flux(k-1,j,i)) * rdz_view() * flex_height_coef_mid(k);
-            }
-        );
-        Kokkos::parallel_for("flux_convergence_tendency", 
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                tendency(k,j,i) /= rhobar_divide(k);
+                tendency(k,j,i) += -0.5*(flux(k,j,i) - flux(k-1,j,i)) * rdz_view() * flex_height_coef_mid(k) / rhobar_divide(k);
             }
         );
     }
@@ -729,7 +706,7 @@ void Takacs::calculate_buoyancy_tendency_x(
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             // Set tendency to 0 if ITYPEV = 0
-            tendency(k,j,i) *= ITYPEV(k,j,i);
+            if (ITYPEV(k,j,i) == 0) tendency(k,j,i) = ITYPEV(k,j,i);
         }
     );
 }
@@ -771,7 +748,7 @@ void Takacs::calculate_buoyancy_tendency_y(
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             // Set tendency to 0 if ITYPEV = 0
-            tendency(k,j,i) *= ITYPEU(k,j,i);
+            if (ITYPEU(k,j,i) == 0) tendency(k,j,i) = 0.;
         }
     );
     // int rank;

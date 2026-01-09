@@ -9,9 +9,7 @@ TimeIntegrator::TimeIntegrator(std::string var_name, bool has_ab2, bool has_fe)
       has_ab2_terms_(has_ab2),
       has_fe_terms_(has_fe) {}
 
-TimeIntegrator::~TimeIntegrator() = default;
-
-void TimeIntegrator::step(
+TimeIntegrator::~TimeIntegrator() = default; void TimeIntegrator::step(
     Core::State& state,
     const Core::Grid& grid,
     const Core::Parameters& params,
@@ -46,14 +44,17 @@ void TimeIntegrator::step(
 
         const auto& ITYPEU = state.get_field<3>("ITYPEU").get_device_data();
         const auto& ITYPEV = state.get_field<3>("ITYPEV").get_device_data();
+        const auto& ITYPEW = state.get_field<3>("ITYPEW").get_device_data();
         const auto& max_topo_idx = params.max_topo_idx;
         if (variable_name_ == "xi") {
             Kokkos::parallel_for("topo",
                 Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
                 KOKKOS_LAMBDA(const int k, const int j, const int i) {
                     // Set tendency to 0 if ITYPEV = 0
-                    tendency_now_view(k,j,i) *= ITYPEV(k,j,i);
-                    tendency_prev_view(k,j,i) *= ITYPEV(k,j,i);
+                    if (ITYPEV(k,j,i) != 1) {
+                        tendency_now_view(k,j,i) = 0.;
+                        tendency_prev_view(k,j,i) = 0.;
+                    }
                 }
             );
         }
@@ -61,9 +62,23 @@ void TimeIntegrator::step(
             Kokkos::parallel_for("topo",
                 Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
                 KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                    // Set tendency to 0 if ITYPEV = 0
-                    tendency_now_view(k,j,i) *= ITYPEU(k,j,i);
-                    tendency_prev_view(k,j,i) *= ITYPEU(k,j,i);
+                    // Set tendency to 0 if ITYPEU = 0
+                    if (ITYPEU(k,j,i) != 1) {
+                        tendency_now_view(k,j,i) = 0.;
+                        tendency_prev_view(k,j,i) = 0.;
+                    }
+                }
+            );
+        }
+        else {
+            Kokkos::parallel_for("topo",
+                Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
+                KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                    // Set tendency to 0 if ITYPEW = 0
+                    if (ITYPEW(k,j,i) != 1) {
+                        tendency_now_view(k,j,i) = 0.;
+                        tendency_prev_view(k,j,i) = 0.;
+                    }
                 }
             );
         }

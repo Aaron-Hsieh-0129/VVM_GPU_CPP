@@ -206,7 +206,7 @@ void DynamicalCore::compute_wind_fields() {
     const int h = grid_.get_halo_cells();
 
     Kokkos::parallel_for("wind_topo",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {max_topo_idx+2, ny, nx}),
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {max_topo_idx+2, ny, nx}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             if (ITYPEU(k,j,i) != 1) u_topo(k,j,i) = 0;
             else u_topo(k,j,i) = u(k,j,i);
@@ -228,8 +228,6 @@ void DynamicalCore::compute_wind_fields() {
     const auto& rdz = params_.rdz;
     const auto& flex_height_coef_up = params_.flex_height_coef_up.get_device_data();
 
-    Kokkos::deep_copy(xi_topo, xi);
-    Kokkos::deep_copy(eta_topo, eta);
     // Assign vorticity for topography
     Kokkos::parallel_for("vorticity_topo",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, h, h}, {nz-h, ny-h, nx-h}),
@@ -238,11 +236,14 @@ void DynamicalCore::compute_wind_fields() {
                 xi_topo(k,j,i) = (w_topo(k,j+1,i) - w_topo(k,j,i)) * rdy()
                                - (v_topo(k+1,j,i) - v_topo(k,j,i)) * rdz() * flex_height_coef_up(k);
             }
+            else xi_topo(k,j,i) = xi(k,j,i);
+            
 
             if (ITYPEU(k,j,i) != 1) {
                 eta_topo(k,j,i) = (w_topo(k,j,i+1) - w_topo(k,j,i)) * rdx()
                                 - (u_topo(k+1,j,i) - u_topo(k,j,i)) * rdz() * flex_height_coef_up(k);
             }
+            else eta_topo(k,j,i) = eta(k,j,i);
         }
     );
     halo_exchanger_.exchange_halos(state_.get_field<3>("xi_topo"));
@@ -366,6 +367,7 @@ void DynamicalCore::calculate_thermo_tendencies() {
 void DynamicalCore::update_thermodynamics(double dt) {
     const int h = grid_.get_halo_cells();
     const auto& max_topo_idx = params_.max_topo_idx;
+    const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
     const int nx = grid_.get_local_total_points_x();
 
@@ -374,22 +376,54 @@ void DynamicalCore::update_thermodynamics(double dt) {
             // var += dt * (AB2 + FE)
             time_integrators_.at(var_name)->step(state_, grid_, params_, dt);
             
+            const auto& ITYPEW = state_.get_field<3>("ITYPEW").get_device_data();
+            auto& var = state_.get_field<3>(var_name).get_mutable_device_data();
             // Topography for theta
             if (var_name == "th") {
-                const auto& ITYPEW = state_.get_field<3>("ITYPEW").get_device_data();
-                auto& th = state_.get_field<3>("th").get_mutable_device_data();
                 const auto& thbar = state_.get_field<1>("thbar").get_device_data();
-                
                 Kokkos::parallel_for("topo_bc_th",
                     Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
                     KOKKOS_LAMBDA(const int k, const int j, const int i) {
                         if (ITYPEW(k,j,i) != 1) {
-                            th(k,j,i) = thbar(k);
+                            var(k,j,i) = thbar(k);
+                        }
+                    }
+                );
+            }
+            else {
+                Kokkos::parallel_for("topo",
+                    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
+                    KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                        if (ITYPEW(k,j,i) != 1) {
+                            var(k,j,i) = 0.;
                         }
                     }
                 );
             }
             halo_exchanger_.exchange_halos(state_.get_field<3>(var_name));
+            // TODO: This is a temporary soution. Make it a method for boundary process
+            Kokkos::parallel_for("Boundary" + var_name,
+                Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{0, 0}}, {{ny, nx}}),
+                KOKKOS_LAMBDA(const int j, const int i) {
+                    var(1, j, i) = var(2, j, i);
+                }
+            );
+            if (var_name == "th" || var_name == "qv") {
+                Kokkos::parallel_for("Boundary" + var_name,
+                    Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{0, 0}}, {{ny, nx}}),
+                    KOKKOS_LAMBDA(const int j, const int i) {
+                        var(nz-h, j, i) = var(nz-h-1, j, i);
+                    }
+                );
+            }
+            else {
+                Kokkos::parallel_for("Boundary" + var_name,
+                    Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{0, 0}}, {{ny, nx}}),
+                    KOKKOS_LAMBDA(const int j, const int i) {
+                        var(nz-h, j, i) = 0.;
+                    }
+                );
+            }
         }
     }
 }
@@ -415,7 +449,7 @@ void DynamicalCore::calculate_vorticity_tendencies() {
         }
     );
     Kokkos::parallel_for("divide_by_density_zeta",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz, ny, nx}),
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz-h+1, ny, nx}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             zeta(k, j, i) /= rhobar(k);
         }
@@ -454,7 +488,7 @@ void DynamicalCore::update_vorticity(double dt) {
         }
     );
     Kokkos::parallel_for("multiply_density_zeta",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz, ny, nx}),
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {nz-h+1, ny, nx}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             zeta(k, j, i) *= rhobar(k);
         }
@@ -466,10 +500,27 @@ void DynamicalCore::update_vorticity(double dt) {
             halo_exchanger_.exchange_halos(state_.get_field<3>(var_name));
         }
     }
+    // TODO: Make this to method
+    Kokkos::parallel_for("vetical_bc",
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, nx}),
+        KOKKOS_LAMBDA(const int j, const int i) {
+            xi(h-1,j,i) = 0;
+            xi(nz-h-1,j,i) = 0;
+            eta(h-1,j,i) = 0;
+            eta(nz-h-1,j,i) = 0;
+
+            // FIXME: Test
+            // xi(h-1,j,i) = xi(h,j,i);
+            // xi(nz-h-1,j,i) = xi(nz-h-2,j,i);
+            // eta(h-1,j,i) = eta(h,j,i);
+            // eta(nz-h-1,j,i) = eta(nz-h-2,j,i);
+        }
+    );
+
+    compute_zeta_vertical_structure(state_);
 }
 
 void DynamicalCore::diagnose_wind_fields(Core::State& state) {
-    compute_zeta_vertical_structure(state);
     compute_uvtopmn(); 
     compute_wind_fields();
 }
