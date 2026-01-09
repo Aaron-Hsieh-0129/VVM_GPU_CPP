@@ -77,9 +77,9 @@ public:
 
     // --- Printing/Debugging Methods ---
     void print_field_info() const;
-    void print_slice_z_at_k(const Grid& grid, int N_idx, int k_local_idx) const;
+    void print_slice_z_at_k(const Grid& grid, int N_idx, int k_local_idx, int halo=-1) const;
     void print_profile(const Grid& grid, int N_idx, int j_local_idx, int i_local_idx) const;
-    void print_xz_cross_at_j(const Grid& grid, int N_idx, int j_local_idx) const;
+    void print_xz_cross_at_j(const Grid& grid, int N_idx, int j_local_idx, int halo=-1) const;
 
 private:
     std::string name_; // Name of the field for identification
@@ -87,7 +87,7 @@ private:
 };
 
 template<size_t Dim>
-inline void Field<Dim>::print_slice_z_at_k(const Grid& grid, int N_idx, int k_local_idx) const {
+inline void Field<Dim>::print_slice_z_at_k(const Grid& grid, int N_idx, int k_local_idx, int halo) const {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
@@ -104,8 +104,12 @@ inline void Field<Dim>::print_slice_z_at_k(const Grid& grid, int N_idx, int k_lo
             return;
         }
         std::cout << "  Slice at N=" << N_idx << ", k=" << k_local_idx << std::endl;
-        for (int j = 0; j < host_data.extent(2); ++j) {
-            for (int i = 0; i < host_data.extent(3); ++i) {
+        int i_start = halo == -1 ? 0 : halo;
+        int j_start = halo == -1 ? 0 : halo;
+        int i_end = halo == -1 ? host_data.extent(3) : host_data.extent(3)-halo;
+        int j_end = halo == -1 ? host_data.extent(2) : host_data.extent(2)-halo;
+        for (int j = j_start; j < j_end; ++j) {
+            for (int i = i_start; i < i_end; ++i) {
                 std::cout << host_data(N_idx, k_local_idx, j, i) << "\t";
             }
             std::cout << std::endl;
@@ -117,8 +121,12 @@ inline void Field<Dim>::print_slice_z_at_k(const Grid& grid, int N_idx, int k_lo
             return;
         }
         std::cout << "  Z-slice at k=" << k_local_idx << std::endl;
-        for (int j = 0; j < host_data.extent(1); ++j) {
-            for (int i = 0; i < host_data.extent(2); ++i) {
+        int i_start = halo == -1 ? 0 : halo;
+        int j_start = halo == -1 ? 0 : halo;
+        int i_end = halo == -1 ? host_data.extent(2) : host_data.extent(2)-halo;
+        int j_end = halo == -1 ? host_data.extent(1) : host_data.extent(1)-halo;
+        for (int j = j_start; j < j_end; ++j) {
+            for (int i = i_start; i < i_end; ++i) {
                 std::cout << host_data(k_local_idx, j, i) << "\t";
             }
             std::cout << std::endl;
@@ -127,8 +135,12 @@ inline void Field<Dim>::print_slice_z_at_k(const Grid& grid, int N_idx, int k_lo
     else if constexpr (Dim == 2) {
         // For a 2D field, we ignore indices and print the whole field
         std::cout << "  Full 2D data:" << std::endl;
-        for (int j = 0; j < host_data.extent(0); ++j) {
-            for (int i = 0; i < host_data.extent(1); ++i) {
+        int i_start = halo == -1 ? 0 : halo;
+        int j_start = halo == -1 ? 0 : halo;
+        int i_end = halo == -1 ? host_data.extent(1) : host_data.extent(1)-halo;
+        int j_end = halo == -1 ? host_data.extent(0) : host_data.extent(0)-halo;
+        for (int j = j_start; j < j_end; ++j) {
+            for (int i = i_start; i < i_end; ++i) {
                 std::cout << host_data(j, i) << "\t";
             }
             std::cout << std::endl;
@@ -186,7 +198,7 @@ inline void Field<Dim>::print_profile(const Grid& grid, int N_idx, int j_local_i
 }
 
 template<size_t Dim>
-inline void Field<Dim>::print_xz_cross_at_j(const Grid& grid, int N_idx, int j_local_idx) const {
+inline void Field<Dim>::print_xz_cross_at_j(const Grid& grid, int N_idx, int j_local_idx, int halo) const {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
@@ -203,8 +215,12 @@ inline void Field<Dim>::print_xz_cross_at_j(const Grid& grid, int N_idx, int j_l
             return;
         }
         std::cout << "  Slice at N=" << N_idx << ", j=" << j_local_idx << std::endl;
-        for (int k = 0; k < host_data.extent(1); ++k) {
-            for (int i = 0; i < host_data.extent(3); ++i) {
+        int i_start = halo == -1 ? 0 : halo;
+        int k_start = halo == -1 ? 0 : halo;
+        int i_end = halo == -1 ? host_data.extent(3) : host_data.extent(3)-halo;
+        int k_end = halo == -1 ? host_data.extent(1) : host_data.extent(1)-halo;
+        for (int k = k_start; k < k_end; ++k) {
+            for (int i = i_start; i < i_end; ++i) {
                 std::cout << host_data(N_idx, k, j_local_idx, i) << "\t";
             }
             std::cout << std::endl;
@@ -216,8 +232,13 @@ inline void Field<Dim>::print_xz_cross_at_j(const Grid& grid, int N_idx, int j_l
             return;
         }
         std::cout << "  Y-slice at j=" << j_local_idx << std::endl;
-        for (int k = 0; k < host_data.extent(0); ++k) {
-            for (int i = 0; i < host_data.extent(2); ++i) {
+        int i_start = halo == -1 ? 0 : halo;
+        int k_start = halo == -1 ? 0 : halo;
+        int i_end = halo == -1 ? host_data.extent(2) : host_data.extent(2)-halo;
+        int k_end = halo == -1 ? host_data.extent(0) : host_data.extent(0)-halo;
+
+        for (int k = k_start; k < k_end; ++k) {
+            for (int i = i_start; i < i_end; ++i) {
                 std::cout << host_data(k, j_local_idx, i) << "\t";
             }
             std::cout << std::endl;

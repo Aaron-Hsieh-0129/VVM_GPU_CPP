@@ -73,7 +73,7 @@ int main(int argc, char *argv[]) {
         // Create a VVM model instance and run the simulation
         VVM::Core::Grid grid(config);
         VVM::Core::Parameters parameters(config, grid);
-        grid.print_info();
+        // grid.print_info();
 
 #if defined(ENABLE_NCCL)
         VVM::Core::State state(config, parameters, grid, nccl_comm, stream);
@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
 
         VVM::IO::OutputManager output_manager(config, grid, parameters, state, MPI_COMM_WORLD);
         output_manager.write(0, 0.0);
-        // output_manager.write_static_topo_file();
+        output_manager.write_static_topo_file();
 
         // Simulation loop parameters
         double total_time = config.get_value<double>("simulation.total_time_s");

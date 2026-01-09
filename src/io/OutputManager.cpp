@@ -217,8 +217,8 @@ std::string format_to_six_digits(int number) {
 void OutputManager::write(int step, double time) {
     VVM::Utils::Timer advection_x_timer("OUTPUT");
 
-    if (rank_ == 0) std::cout << "  [OutputManager::write] Opening file for step " << step << "..." << std::endl;
-    std::string filename = output_dir_ + "/" + filename_prefix_ + "_" + format_to_six_digits((int) (step/output_interval_s_)) + ".h5";
+    if (rank_ == 0) std::cout << "  [OutputManager::write] Opening file for time " << time << " s" << std::endl;
+    std::string filename = output_dir_ + "/" + filename_prefix_ + "_" + format_to_six_digits((int) (time/output_interval_s_)) + ".h5";
     writer_ = io_.Open(filename, adios2::Mode::Write, MPI_COMM_WORLD);
 
     if (rank_ == 0) std::cout << "  [OutputManager::write] File opened. Defining vars if needed..." << std::endl;
