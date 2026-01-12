@@ -144,7 +144,7 @@ void Takacs::calculate_flux_convergence_y(
 }
 
 void Takacs::calculate_flux_convergence_z(
-    const Core::Field<3>& scalar, const Core::Field<1>& rhobar_divide_field, const Core::Field<3>& w_field,
+    const Core::Field<3>& scalar, const Core::Field<3>& w_field,
     const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency, const std::string& var_name) const {
 
     VVM::Utils::Timer advection_x_timer("ADVECTION_Z");
@@ -153,7 +153,6 @@ void Takacs::calculate_flux_convergence_z(
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
     const int h = grid.get_halo_cells();
-    const auto& rhobar_divide = rhobar_divide_field.get_device_data();
 
     const auto& w = w_field.get_device_data();
     const auto& q = scalar.get_device_data();
@@ -285,7 +284,7 @@ void Takacs::calculate_flux_convergence_z(
         Kokkos::parallel_for("flux_convergence_tendency", 
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                tendency(k,j,i) += -0.5*(flux(k,j,i) - flux(k-1,j,i)) * rdz_view() * flex_height_coef_mid(k) / rhobar_divide(k);
+                tendency(k,j,i) += -0.5*(flux(k,j,i) - flux(k-1,j,i)) * rdz_view() * flex_height_coef_mid(k);
             }
         );
     }
@@ -691,10 +690,12 @@ void Takacs::calculate_buoyancy_tendency_x(
     Kokkos::parallel_for("buoyancy_tendency_x",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h-1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
+            // const double dB_dy = (th(k  ,j+1,i)-th(k  ,j,i)) / thbar(k)
+            //                    + (th(k+1,j+1,i)-th(k+1,j,i)) / thbar(k+1)
+            //                    + 0.608*(qv(k,j+1,i)-qv(k,j,i)+qv(k+1,j+1,i)-qv(k+1,j,i))
+            //                    - (qp(k,j+1,i)-qp(k,j,i)+qp(k+1,j+1,i)-qp(k+1,j,i));
             const double dB_dy = (th(k  ,j+1,i)-th(k  ,j,i)) / thbar(k)
-                               + (th(k+1,j+1,i)-th(k+1,j,i)) / thbar(k+1)
-                               + 0.608*(qv(k,j+1,i)-qv(k,j,i)+qv(k+1,j+1,i)-qv(k+1,j,i))
-                               - (qp(k,j+1,i)-qp(k,j,i)+qp(k+1,j+1,i)-qp(k+1,j,i));
+                               + (th(k+1,j+1,i)-th(k+1,j,i)) / thbar(k+1);
 
             tendency(k, j, i) += gravity() * 0.5 * dB_dy * rdy();
         }
@@ -705,8 +706,8 @@ void Takacs::calculate_buoyancy_tendency_x(
     Kokkos::parallel_for("topo",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            // Set tendency to 0 if ITYPEV = 0
-            if (ITYPEV(k,j,i) == 0) tendency(k,j,i) = ITYPEV(k,j,i);
+            // Set tendency to 0 if it's topo for v-loc point (ITYPEV = 0)
+            if (ITYPEV(k,j,i) == 0) tendency(k,j,i) = 0.;
         }
     );
 }
@@ -731,13 +732,15 @@ void Takacs::calculate_buoyancy_tendency_y(
     Kokkos::parallel_for("buoyancy_tendency_y",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h-1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            const double dB_dx = (th(k  ,j,i+1)-th(k  ,j,i)) / thbar(k)
-                               + (th(k+1,j,i+1)-th(k+1,j,i)) / thbar(k+1)
-                               + (0.608*(qv(k,j,i+1)-qv(k,j,i)+qv(k+1,j,i+1)-qv(k+1,j,i)))
-                               - (qp(k,j,i+1)-qp(k,j,i)+qp(k+1,j,i+1)-qp(k+1,j,i));
+            // const double dB_dx = (th(k  ,j,i+1)-th(k  ,j,i)) / thbar(k)
+            //                    + (th(k+1,j,i+1)-th(k+1,j,i)) / thbar(k+1)
+            //                    + (0.608*(qv(k,j,i+1)-qv(k,j,i)+qv(k+1,j,i+1)-qv(k+1,j,i)))
+            //                    - (qp(k,j,i+1)-qp(k,j,i)+qp(k+1,j,i+1)-qp(k+1,j,i));
 
+            const double dB_dx = (th(k  ,j,i+1)-th(k  ,j,i)) / thbar(k)
+                               + (th(k+1,j,i+1)-th(k+1,j,i)) / thbar(k+1);
             // WARNING: dB_dy has a negative sign in original VVM because the definition of eta in that VVM is negative from this one.
-            // FIXME: Fix the comparison negative sign
+            // Fix the comparison negative sign
             tendency(k, j, i) += gravity() * 0.5 * dB_dx * rdx();
         }
     );
@@ -747,7 +750,7 @@ void Takacs::calculate_buoyancy_tendency_y(
     Kokkos::parallel_for("buoyancy_tendency_y",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            // Set tendency to 0 if ITYPEV = 0
+            // Set tendency to 0 if it's topo for u-loc point (ITYPEU = 0)
             if (ITYPEU(k,j,i) == 0) tendency(k,j,i) = 0.;
         }
     );

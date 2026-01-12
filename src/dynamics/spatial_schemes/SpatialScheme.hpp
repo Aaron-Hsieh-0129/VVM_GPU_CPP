@@ -22,7 +22,7 @@ public:
         const Core::Field<3>& scalar, const Core::Field<3>& v,
         const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency, const std::string& var_name) const = 0;
     virtual void calculate_flux_convergence_z(
-        const Core::Field<3>& scalar, const Core::Field<1>& rhobar_divide_field, const Core::Field<3>& w,
+        const Core::Field<3>& scalar, const Core::Field<3>& w,
         const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency, const std::string& var_name) const = 0;
 
     // ρω∇⋅(v)

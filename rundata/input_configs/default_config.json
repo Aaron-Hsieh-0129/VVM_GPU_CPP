@@ -107,7 +107,8 @@
             "BGAU",
             "CGAU",
             "bn",
-            "cn"
+            "cn",
+            "u_mean"
         ],
         "output_grid": {
             "x_start": 0,

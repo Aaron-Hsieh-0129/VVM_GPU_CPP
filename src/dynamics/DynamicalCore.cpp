@@ -402,16 +402,11 @@ void DynamicalCore::update_thermodynamics(double dt) {
             }
             halo_exchanger_.exchange_halos(state_.get_field<3>(var_name));
             // TODO: This is a temporary soution. Make it a method for boundary process
-            Kokkos::parallel_for("Boundary" + var_name,
-                Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{0, 0}}, {{ny, nx}}),
-                KOKKOS_LAMBDA(const int j, const int i) {
-                    var(1, j, i) = var(2, j, i);
-                }
-            );
             if (var_name == "th" || var_name == "qv") {
                 Kokkos::parallel_for("Boundary" + var_name,
                     Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{0, 0}}, {{ny, nx}}),
                     KOKKOS_LAMBDA(const int j, const int i) {
+                        var(h-1, j, i) = var(h, j, i);
                         var(nz-h, j, i) = var(nz-h-1, j, i);
                     }
                 );
@@ -420,6 +415,7 @@ void DynamicalCore::update_thermodynamics(double dt) {
                 Kokkos::parallel_for("Boundary" + var_name,
                     Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{0, 0}}, {{ny, nx}}),
                     KOKKOS_LAMBDA(const int j, const int i) {
+                        var(h-1, j, i) = var(h, j, i);
                         var(nz-h, j, i) = 0.;
                     }
                 );
@@ -508,12 +504,6 @@ void DynamicalCore::update_vorticity(double dt) {
             xi(nz-h-1,j,i) = 0;
             eta(h-1,j,i) = 0;
             eta(nz-h-1,j,i) = 0;
-
-            // FIXME: Test
-            // xi(h-1,j,i) = xi(h,j,i);
-            // xi(nz-h-1,j,i) = xi(nz-h-2,j,i);
-            // eta(h-1,j,i) = eta(h,j,i);
-            // eta(nz-h-1,j,i) = eta(nz-h-2,j,i);
         }
     );
 

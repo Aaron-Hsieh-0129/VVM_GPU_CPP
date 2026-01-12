@@ -6,7 +6,11 @@ namespace VVM {
 namespace Dynamics {
 
 AdvectionTerm::AdvectionTerm(std::unique_ptr<SpatialScheme> scheme, std::string var_name, VVM::Core::HaloExchanger& halo_exchanger)
-    : scheme_(std::move(scheme)), variable_name_(std::move(var_name)), halo_exchanger_(halo_exchanger) {}
+    : scheme_(std::move(scheme)), variable_name_(std::move(var_name)), halo_exchanger_(halo_exchanger) {
+
+    thermodynamics_vars_ = {"th", "qv", "qc", "qr", "qi", "nc", "nr", "ni"};
+    dynamics_vars_ = {"xi", "eta", "zeta"};
+}
 
 AdvectionTerm::~AdvectionTerm() = default;
 
@@ -156,7 +160,20 @@ void AdvectionTerm::compute_tendency(
 
     scheme_->calculate_flux_convergence_x(advected_field, u_mean_field, grid, params, out_tendency, variable_name_);
     scheme_->calculate_flux_convergence_y(advected_field, v_mean_field, grid, params, out_tendency, variable_name_);
-    scheme_->calculate_flux_convergence_z(advected_field, rhobar_field, w_mean_field, grid, params, out_tendency, variable_name_);
+    scheme_->calculate_flux_convergence_z(advected_field, w_mean_field, grid, params, out_tendency, variable_name_);
+
+    auto& tendency = out_tendency.get_mutable_device_data();
+    auto& var_data = state.get_field<3>(variable_name_).get_mutable_device_data();
+    if (std::find(thermodynamics_vars_.begin(), thermodynamics_vars_.end(), variable_name_) != thermodynamics_vars_.end()) {
+        // Divide rho for tendency
+        Kokkos::parallel_for("Divide_rho_for_thermovariables", 
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz,ny,nx}),
+            KOKKOS_LAMBDA(int k, int j, int i) {
+                tendency(k,j,i) /= rhobar(k);
+            }
+        );
+    }
+    return;
 }
 
 } // namespace Dynamics

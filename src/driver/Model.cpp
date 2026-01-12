@@ -94,17 +94,10 @@ void Model::run_step(double dt) {
         dycore_->compute_zeta_vertical_structure(state_);
     }
     dycore_->diagnose_wind_fields(state_);
-    // FIXME: Test
-    Kokkos::deep_copy(state_.get_field<3>("u").get_mutable_device_data(), 5);
-    Kokkos::deep_copy(state_.get_field<3>("v").get_mutable_device_data(), 0);
-    Kokkos::deep_copy(state_.get_field<3>("w").get_mutable_device_data(), 0);
 }
 
 void Model::finalize() {
-    if (microphysics_) {
-        microphysics_->finalize();
-        microphysics_.reset();
-    }
+    if (microphysics_) microphysics_->finalize();
     if (radiation_) radiation_->finalize();
 }
 
