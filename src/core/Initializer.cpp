@@ -381,11 +381,6 @@ void Initializer::assign_vars() const {
             th(k,j,i) = thbar(k);
         }
     );
-    // FIXME: Test
-    // auto& zeta = state_.get_field<3>("zeta").get_mutable_device_data();
-    // Kokkos::deep_copy(xi, th);
-    // Kokkos::deep_copy(eta, th);
-    // Kokkos::deep_copy(zeta, th);
 
     auto& lon = state_.get_field<1>("lon").get_mutable_device_data();
     Kokkos::deep_copy(lon, 121.);

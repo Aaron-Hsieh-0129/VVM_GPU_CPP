@@ -916,8 +916,6 @@ void TurbulenceProcess::process_thermodynamics(Core::State& state, double dt) {
         calculate_tendencies(state, var_name, temp3d_tendency_);
         const auto& tend_data = temp3d_tendency_.get_device_data(); 
 
-        // temp3d_tendency_.print_slice_z_at_k(grid_, 0, nz-h-1, 2);
-
         Kokkos::parallel_for("Turbulence_Update_" + var_name,
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({{h, h, h}}, {{nz-h, ny-h, nx-h}}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
@@ -926,16 +924,11 @@ void TurbulenceProcess::process_thermodynamics(Core::State& state, double dt) {
         );
         halo_exchanger_.exchange_halos(state.get_field<3>(var_name));
         // TODO: This is a temporary soution. Make it a method for boundary process
-        Kokkos::parallel_for("Boundary" + var_name,
-            Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{0, 0}}, {{ny, nx}}),
-            KOKKOS_LAMBDA(const int j, const int i) {
-                var_data(1, j, i) = var_data(2, j, i);
-            }
-        );
         if (var_name == "th" || var_name == "qv") {
             Kokkos::parallel_for("Boundary" + var_name,
                 Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{0, 0}}, {{ny, nx}}),
                 KOKKOS_LAMBDA(const int j, const int i) {
+                    var_data(h-1, j, i) = var_data(h, j, i);
                     var_data(nz-h, j, i) = var_data(nz-h-1, j, i);
                 }
             );
@@ -944,6 +937,7 @@ void TurbulenceProcess::process_thermodynamics(Core::State& state, double dt) {
             Kokkos::parallel_for("Boundary" + var_name,
                 Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{0, 0}}, {{ny, nx}}),
                 KOKKOS_LAMBDA(const int j, const int i) {
+                    var_data(h-1, j, i) = var_data(h, j, i);
                     var_data(nz-h, j, i) = 0.;
                 }
             );
@@ -989,9 +983,6 @@ void TurbulenceProcess::process_dynamics(Core::State& state, double dt) {
                 KOKKOS_LAMBDA(const int j, const int i) {
                     var_data(h-1, j, i) = 0.;
                     var_data(nz-h-1, j, i) = 0.;
-                    // FIXME: Test
-                    // var_data(h-1, j, i) = var_data(h,j,i);
-                    // var_data(nz-h-1, j, i) = var_data(nz-h-2,j,i);
                 }
             );
         }

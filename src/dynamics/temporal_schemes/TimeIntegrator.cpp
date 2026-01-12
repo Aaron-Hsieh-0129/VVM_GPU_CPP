@@ -122,8 +122,22 @@ TimeIntegrator::~TimeIntegrator() = default; void TimeIntegrator::step(
                 );
             }
         }
+
+        // --- Add Forward Euler tendencies on top of AB2 update if applicable ---
+        if (has_fe_terms_) {
+            auto& fe_tendency_field = state.get_field<3>("fe_tendency_" + variable_name_);
+            auto fe_tendency_data = fe_tendency_field.get_device_data();
+
+            Kokkos::parallel_for("Forward_Euler_FE_Terms_Additive",
+                Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start, h, h}, {k_end, ny-h, nx-h}),
+                KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                    field_new_view(k, j, i) += dt * fe_tendency_data(k, j, i);
+                }
+            );
+        }
     } 
-    else if (has_fe_terms_) {
+
+    if (has_fe_terms_ && !has_ab2_terms_) {
         // --- Case 2: Variable *only* uses Forward Euler ---
         // We need a copy of the original field state before updating
         Core::Field<3> field_old_state("temp_old_state", {nz, ny, nx});
@@ -137,19 +151,6 @@ TimeIntegrator::~TimeIntegrator() = default; void TimeIntegrator::step(
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start, h, h}, {k_end, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
                 field_new_view(k, j, i) = field_old_view(k, j, i) + dt * fe_tendency_data(k, j, i);
-            }
-        );
-    }
-
-    // --- Add Forward Euler tendencies on top of AB2 update if applicable ---
-    if (has_ab2_terms_ && has_fe_terms_) {
-        auto& fe_tendency_field = state.get_field<3>("fe_tendency_" + variable_name_);
-        auto fe_tendency_data = fe_tendency_field.get_device_data();
-
-        Kokkos::parallel_for("Forward_Euler_FE_Terms_Additive",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start, h, h}, {k_end, ny-h, nx-h}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                field_new_view(k, j, i) += dt * fe_tendency_data(k, j, i);
             }
         );
     }

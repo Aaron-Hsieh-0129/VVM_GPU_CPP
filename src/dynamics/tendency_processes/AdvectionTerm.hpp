@@ -23,6 +23,8 @@ public:
 private:
     std::unique_ptr<SpatialScheme> scheme_;
     std::string variable_name_;
+    std::vector<std::string> dynamics_vars_;
+    std::vector<std::string> thermodynamics_vars_;
 
     Core::HaloExchanger& halo_exchanger_;
 };
