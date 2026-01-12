@@ -115,6 +115,8 @@ int main(int argc, char *argv[]) {
         VVM::Utils::TimingManager::get_instance().stop_timer("total vvm");
         VVM::Utils::TimingManager::get_instance().print_timings(MPI_COMM_WORLD);
         model.finalize();
+
+        Kokkos::fence();
     }
     Kokkos::finalize();
     MPI_Finalize();
