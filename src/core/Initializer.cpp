@@ -253,14 +253,6 @@ void Initializer::initialize_poisson() const {
     }
     Kokkos::deep_copy(bn_new, h_bn_new);
     Kokkos::deep_copy(cn_new, h_cn_new);
-
-    // DEBUG output
-    Kokkos::deep_copy(state_.get_field<1>("AGAU").get_mutable_device_data(), AGAU);
-    Kokkos::deep_copy(state_.get_field<1>("BGAU").get_mutable_device_data(), BGAU);
-    Kokkos::deep_copy(state_.get_field<1>("CGAU").get_mutable_device_data(), CGAU);
-    Kokkos::deep_copy(state_.get_field<1>("bn").get_mutable_device_data(), bn_new);
-    Kokkos::deep_copy(state_.get_field<1>("cn").get_mutable_device_data(), cn_new);
-
     return;
 }
 

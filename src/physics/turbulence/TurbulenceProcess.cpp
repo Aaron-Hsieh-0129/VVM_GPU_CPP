@@ -23,24 +23,24 @@ TurbulenceProcess::TurbulenceProcess(const Utils::ConfigurationManager& config,
             grid.get_local_total_points_y(),
             grid.get_local_total_points_x()
         }),
-      DHUU1_("DHUU1", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
-      DHUU2_("DHUU2", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
-      DHUV1_("DHUV1", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
-      DHUV2_("DHUV2", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
-      DHUW1_("DHUW1", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
-      DHUW2_("DHUW2", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
-      DHVU1_("DHVU1", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
-      DHVU2_("DHVU2", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
-      DHVV1_("DHVV1", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
-      DHVV2_("DHVV2", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
-      DHVW1_("DHVW1", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
-      DHVW2_("DHVW2", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
-      DHWU1_("DHWU1", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
-      DHWU2_("DHWU2", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
-      DHWV1_("DHWV1", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
-      DHWV2_("DHWV2", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
-      DHWW1_("DHWW1", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
-      DHWW2_("DHWW2", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      // DHUU1_("DHUU1", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      // DHUU2_("DHUU2", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      // DHUV1_("DHUV1", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      // DHUV2_("DHUV2", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      // DHUW1_("DHUW1", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      // DHUW2_("DHUW2", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      // DHVU1_("DHVU1", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      // DHVU2_("DHVU2", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      // DHVV1_("DHVV1", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      // DHVV2_("DHVV2", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      // DHVW1_("DHVW1", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      // DHVW2_("DHVW2", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      // DHWU1_("DHWU1", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      // DHWU2_("DHWU2", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      // DHWV1_("DHWV1", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      // DHWV2_("DHWV2", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      // DHWW1_("DHWW1", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
+      // DHWW2_("DHWW2", std::array<int, 3>{grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
       masks_(grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()) 
 {
     int nz = grid_.get_local_total_points_z();
@@ -82,13 +82,98 @@ TurbulenceProcess::TurbulenceProcess(const Utils::ConfigurationManager& config,
     }
 }
 
+/*
+void check_conversion_correctness(
+    int nz, int ny, int nx,
+    Kokkos::View<double***> dhuu1, Kokkos::View<double***> dhuu2,
+    Kokkos::View<double***> dhuv1, Kokkos::View<double***> dhuv2,
+    Kokkos::View<double***> dhuw1, Kokkos::View<double***> dhuw2,
+    Kokkos::View<double***> dhvu1, Kokkos::View<double***> dhvu2,
+    Kokkos::View<double***> dhvv1, Kokkos::View<double***> dhvv2,
+    Kokkos::View<double***> dhvw1, Kokkos::View<double***> dhvw2,
+    Kokkos::View<double***> dhwu1, Kokkos::View<double***> dhwu2,
+    Kokkos::View<double***> dhwv1, Kokkos::View<double***> dhwv2,
+    Kokkos::View<double***> dhww1, Kokkos::View<double***> dhww2,
+    const VVM::Physics::TerrainMasks& masks_new
+) 
+{
+    int total_errors = 0;
+
+    printf("Compare topomask and original DHXX (Grid: %d x %d x %d)...\n", nz, ny, nx);
+
+    Kokkos::parallel_reduce("Verify_DH_Masks",
+        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({{0, 0, 0}}, {{nz, ny, nx}}),
+        KOKKOS_LAMBDA(const int k, const int j, const int i, int& local_error_count) {
+            
+            auto check = [&](double old_val, CoeffID id) {
+                double new_val = masks_new.val(k, j, i, id);
+                
+                if (Kokkos::abs(old_val - new_val) > 1e-9) {
+                    local_error_count++;
+                }
+            };
+
+            check(dhuu1(k, j, i), UU1); check(dhuu2(k, j, i), UU2);
+            check(dhuv1(k, j, i), UV1); check(dhuv2(k, j, i), UV2);
+            check(dhuw1(k, j, i), UW1); check(dhuw2(k, j, i), UW2);
+            
+            check(dhvu1(k, j, i), VU1); check(dhvu2(k, j, i), VU2);
+            check(dhvv1(k, j, i), VV1); check(dhvv2(k, j, i), VV2);
+            check(dhvw1(k, j, i), VW1); check(dhvw2(k, j, i), VW2);
+            
+            check(dhwu1(k, j, i), WU1); check(dhwu2(k, j, i), WU2);
+            check(dhwv1(k, j, i), WV1); check(dhwv2(k, j, i), WV2);
+            check(dhww1(k, j, i), WW1); check(dhww2(k, j, i), WW2);
+        },
+        total_errors
+    );
+
+    if (total_errors == 0) {
+        printf("\n [SUCCESS] Successiful！\n");
+        printf("Mask and 18 DHXX are the same!!\n\n");
+    } 
+    else {
+        printf("\n [FAILED] Unsuccessiful\n");
+        printf("   Found %d different coefficients\n", total_errors);
+        printf("   Check init_dh_coefficients and init_boundary_masks\n\n");
+    }
+}
+*/
 
 void TurbulenceProcess::initialize(Core::State& state) {
-    // init_boundary_masks(state);
-    init_dh_coefficients(state);
+    init_boundary_masks(state);
+    // init_dh_coefficients(state);
+
+    // The following code compares orignal DHXX and masks
+    // int nz = grid_.get_local_total_points_z();
+    // int ny = grid_.get_local_total_points_y();
+    // int nx = grid_.get_local_total_points_x();
+    // auto dhuu1 = DHUU1_.get_mutable_device_data(); auto dhuu2 = DHUU2_.get_mutable_device_data();
+    // auto dhuv1 = DHUV1_.get_mutable_device_data(); auto dhuv2 = DHUV2_.get_mutable_device_data();
+    // auto dhuw1 = DHUW1_.get_mutable_device_data(); auto dhuw2 = DHUW2_.get_mutable_device_data();
+    // auto dhvu1 = DHVU1_.get_mutable_device_data(); auto dhvu2 = DHVU2_.get_mutable_device_data();
+    // auto dhvv1 = DHVV1_.get_mutable_device_data(); auto dhvv2 = DHVV2_.get_mutable_device_data();
+    // auto dhvw1 = DHVW1_.get_mutable_device_data(); auto dhvw2 = DHVW2_.get_mutable_device_data();
+    // auto dhwu1 = DHWU1_.get_mutable_device_data(); auto dhwu2 = DHWU2_.get_mutable_device_data();
+    // auto dhwv1 = DHWV1_.get_mutable_device_data(); auto dhwv2 = DHWV2_.get_mutable_device_data();
+    // auto dhww1 = DHWW1_.get_mutable_device_data(); auto dhww2 = DHWW2_.get_mutable_device_data();
+    // check_conversion_correctness(
+    //     nz, ny, nx,
+    //     dhuu1, dhuu2,
+    //     dhuv1, dhuv2,
+    //     dhuw1, dhuw2,
+    //     dhvu1, dhvu2,
+    //     dhvv1, dhvv2,
+    //     dhvw1, dhvw2,
+    //     dhwu1, dhwu2,
+    //     dhwv1, dhwv2,
+    //     dhww1, dhww2,
+    //     masks_
+    // );
     return;
 }
 
+/*
 void TurbulenceProcess::init_dh_coefficients(Core::State& state) {
     const auto& ITYPEU = state.get_field<3>("ITYPEU").get_device_data();
     const auto& ITYPEV = state.get_field<3>("ITYPEV").get_device_data();
@@ -260,108 +345,8 @@ void TurbulenceProcess::init_dh_coefficients(Core::State& state) {
             }
         }
     );
-
-    auto dims = std::array<int, 3>{
-          grid_.get_local_total_points_z(),
-          grid_.get_local_total_points_y(),
-          grid_.get_local_total_points_x()
-    };
-
-    int k_print = 15;
-    if (!state.has_field("DHUU1")) state.add_field<3>("DHUU1", dims);
-    if (!state.has_field("DHUV1")) state.add_field<3>("DHUV1", dims);
-    if (!state.has_field("DHUW1")) state.add_field<3>("DHUW1", dims);
-    Kokkos::deep_copy(state.get_field<3>("DHUU1").get_mutable_device_data(), dhuu1);
-    Kokkos::deep_copy(state.get_field<3>("DHUV1").get_mutable_device_data(), dhuv1);
-    Kokkos::deep_copy(state.get_field<3>("DHUW1").get_mutable_device_data(), dhuw1);
-    halo_exchanger_.exchange_halos(state.get_field<3>("DHUU1"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("DHUV1"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("DHUW1"));
-    // state.get_field<3>("DHUU1").print_slice_z_at_k(grid_, 0, k_print, halo);
-    // state.get_field<3>("DHUV1").print_slice_z_at_k(grid_, 0, k_print, halo);
-    // state.get_field<3>("DHUW1").print_slice_z_at_k(grid_, 0, k_print, halo);
-    //
-    if (!state.has_field("DHUU2")) state.add_field<3>("DHUU2", dims);
-    if (!state.has_field("DHUV2")) state.add_field<3>("DHUV2", dims);
-    if (!state.has_field("DHUW2")) state.add_field<3>("DHUW2", dims);
-    Kokkos::deep_copy(state.get_field<3>("DHUU2").get_mutable_device_data(), dhuu2);
-    Kokkos::deep_copy(state.get_field<3>("DHUV2").get_mutable_device_data(), dhuv2);
-    Kokkos::deep_copy(state.get_field<3>("DHUW2").get_mutable_device_data(), dhuw2);
-    halo_exchanger_.exchange_halos(state.get_field<3>("DHUU2"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("DHUV2"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("DHUW2"));
-    // state.get_field<3>("DHUU2").print_slice_z_at_k(grid_, 0, k_print, halo);
-    // state.get_field<3>("DHUV2").print_slice_z_at_k(grid_, 0, k_print, halo);
-    // state.get_field<3>("DHUW2").print_slice_z_at_k(grid_, 0, k_print, halo);
-
-    
-    if (!state.has_field("DHVU1")) state.add_field<3>("DHVU1", dims);
-    if (!state.has_field("DHVV1")) state.add_field<3>("DHVV1", dims);
-    if (!state.has_field("DHVW1")) state.add_field<3>("DHVW1", dims);
-    Kokkos::deep_copy(state.get_field<3>("DHVU1").get_mutable_device_data(), dhvu1);
-    Kokkos::deep_copy(state.get_field<3>("DHVV1").get_mutable_device_data(), dhvv1);
-    Kokkos::deep_copy(state.get_field<3>("DHVW1").get_mutable_device_data(), dhvw1);
-    halo_exchanger_.exchange_halos(state.get_field<3>("DHVU1"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("DHVV1"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("DHVW1"));
-    // state.get_field<3>("DHVU1").print_slice_z_at_k(grid_, 0, 12, halo);
-    // state.get_field<3>("DHVV1").print_slice_z_at_k(grid_, 0, 12, halo);
-    // state.get_field<3>("DHVW1").print_slice_z_at_k(grid_, 0, 12, halo);
-    //
-    if (!state.has_field("DHVU2")) state.add_field<3>("DHVU2", dims);
-    if (!state.has_field("DHVV2")) state.add_field<3>("DHVV2", dims);
-    if (!state.has_field("DHVW2")) state.add_field<3>("DHVW2", dims);
-    Kokkos::deep_copy(state.get_field<3>("DHVU2").get_mutable_device_data(), dhvu2);
-    Kokkos::deep_copy(state.get_field<3>("DHVV2").get_mutable_device_data(), dhvv2);
-    Kokkos::deep_copy(state.get_field<3>("DHVW2").get_mutable_device_data(), dhvw2);
-    halo_exchanger_.exchange_halos(state.get_field<3>("DHVU2"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("DHVV2"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("DHVW2"));
-    // state.get_field<3>("DHVU2").print_slice_z_at_k(grid_, 0, 12, halo);
-    // state.get_field<3>("DHVV2").print_slice_z_at_k(grid_, 0, 12, halo);
-    // state.get_field<3>("DHVW2").print_slice_z_at_k(grid_, 0, 12, halo);
-
-    if (!state.has_field("DHWU1")) state.add_field<3>("DHWU1", dims);
-    if (!state.has_field("DHWV1")) state.add_field<3>("DHWV1", dims);
-    if (!state.has_field("DHWW1")) state.add_field<3>("DHWW1", dims);
-    Kokkos::deep_copy(state.get_field<3>("DHWU1").get_mutable_device_data(), dhwu1);
-    Kokkos::deep_copy(state.get_field<3>("DHWV1").get_mutable_device_data(), dhwv1);
-    Kokkos::deep_copy(state.get_field<3>("DHWW1").get_mutable_device_data(), dhww1);
-    halo_exchanger_.exchange_halos(state.get_field<3>("DHWU1"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("DHWV1"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("DHWW1"));
-    // state.get_field<3>("DHWU1").print_slice_z_at_k(grid_, 0, 12, halo);
-    // state.get_field<3>("DHWV1").print_slice_z_at_k(grid_, 0, 12, halo);
-    // state.get_field<3>("DHWW1").print_slice_z_at_k(grid_, 0, k_print, halo);
-    state.get_field<3>("ITYPEW").print_xz_cross_at_j(grid_, 0, 4);
-    //
-    if (!state.has_field("DHWU2")) state.add_field<3>("DHWU2", dims);
-    if (!state.has_field("DHWV2")) state.add_field<3>("DHWV2", dims);
-    if (!state.has_field("DHWW2")) state.add_field<3>("DHWW2", dims);
-    Kokkos::deep_copy(state.get_field<3>("DHWU2").get_mutable_device_data(), dhwu2);
-    Kokkos::deep_copy(state.get_field<3>("DHWV2").get_mutable_device_data(), dhwv2);
-    Kokkos::deep_copy(state.get_field<3>("DHWW2").get_mutable_device_data(), dhww2);
-    halo_exchanger_.exchange_halos(state.get_field<3>("DHWU2"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("DHWV2"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("DHWW2"));
-    // state.get_field<3>("DHWU2").print_slice_z_at_k(grid_, 0, 12, halo);
-    // state.get_field<3>("DHWV2").print_slice_z_at_k(grid_, 0, 12, halo);
-    // state.get_field<3>("DHWW2").print_slice_z_at_k(grid_, 0, k_print, halo);
-    state.get_field<3>("DHWU1").print_xz_cross_at_j(grid_, 0, 4, 0);
-    state.get_field<3>("DHWU2").print_xz_cross_at_j(grid_, 0, 4, 0);
-    state.get_field<3>("DHWV1").print_xz_cross_at_j(grid_, 0, 4, 0);
-    state.get_field<3>("DHWV2").print_xz_cross_at_j(grid_, 0, 4, 0);
-    state.get_field<3>("DHWW1").print_xz_cross_at_j(grid_, 0, 4, 0);
-    state.get_field<3>("DHWW2").print_xz_cross_at_j(grid_, 0, 4, 0);
-
-    // DHWW1_.print_slice_z_at_k(grid_, 0, 2, 2);
-
-    state.get_field<3>("ITYPEW").print_xz_cross_at_j(grid_, 0, 4, h);
-    state.get_field<3>("DHWW2").print_slice_z_at_k(grid_, 0, 1, 0);
-    state.get_field<3>("ITYPEU").print_slice_z_at_k(grid_, 0, 1, 0);
-    state.get_field<3>("ITYPEV").print_slice_z_at_k(grid_, 0, 1, 0);
-    state.get_field<3>("ITYPEW").print_slice_z_at_k(grid_, 0, 1, 0);
 }
+*/
 
 
 void TurbulenceProcess::init_boundary_masks(Core::State& state) {
@@ -550,7 +535,8 @@ void TurbulenceProcess::compute_coefficients(Core::State& state, double dt)
     const double critmn = critmn_;
     const double critmx = 0.8 * deld_ * deld_ / dt;
 
-    auto DHWW1 = DHWW1_.get_device_data(); auto DHWW2 = DHWW2_.get_device_data();
+    // auto DHWW1 = DHWW1_.get_device_data(); auto DHWW2 = DHWW2_.get_device_data();
+    const auto& masks = masks_;
     Kokkos::parallel_for("ShuttsGray_Coeffs",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({{h, h, h}}, {{nz-h, ny-h, nx-h}}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
@@ -570,18 +556,17 @@ void TurbulenceProcess::compute_coefficients(Core::State& state, double dt)
 
 
             // N^2
+            // This uses DHXX as topo masks
             // double DDY_top = grav*flex_height_coef_up(k) * (th(k+1,j,i)-th(k,j,i)) * rdz
-            //              / (th(k+1,j,i)+th(k,j,i)) * mask_view(k, j, i).u_top();;
-            //
+            //              / (th(k+1,j,i)+th(k,j,i)) * DHWW1(k,j,i);
             // double DDY_bot = grav*flex_height_coef_up(k-1) * (th(k,j,i)-th(k-1,j,i)) * rdz
-            //              / (th(k,j,i)+th(k-1,j,i)) * mask_view(k, j, i).u_bot();
-
+            //              / (th(k,j,i)+th(k-1,j,i)) * DHWW2(k,j,i);
 
             double DDY_top = grav*flex_height_coef_up(k) * (th(k+1,j,i)-th(k,j,i)) * rdz
-                         / (th(k+1,j,i)+th(k,j,i)) * DHWW1(k, j, i);;
+                         / (th(k+1,j,i)+th(k,j,i)) * masks.val(k,j,i,WW1);
 
             double DDY_bot = grav*flex_height_coef_up(k-1) * (th(k,j,i)-th(k-1,j,i)) * rdz
-                         / (th(k,j,i)+th(k-1,j,i)) * DHWW2(k, j, i);
+                         / (th(k,j,i)+th(k-1,j,i)) * masks.val(k,j,i,WW2);
 
             double DDY = DDY_top + DDY_bot;
 
@@ -698,15 +683,17 @@ void TurbulenceProcess::calculate_tendencies(Core::State& state,
     const double rdy2 = rdy2_;
     const double rdz2 = rdz2_;
 
-    auto DHUU1 = DHUU1_.get_device_data(); auto DHUU2 = DHUU2_.get_device_data();
-    auto DHUV1 = DHUV1_.get_device_data(); auto DHUV2 = DHUV2_.get_device_data();
-    auto DHUW1 = DHUW1_.get_device_data(); auto DHUW2 = DHUW2_.get_device_data();
-    auto DHVU1 = DHVU1_.get_device_data(); auto DHVU2 = DHVU2_.get_device_data();
-    auto DHVV1 = DHVV1_.get_device_data(); auto DHVV2 = DHVV2_.get_device_data();
-    auto DHVW1 = DHVW1_.get_device_data(); auto DHVW2 = DHVW2_.get_device_data();
-    auto DHWU1 = DHWU1_.get_device_data(); auto DHWU2 = DHWU2_.get_device_data();
-    auto DHWV1 = DHWV1_.get_device_data(); auto DHWV2 = DHWV2_.get_device_data();
-    auto DHWW1 = DHWW1_.get_device_data(); auto DHWW2 = DHWW2_.get_device_data();
+    // auto DHUU1 = DHUU1_.get_device_data(); auto DHUU2 = DHUU2_.get_device_data();
+    // auto DHUV1 = DHUV1_.get_device_data(); auto DHUV2 = DHUV2_.get_device_data();
+    // auto DHUW1 = DHUW1_.get_device_data(); auto DHUW2 = DHUW2_.get_device_data();
+    // auto DHVU1 = DHVU1_.get_device_data(); auto DHVU2 = DHVU2_.get_device_data();
+    // auto DHVV1 = DHVV1_.get_device_data(); auto DHVV2 = DHVV2_.get_device_data();
+    // auto DHVW1 = DHVW1_.get_device_data(); auto DHVW2 = DHVW2_.get_device_data();
+    // auto DHWU1 = DHWU1_.get_device_data(); auto DHWU2 = DHWU2_.get_device_data();
+    // auto DHWV1 = DHWV1_.get_device_data(); auto DHWV2 = DHWV2_.get_device_data();
+    // auto DHWW1 = DHWW1_.get_device_data(); auto DHWW2 = DHWW2_.get_device_data();
+
+    const auto masks = masks_;
 
     int NK2 = nz-h-1;
     int NK1 = nz-h-2;
@@ -717,25 +704,26 @@ void TurbulenceProcess::calculate_tendencies(Core::State& state,
             Kokkos::parallel_for("Compute_Diff_Tendency_" + var_name,
                 Kokkos::MDRangePolicy<Kokkos::Rank<3>>({{h, h, h}}, {{nz-h-1, ny-h, nx-h}}),
                 KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                    // double d2dx2 = ((RKM(k,  j,i)+RKM(k,  j,i+1)+RKM(k,  j+1,i)+RKM(k,  j+1,i+1)
-                    //                 +RKM(k+1,j,i)+RKM(k+1,j,i+1)+RKM(k+1,j+1,i)+RKM(k+1,j+1,i+1))
-                    //                     *(var(k,j,i+1)-var(k,j,i))*mask_view(k,j,i).v_right() -
-                    //                 (RKM(k,  j,i-1)+RKM(k,  j,i)+RKM(k,j+1,i-1)+RKM(k,j+1,i)
-                    //                 +RKM(k+1,j,i-1)+RKM(k+1,j,i)+RKM(k+1,j+1,i-1)+RKM(k+1,j+1,i)) 
-                    //                     *(var(k,j,i)-var(k,j,i-1))*mask_view(k,j,i).v_left() )
-                    //                 * 0.125 * rdx2;
-                    // 
-                    // double d2dy2 = ((RKM(k,j+1,i)+RKM(k+1,j+1,i))*(var(k,j+1,i)-var(k,j,  i))*mask_view(k,j,i).v_front()
-                    //                -(RKM(k,j,  i)+RKM(k+1,j,  i))*(var(k,j,  i)-var(k,j-1,i))*mask_view(k,j,i).v_back())
-                    //                 * 0.5*rdy2;
-                    //
-                    // double d2dz2 = (flex_height_coef_mid(k+1)*rhobar(k+1)*(RKM(k+1,j,i)+RKM(k+1,j+1,i))
-                    //                     *(var(k+1,j,i)-var(k,  j,i))*mask_view(k,j,i).v_top()
-                    //               - flex_height_coef_mid(k)*rhobar(k)*(RKM(k,j,i)+RKM(k,j+1,i))
-                    //                     *(var(k,  j,i)-var(k-1,j,i))*mask_view(k,j,i).v_bot())
-                    //                 *0.5 * rdz2 / (rhobar_up(k))*flex_height_coef_up(k);
+                    double d2dx2 = ((RKM(k,  j,i)+RKM(k,  j,i+1)+RKM(k,  j+1,i)+RKM(k,  j+1,i+1)
+                                    +RKM(k+1,j,i)+RKM(k+1,j,i+1)+RKM(k+1,j+1,i)+RKM(k+1,j+1,i+1))
+                                        *(var(k,j,i+1)-var(k,j,i))*masks.val(k, j, i, VU1) -
+                                    (RKM(k,  j,i-1)+RKM(k,  j,i)+RKM(k,j+1,i-1)+RKM(k,j+1,i)
+                                    +RKM(k+1,j,i-1)+RKM(k+1,j,i)+RKM(k+1,j+1,i-1)+RKM(k+1,j+1,i)) 
+                                        *(var(k,j,i)-var(k,j,i-1))*masks.val(k, j, i, VU2) )
+                                    * 0.125 * rdx2;
+                    
+                    double d2dy2 = ((RKM(k,j+1,i)+RKM(k+1,j+1,i))*(var(k,j+1,i)-var(k,j,  i))*masks.val(k, j, i, VV1)
+                                   -(RKM(k,j,  i)+RKM(k+1,j,  i))*(var(k,j,  i)-var(k,j-1,i))*masks.val(k, j, i, VV2))
+                                    * 0.5*rdy2;
 
+                    double d2dz2 = (flex_height_coef_mid(k+1)*rhobar(k+1)*(RKM(k+1,j,i)+RKM(k+1,j+1,i))
+                                        *(var(k+1,j,i)-var(k,  j,i))*masks.val(k, j, i, VW1)
+                                  - flex_height_coef_mid(k)*rhobar(k)*(RKM(k,j,i)+RKM(k,j+1,i))
+                                        *(var(k,  j,i)-var(k-1,j,i))*masks.val(k, j, i, VW2))
+                                    *0.5 * rdz2 / (rhobar_up(k))*flex_height_coef_up(k);
 
+                    // The following code using DHXX to be topo mask and it costs more memory, but it's more intuitive.
+                    /*
                     double d2dx2 = ((RKM(k,  j,i)+RKM(k,  j,i+1)+RKM(k,  j+1,i)+RKM(k,  j+1,i+1)
                                     +RKM(k+1,j,i)+RKM(k+1,j,i+1)+RKM(k+1,j+1,i)+RKM(k+1,j+1,i+1))
                                         *(var(k,j,i+1)-var(k,j,i))*DHVU1(k,j,i) -
@@ -753,6 +741,8 @@ void TurbulenceProcess::calculate_tendencies(Core::State& state,
                                   - flex_height_coef_mid(k)*rhobar(k)*(RKM(k,j,i)+RKM(k,j+1,i))
                                         *(var(k,  j,i)-var(k-1,j,i))*DHVW2(k,j,i))
                                     *0.5 * rdz2 / (rhobar_up(k))*flex_height_coef_up(k);
+                    */
+                    //////////////////////////////////////////////////
 
                     tend(k,j,i) = d2dx2 + d2dy2 + d2dz2;
                 }
@@ -776,27 +766,27 @@ void TurbulenceProcess::calculate_tendencies(Core::State& state,
             Kokkos::parallel_for("Compute_Diff_Tendency_" + var_name,
                 Kokkos::MDRangePolicy<Kokkos::Rank<3>>({{h, h, h}}, {{nz-h-1, ny-h, nx-h}}),
                 KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                    
-                    // double d2dx2 = ((RKM(k,j,i+1)+RKM(k+1,j,i+1))*(var(k,j,i+1)-var(k,j,i  )) * mask_view(k,j,i).u_right()
-                    //                -(RKM(k,j,i  )+RKM(k+1,j,i  ))*(var(k,j,i  )-var(k,j,i-1)) * mask_view(k,j,i).u_left())
-                    //                 * 0.5 * rdx2;
-                    //
-                    // double d2dy2 = ((RKM(k,j,i)+RKM(k,j,i+1)+RKM(k,j+1,i)+RKM(k,j+1,i+1) 
-                    //                 +RKM(k+1,j,i)+RKM(k+1,j,i+1)+RKM(k+1,j+1,i)+RKM(k+1,j+1,i+1))
-                    //                             *(var(k,j+1,i)-var(k,j,i))*mask_view(k,j,i).u_front() -      
-                    //                 (RKM(k,j-1,i)+RKM(k,j-1,i+1)+RKM(k,j,i)+RKM(k,j,i+1) 
-                    //                 +RKM(k+1,j-1,i)+RKM(k+1,j-1,i+1)+RKM(k+1,j,i)+RKM(k+1,j,i+1))
-                    //                             *(var(k,j,i)-var(k,j-1,i))*mask_view(k,j,i).u_back())
-                    //                 * 0.125 * rdy2;
-                    //
-                    //
-                    // double d2dz2 = (flex_height_coef_mid(k+1)*rhobar(k+1)*(RKM(k+1,j,i)+RKM(k+1,j,i+1))  
-                    //                    *(var(k+1,j,i)-var(k,  j,i))*mask_view(k,j,i).u_top()
-                    //                -flex_height_coef_mid(k)*rhobar(k)*(RKM(k,j,i)+RKM(k,j,i+1))
-                    //                    *(var(k,  j,i)-var(k-1,j,i))*mask_view(k,j,i).u_bot())
-                    //                 * 0.5 * rdz2 / rhobar_up(k) * flex_height_coef_up(k);
-                                  
+                    double d2dx2 = ((RKM(k,j,i+1)+RKM(k+1,j,i+1))*(var(k,j,i+1)-var(k,j,i  )) * masks.val(k, j, i, UU1)
+                                   -(RKM(k,j,i  )+RKM(k+1,j,i  ))*(var(k,j,i  )-var(k,j,i-1)) * masks.val(k, j, i, UU2))
+                                    * 0.5 * rdx2;
 
+                    double d2dy2 = ((RKM(k,j,i)+RKM(k,j,i+1)+RKM(k,j+1,i)+RKM(k,j+1,i+1) 
+                                    +RKM(k+1,j,i)+RKM(k+1,j,i+1)+RKM(k+1,j+1,i)+RKM(k+1,j+1,i+1))
+                                                *(var(k,j+1,i)-var(k,j,i))*masks.val(k, j, i, UV1) -      
+                                    (RKM(k,j-1,i)+RKM(k,j-1,i+1)+RKM(k,j,i)+RKM(k,j,i+1) 
+                                    +RKM(k+1,j-1,i)+RKM(k+1,j-1,i+1)+RKM(k+1,j,i)+RKM(k+1,j,i+1))
+                                                *(var(k,j,i)-var(k,j-1,i))*masks.val(k, j, i, UV2))
+                                    * 0.125 * rdy2;
+
+
+                    double d2dz2 = (flex_height_coef_mid(k+1)*rhobar(k+1)*(RKM(k+1,j,i)+RKM(k+1,j,i+1))  
+                                       *(var(k+1,j,i)-var(k,  j,i))*masks.val(k, j, i, UW1)
+                                   -flex_height_coef_mid(k)*rhobar(k)*(RKM(k,j,i)+RKM(k,j,i+1))
+                                       *(var(k,  j,i)-var(k-1,j,i))*masks.val(k, j, i, UW2))
+                                    * 0.5 * rdz2 / rhobar_up(k) * flex_height_coef_up(k);
+
+                    // The following code using DHXX to be topo mask and it costs more memory, but it's more intuitive.
+                    /*
                     double d2dx2 = ((RKM(k,j,i+1)+RKM(k+1,j,i+1))*(var(k,j,i+1)-var(k,j,i  )) * DHUU1(k,j,i)
                                    -(RKM(k,j,i  )+RKM(k+1,j,i  ))*(var(k,j,i  )-var(k,j,i-1)) * DHUU2(k,j,i))
                                     * 0.5 * rdx2;
@@ -815,6 +805,9 @@ void TurbulenceProcess::calculate_tendencies(Core::State& state,
                                    -flex_height_coef_mid(k)*rhobar(k)*(RKM(k,j,i)+RKM(k,j,i+1))
                                        *(var(k,  j,i)-var(k-1,j,i))*DHUW2(k,j,i))
                                     * 0.5 * rdz2 / rhobar_up(k) * flex_height_coef_up(k);
+                    */
+                    //////////////////////////////////////////////
+                    
                     tend(k,j,i) = d2dx2 + d2dy2 + d2dz2;
                 }
             );
@@ -823,30 +816,34 @@ void TurbulenceProcess::calculate_tendencies(Core::State& state,
             Kokkos::parallel_for("Compute_Diff_Tendency_" + var_name,
                 Kokkos::MDRangePolicy<Kokkos::Rank<3>>({{h, h, h}}, {{nz-h, ny-h, nx-h}}),
                 KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                    // double d2dx2 = 0.5*( (RKH(k,j,i+1)+RKH(k,j,i))
-                    //                         *(var(k,j,i+1)-var(k,j,i))*mask_view(k,j,i).w_right()
-                    //                    - (RKH(k,j,i)+RKH(k,j,i-1))
-                    //                         *(var(k,j,i)-var(k,j,i-1))*mask_view(k,j,i).w_left() ) * rdx2;
-                    //
-                    // double d2dy2 = 0.5*( (RKH(k,j+1,i)+RKH(k,j,i))
-                    //                         *(var(k,j+1,i)-var(k,j  ,i))*mask_view(k,j,i).w_front()
-                    //                    - (RKH(k,j,i)+RKH(k,j-1,i))
-                    //                         *(var(k,j  ,i)-var(k,j-1,i))*mask_view(k,j,i).w_back() ) * rdy2;
-                    //  
-                    // double d2dz2 = 0.;
-                    //
-                    // if (k != nz-h-1) {
-                    //     d2dz2 =  0.5 * flex_height_coef_mid(k)*(flex_height_coef_up(k)*rhobar_up(k)*(RKH(k+1,j,i)+RKH(k,j,i))
-                    //                         *(var(k+1,j,i)-var(k,j,i))*mask_view(k,j,i).w_top()
-                    //                   -flex_height_coef_up(k-1)*rhobar_up(k-1)*(RKH(k,j,i)+RKH(k-1,j,i))
-                    //                         *(var(k,j,i)-var(k-1,j,i))*mask_view(k,j,i).w_bot() ) / flex_height_coef_mid(k) * rdz2;
-                    // }
-                    // else {
-                    //     d2dz2 = -0.5*flex_height_coef_mid(NK2)*(flex_height_coef_up(NK1)*rhobar_up(NK1)*(RKH(NK2,j,i)+RKH(NK1,j,i))
-                    //                 *(var(NK2,j,i)-var(NK1,j,i))) / rhobar(NK2) * rdz2; 
-                    // }
-                     
+                    double d2dx2 = 0.5*( (RKH(k,j,i+1)+RKH(k,j,i))
+                                            *(var(k,j,i+1)-var(k,j,i))*masks.val(k, j, i, WU1)
+                                       - (RKH(k,j,i)+RKH(k,j,i-1))
+                                            *(var(k,j,i)-var(k,j,i-1))*masks.val(k, j, i, WU2) ) * rdx2;
 
+                    double d2dy2 = 0.5*( (RKH(k,j+1,i)+RKH(k,j,i))
+                                            *(var(k,j+1,i)-var(k,j  ,i))*masks.val(k, j, i, WV1)
+                                       - (RKH(k,j,i)+RKH(k,j-1,i))
+                                            *(var(k,j  ,i)-var(k,j-1,i))*masks.val(k, j, i, WV2) ) * rdy2;
+                     
+                    double d2dz2 = 0.;
+
+                    if (k == nz-h-1) {
+                        d2dz2 = -0.5*flex_height_coef_mid(NK2)*(flex_height_coef_up(NK1)*rhobar_up(NK1)*(RKH(NK2,j,i)+RKH(NK1,j,i))
+                                    *(var(NK2,j,i)-var(NK1,j,i))) / rhobar(NK2) * rdz2; 
+                    }
+                    else {
+                        d2dz2 =  0.5 * flex_height_coef_mid(k)*(
+                                       flex_height_coef_up(k)*rhobar_up(k)*(RKH(k+1,j,i)+RKH(k,j,i))
+                                            *(var(k+1,j,i)-var(k,j,i))*masks.val(k, j, i, WW1)
+                                      -flex_height_coef_up(k-1)*rhobar_up(k-1)*(RKH(k,j,i)+RKH(k-1,j,i))
+                                            *(var(k,j,i)-var(k-1,j,i))*masks.val(k, j, i, WW2) ) / rhobar(k) * rdz2;
+                    }
+
+
+                     
+                    // The following code using DHXX to be topo mask and it costs more memory, but it's more intuitive.
+                    /* 
                     double d2dx2 = 0.5*( (RKH(k,j,i+1)+RKH(k,j,i))
                                             *(var(k,j,i+1)-var(k,j,i))*DHWU1(k,j,i)
                                        - (RKH(k,j,i)+RKH(k,j,i-1))
@@ -870,9 +867,10 @@ void TurbulenceProcess::calculate_tendencies(Core::State& state,
                                       -flex_height_coef_up(k-1)*rhobar_up(k-1)*(RKH(k,j,i)+RKH(k-1,j,i))
                                             *(var(k,j,i)-var(k-1,j,i))*DHWW2(k,j,i) ) / rhobar(k) * rdz2;
                     }
+                    */
+                    ////////////////////////////////////////////////
 
                     tend(k,j,i) = d2dx2 + d2dy2 + d2dz2;
-                    // tend(k,j,i) = d2dz2;
                 }
             );
         }
@@ -988,6 +986,7 @@ void TurbulenceProcess::process_dynamics(Core::State& state, double dt) {
         }
     }
 }
+
 
 } // namespace Physics
 } // namespace VVM
