@@ -35,11 +35,6 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<1>("qvbar", {nz_total});
     add_field<1>("U", {nz_total});
     add_field<1>("V", {nz_total});
-    add_field<1>("AGAU", {nz_total});
-    add_field<1>("BGAU", {nz_total});
-    add_field<1>("CGAU", {nz_total});
-    add_field<1>("bn", {nz_total});
-    add_field<1>("cn", {nz_total});
 
     add_field<1>("lon", {nx_total});
     add_field<1>("lat", {ny_total});
