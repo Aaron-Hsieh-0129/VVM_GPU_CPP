@@ -114,7 +114,6 @@ private:
     double grav_;
     double vk_;
 
-    // Kokkos::View<TopoMask***> mask_view_;
     TerrainMasks masks_;
 
     // VVM::Core::Field<3> DHUU1_, DHUU2_;
