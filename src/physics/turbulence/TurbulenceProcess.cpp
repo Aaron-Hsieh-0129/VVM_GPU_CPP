@@ -618,8 +618,9 @@ void TurbulenceProcess::compute_coefficients(Core::State& state, double dt)
             rkh(k, j, i) = rkh_val;
         }
     );
-    Kokkos::deep_copy(rkm, 100.);
-    Kokkos::deep_copy(rkh, 100.);
+    // DEBUG: Fix RKM, RKH
+    // Kokkos::deep_copy(rkm, 100.);
+    // Kokkos::deep_copy(rkh, 100.);
 
     halo_exchanger_.exchange_halos(state.get_field<3>("RKM"));
     halo_exchanger_.exchange_halos(state.get_field<3>("RKH"));

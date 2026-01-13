@@ -371,7 +371,7 @@ void OutputManager::grads_ctl_file() {
         if (k < nz_phy+h-1) outFile << ", ";
     }
     outFile << "\n";
-    outFile << "TDEF " << (int) (total_time_ / (dt*output_interval_s_)+1) << " LINEAR 00:00Z01JAN2000 " << "1hr\n";
+    outFile << "TDEF " << (int) (total_time_ / (output_interval_s_)+1) << " LINEAR 00:00Z01JAN2000 " << "1hr\n";
     outFile << "\n";
 
     // int outnum = 7; // xi,eta,zeta,u,v,w,th

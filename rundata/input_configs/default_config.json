@@ -1,7 +1,7 @@
 {
     "grid": {
-        "nx": 10,
-        "ny": 10,
+        "nx": 32,
+        "ny": 32,
         "nz": 33,
         "n_halo_cells": 2,
         "dx": 500.0,
@@ -10,9 +10,9 @@
         "dz1": 100.0
     },
     "simulation": {
-        "total_time_s": 400.0,
+        "total_time_s": 1500.0,
         "dt_s": 1.0,
-        "output_interval_s": 1.0
+        "output_interval_s": 50.0
     },
     "boundary_conditions": {
         "default": {
@@ -48,7 +48,7 @@
     "initial_conditions": {
         "format": "txt",
         "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/initial_conditions/profile.txt",
-        "perturbation": "none"
+        "perturbation": "bubble"
     },
     "netcdf_reader": {
         "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/TOPO.nc",
