@@ -4,7 +4,7 @@ import os
 
 filename = '../rundata/TOPO.nc' 
 
-nz, ny, nx = 33, 10, 10
+nz, ny, nx = 33, 32, 32
 DX = 500.0
 DY = 500.0
 
@@ -31,10 +31,10 @@ xx, yy = np.meshgrid(x, y)
 
 topo_index = np.zeros((ny, nx))
 # topo_index[center_y-6:center_y+6, center_x-15:center_x+15] = 15
-topo_index[1:4, 1:4] = 15
-topo_index[6:9, 1:4] = 15
-topo_index[1:4, 6:9] = 15
-topo_index[6:9, 6:9] = 15
+# topo_index[1:4, 1:4] = 15
+# topo_index[6:9, 1:4] = 15
+# topo_index[1:4, 6:9] = 15
+# topo_index[6:9, 6:9] = 15
 
 try:
     with netCDF4.Dataset(filename, 'w', format='NETCDF4') as ncfile:

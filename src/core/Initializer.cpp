@@ -424,15 +424,15 @@ void Initializer::initialize_perturbation() const {
         auto& th = state_.get_field<3>("th").get_mutable_device_data();
         Kokkos::parallel_for("init_perturbation", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
             KOKKOS_LAMBDA(int k, int j, int i) {
-                const int local_j = j - h;
-                const int local_i = i - h;
+                const int local_j = j;
+                const int local_i = i;
 
                 const int global_j = global_start_j + local_j;
                 const int global_i = global_start_i + local_i;
 
                 double radius_norm = std::sqrt(
-                                      std::pow(((global_i + 1) - nx/2.) * dx() / 2000., 2) +
-                                      // std::pow(((global_j + 1) - 32. / 2.) * dy() / 2000., 2) +
+                                      std::pow(((global_i + 1) - (int) (nx/2)) * dx() / 2000., 2) +
+                                      // std::pow(((global_j + 1) - (int) (ny/2)) * dy() / 2000., 2) +
                                       std::pow((z_mid(k) - 3000.) / 2000., 2)
                                      );
                 if (radius_norm <= 1) {
