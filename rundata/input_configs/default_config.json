@@ -10,9 +10,9 @@
         "dz1": 100.0
     },
     "simulation": {
-        "total_time_s": 1500.0,
+        "total_time_s": 200.0,
         "dt_s": 1.0,
-        "output_interval_s": 50.0
+        "output_interval_s": 1.0
     },
     "boundary_conditions": {
         "default": {
@@ -47,7 +47,7 @@
     },
     "initial_conditions": {
         "format": "txt",
-        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/initial_conditions/profile.txt",
+        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/initial_conditions/profile_p3.txt",
         "perturbation": "bubble"
     },
     "netcdf_reader": {
@@ -57,7 +57,7 @@
         }
     },
     "output": {
-        "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/p3_refactor",
+        "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/profile_test",
         "enable_netcdf": true,
         "output_filename_prefix": "vvm_output",
         "fields_to_output": [

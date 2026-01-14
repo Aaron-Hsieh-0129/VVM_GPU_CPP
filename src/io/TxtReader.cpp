@@ -1,521 +1,344 @@
-/*
 #include "TxtReader.hpp"
-#include "core/BoundaryConditionManager.hpp"
 #include <fstream>
-#include <stdexcept>
-#include <iostream>
 #include <sstream>
+#include <iostream>
+#include <cmath>
 #include <algorithm>
-#include <vector>
-#include <string>
-#include <map>
-#include <utility>
+#include <stdexcept>
+#include <mpi.h>
 
 namespace VVM {
 namespace IO {
 
-TxtReader::TxtReader(const std::string& filepath, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params, const VVM::Utils::ConfigurationManager& config) 
-    : grid_(grid), params_(params), source_file_(filepath), config_(config) {
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
-    std::ifstream infile(source_file_);
-    if (!infile.is_open()) {
-        throw std::runtime_error("Failed to open initial conditions file: " + source_file_);
-    }
-
-    std::string line;
-    // Skip comment lines and separator lines
-    while (std::getline(infile, line)) {
-        if (line.empty() || line[0] == '#' || line.find("===") != std::string::npos) {
-            continue;
-        }
-        break; // First non-comment/separator line is the header
-    }
-
-    // Parse header to find column indices
-    std::stringstream ss_header(line);
-    std::string header_token;
-    std::vector<std::string> column_names;
-    std::map<std::string, int> header_indices; // Store original column name to index mapping
-    int col_idx = 0;
-    while (ss_header >> header_token) {
-        column_names.push_back(header_token);
-        header_indices[header_token] = col_idx++;
-        // Initialize an empty vector for each profile in all_profiles_
-        all_profiles_[header_token] = std::vector<std::pair<double, double>>();
-    }
-
-    if (header_indices.find("pbar") == header_indices.end()) {
-        throw std::runtime_error("Missing 'pbar' column in profile file header.");
-    }
-
-    // Read data rows
-    int pbar_col_idx = header_indices["pbar"];
-    while (std::getline(infile, line)) {
-        if (line.empty()) continue; // Skip empty lines
-
-        std::stringstream ss_data(line);
-        std::vector<double> row_data;
-        double val;
-        while (ss_data >> val) {
-            row_data.push_back(val);
-        }
-
-        if (row_data.size() <= static_cast<size_t>(pbar_col_idx)) {
-            if (rank == 0) std::cerr << "Warning: Skipping malformed row (missing pbar) in profile file: " << line << std::endl;
-            continue;
-        }
-
-        double pbar_val = row_data[pbar_col_idx];
-
-        // pair.first --> name, pair.second --> [[pbar], [data]]
-        // Populate all_profiles_ for each column found in the header
-        for (const auto& col_name : column_names) {
-            int current_col_idx = header_indices[col_name];
-            if (row_data.size() > static_cast<size_t>(current_col_idx)) {
-                all_profiles_[col_name].emplace_back(pbar_val, row_data[current_col_idx]);
-            } 
-            else {
-                if (rank == 0) std::cerr << "Warning: Missing data for column '" << col_name << "' in row: " << line << std::endl;
-            }
-        }
-    }
-
-    if (rank == 0) {
-        if (all_profiles_.empty() || all_profiles_.at("pbar").empty()) {
-            std::cerr << "Warning: No profile data loaded from " << source_file_ << std::endl;
-        } 
-        else {
-            std::cout << "Profiles loaded from: " << source_file_ << std::endl;
-            std::cout << "--- Loaded Profile Data Summary ---" << std::endl;
-            for (const auto& pair : all_profiles_) {
-                std::cout << "- " << pair.first << ": " << pair.second.size() << " data points" << std::endl;
-            }
-            std::cout << "-----------------------------------" << std::endl;
-        }
-    }
-}
-
-double TxtReader::linear_interpolate(const std::string& field_name, double target_z) const {
-    int rank = grid_.get_mpi_rank();
-
-    const auto& profile_data = all_profiles_.at(field_name);
-    
-    if (profile_data.empty()) {
-        throw std::runtime_error("Profile data for field '" + field_name + "' is empty for interpolation.");
-    }
-
-    static std::map<std::string, bool> warned_below;
-    static std::map<std::string, bool> warned_above;
-
-    // Handle extrapolation
-    if (target_z < profile_data.front().first) {
-        if (!warned_below[field_name]) {
-            if (rank == 0) std::cerr << "Warning for field '" << field_name << "': Target Z (" << target_z << "m) is below profile range (" << profile_data.front().first << "m). Extrapolating..." << std::endl;
-            warned_below[field_name] = true;
-        }
-        return profile_data.front().second;
-    }
-    if (target_z > profile_data.back().first) {
-        if (!warned_above[field_name]) {
-             if (rank == 0) std::cerr << "Warning for field '" << field_name << "': Target Z (" << target_z << "m) is above profile range (" << profile_data.back().first << "m). Extrapolating..." << std::endl;
-            warned_above[field_name] = true;
-        }
-        return profile_data.back().second;
-    }
-
-    auto it = std::lower_bound(profile_data.begin(), profile_data.end(), target_z,
-        [](const std::pair<double, double>& elem, double val) {
-            return elem.first < val;
-        });
-    const auto& p2 = *it;
-    const auto& p1 = *(it - 1);
-
-    if (target_z == p2.first) {
-        return p2.second;
-    }
-
-    if (target_z == p1.first) {
-        return p1.second;
-    }
-
-    if (p2.first == p1.first) {
-        return p1.second;
-    }
-    const double factor = (target_z - p1.first) / (p2.first - p1.first);
-    return p1.second + factor * (p2.second - p1.second);
+TxtReader::TxtReader(const std::string& filepath, const VVM::Core::Grid& grid, 
+                     const VVM::Core::Parameters& params, const VVM::Utils::ConfigurationManager& config)
+    : grid_(grid), params_(params), config_(config), source_file_(filepath) {
+    read_file();
 }
 
 void TxtReader::read_and_initialize(VVM::Core::State& state) {
     int rank = grid_.get_mpi_rank();
-
-    if (all_profiles_.empty() || all_profiles_.at("pbar").empty()) {
-        std::cout << "No profile data loaded. Skipping file-based initialization." << std::endl;
+    
+    if (raw_data_.empty()) {
+        if (rank == 0) std::cerr << "[TxtReader] Warning: No data loaded. Skipping initialization." << std::endl;
         return;
     }
 
-    calculate_input_z();
-    auto z_mid_host = params_.z_mid.get_host_data();
-    
-    const auto& nz = grid_.get_local_total_points_z();
-    const auto& h = grid_.get_halo_cells(); 
-    // Interpolate the data (qv, T) from calculated z_input and calculate 
-    for (const auto& profile_pair : all_profiles_) {
-        const std::string& profile_name = profile_pair.first;
-        try {
-            auto& field_1d = state.get_field<1>(profile_name);
-            auto host_mirror = field_1d.get_host_data();
+    if (rank == 0) std::cout << "[TxtReader] Starting Profile Initialization..." << std::endl;
+    calculate_input_heights();
+    initialize_thermodynamics(state);
+    initialize_forcing(state);
 
-            // Initialize only physical points of the 1D field
-            for (int k = h-1; k < nz; k++) {
-                double target_z = z_mid_host(k);
-                host_mirror(k) = linear_interpolate(profile_name, target_z);
-            }
-
-            Kokkos::deep_copy(field_1d.get_mutable_device_data(), host_mirror);
-            if (rank == 0) std::cout << "Successfully initialized field: " << profile_name << std::endl;
-        } 
-        catch (const std::runtime_error& e) {
-            // Catch if the field is not a 1D field or doesn't exist in the State
-            if (rank == 0) std::cerr << "Warning: Could not initialize 1D field for profile '" << profile_name << "'. Reason: " << e.what() << std::endl;
-        }
-    }
-    Kokkos::fence();
-
-    auto& Tvbar = state.get_field<1>("Tvbar").get_mutable_device_data();
-    auto Tvbar_h = state.get_field<1>("Tvbar").get_host_data();
-    auto& qvbar = state.get_field<1>("qvbar").get_mutable_device_data();
-    auto qvbar_h = state.get_field<1>("qvbar").get_host_data();
-    auto& pbar = state.get_field<1>("pbar").get_mutable_device_data();
-    auto pbar_h = state.get_field<1>("pbar").get_host_data();
-    auto& pibar = state.get_field<1>("pibar").get_mutable_device_data();
-    auto pibar_h = state.get_field<1>("pibar").get_host_data();
-    const auto& Tbar = state.get_field<1>("Tbar").get_mutable_device_data();
-    auto Tbar_h = state.get_field<1>("Tbar").get_host_data();
-    auto& thbar = state.get_field<1>("thbar").get_mutable_device_data();
-    auto thbar_h = state.get_field<1>("thbar").get_host_data();
-
-    const auto& PSFC = config_.get_value<double>("constants.PSFC");
-    const auto& P0 = config_.get_value<double>("constants.P0");
-    const auto& Rd = config_.get_value<double>("constants.Rd");
-    const auto& Cp = config_.get_value<double>("constants.Cp");
-    const auto& gravity = config_.get_value<double>("constants.gravity");
-    const auto& dz = config_.get_value<double>("grid.dz");
-
-    const auto& z_up = params_.z_up.get_device_data();
-    const auto z_up_h = params_.z_up.get_host_data();
-    const auto& z_mid = params_.z_mid.get_device_data();
-    const auto z_mid_h = params_.z_mid.get_host_data();
-    const auto& flex_height_coef_up = params_.flex_height_coef_up.get_device_data();
-    const auto flex_height_coef_up_h = params_.flex_height_coef_up.get_host_data();
-
-    for (int k = 0; k < nz; k++) {
-        Tvbar_h(k) = Tbar_h(k) * (1+0.608*qvbar_h(k));
-    }
-    Kokkos::deep_copy(Tvbar, Tvbar_h);
-
-    VVM::Core::Field<1> pibarlog_field("pibarlog", {nz});
-    auto& pibarlog = pibarlog_field.get_mutable_device_data();
-    auto pibarlog_h = pibarlog_field.get_host_data();
-
-    for (int k = 1; k < nz; k++) {
-        if (k == 1) pibarlog_h(k) = std::log(std::pow(PSFC/P0, Rd/Cp));
-        else if (k == 2) pibarlog_h(k) = pibarlog_h(k-1)-2.*gravity*dz/Cp / (Tvbar_h(k-1)+Tvbar_h(k)) * (z_mid_h(k)-z_up_h(k-1)) / dz;
-        else pibarlog_h(k) = pibarlog_h(k-1) - 2.*gravity*dz/Cp / (Tvbar_h(k-1)+Tvbar_h(k)) / flex_height_coef_up_h(k-1); 
-    }
-    Kokkos::deep_copy(pibarlog, pibarlog_h);
-
-    for (int k = 1; k < nz; k++) {
-        pibar_h(k) = std::exp(pibarlog_h(k));
-        pbar_h(k) = P0 * std::pow(pibar_h(k), Cp/Rd);
-    }
-    
-    Kokkos::deep_copy(Tvbar, Tvbar_h);
-    Kokkos::deep_copy(pibar, pibar_h);
-    Kokkos::deep_copy(pbar, pbar_h);
-
-    for (int k = 1; k < nz; k++) {
-        thbar_h(k) = Tbar_h(k) / pibar_h(k);
-    }
-    Kokkos::deep_copy(thbar, thbar_h);
-
-    // Calculate rhobar, rhobar_up
-    std::vector<double> ALPHA, ALPHAW;
-    auto& rhobar = state.get_field<1>("rhobar").get_mutable_device_data();
-    auto rhobar_h = state.get_field<1>("rhobar").get_host_data();
-    auto& rhobar_up = state.get_field<1>("rhobar_up").get_mutable_device_data();
-    auto rhobar_up_h = state.get_field<1>("rhobar_up").get_host_data();
-    for (int k = 0; k < nz; k++) {
-        ALPHA.push_back(Rd * Tvbar_h(k) / pbar_h(k));
-        rhobar_h(k) = 1. / ALPHA[k];
-    }
-    for (int k = 0; k < nz-1; k++) {
-        ALPHAW.push_back((ALPHA[k] + ALPHA[k+1]) * 0.5);
-        rhobar_up_h(k) = 1. / ALPHAW[k];
-    }
-    rhobar_up_h(h-1) = PSFC / (Rd * Tvbar_h(h-1));
-
-    Kokkos::deep_copy(rhobar, rhobar_h);
-    Kokkos::deep_copy(rhobar_up, rhobar_up_h);
-
-
-    auto U_h = state.get_field<1>("U").get_host_data();
-    auto& U = state.get_field<1>("U").get_mutable_device_data();
-    auto V_h = state.get_field<1>("V").get_host_data();
-    auto& V = state.get_field<1>("V").get_mutable_device_data();
-    U_h(h-1) = U_h(h);
-    U_h(nz-h) = U_h(nz-h-1);
-    V_h(h-1) = V_h(h);
-    V_h(nz-h) = V_h(nz-h-1);
-    Kokkos::deep_copy(U, U_h);
-    Kokkos::deep_copy(V, V_h);
-    return;
+    if (rank == 0) std::cout << "[TxtReader] Initialization Complete." << std::endl;
 }
 
-void TxtReader::calculate_input_z() {
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+void TxtReader::read_file() {
+    std::ifstream infile(source_file_);
+    if (!infile.is_open()) throw std::runtime_error("Failed to open file: " + source_file_);
+
+    std::string line;
+    // Skip comments
+    while (std::getline(infile, line)) {
+        if (line.empty() || line[0] == '#' || line.find("===") != std::string::npos) continue;
+        break; 
+    }
+
+    // Parse Header
+    std::stringstream ss_header(line);
+    std::string col_name;
+    std::vector<std::string> headers;
+    while (ss_header >> col_name) {
+        headers.push_back(col_name);
+        raw_data_[col_name] = std::vector<double>();
+    }
+
+    // Parse Data
+    while (std::getline(infile, line)) {
+        if (line.empty()) continue;
+        std::stringstream ss_data(line);
+        double val;
+        for (const auto& h : headers) {
+            if (ss_data >> val) raw_data_[h].push_back(val);
+        }
+    }
+    
+    // Check essential columns
+    if (raw_data_.find("pbar") == raw_data_.end()) 
+        throw std::runtime_error("Missing required column 'pbar' in input file.");
+}
+
+void TxtReader::calculate_input_heights() {
+    const auto& P_in = raw_data_.at("pbar");
+    const auto& T_in = raw_data_.at("Tbar"); 
+    const auto& Qv_in = raw_data_.at("qvbar"); 
+    
+    size_t n = P_in.size();
+    input_z_.resize(n);
+
+    double Rd = config_.get_value<double>("constants.Rd");
+    double Cp = config_.get_value<double>("constants.Cp");
+    double g = config_.get_value<double>("constants.gravity");
+    double P0 = config_.get_value<double>("constants.P0");
+    double RbCp = Rd / Cp;
+
+    std::vector<double> pilog1(n);
+    std::vector<double> tv1(n);
+
+    for (size_t i = 0; i < n; ++i) {
+        double pi = std::pow(P_in[i] / P0, RbCp);
+        pilog1[i] = std::log(pi);
+        tv1[i] = T_in[i] * (1.0 + 0.608 * Qv_in[i]);
+    }
+
+    input_z_[0] = 0.0; 
+    
+    for (size_t k = 1; k < n; ++k) {
+        double d_pilog = pilog1[k] - pilog1[k-1];
+        double tv_sum = tv1[k] + tv1[k-1];
+        double dz = - (Cp / (2.0 * g)) * d_pilog * tv_sum;
+        
+        input_z_[k] = input_z_[k-1] + dz;
+    }
+}
+
+void TxtReader::initialize_thermodynamics(VVM::Core::State& state) {
     const int nz = grid_.get_local_total_points_z();
-    const int h = grid_.get_halo_cells(); 
-    auto& pbar_vec = all_profiles_.at("pbar");
-    const auto& Tbar_vec = all_profiles_.at("Tbar");
-    const auto& qvbar_vec = all_profiles_.at("qvbar");
-
-
-    const auto& P0 = config_.get_value<double>("constants.P0");
-    const auto& Rd = config_.get_value<double>("constants.Rd");
-    const auto& Cp = config_.get_value<double>("constants.Cp");
-    const auto& gravity = config_.get_value<double>("constants.gravity");
+    const int h = grid_.get_halo_cells();
     
-    size_t num_points = pbar_vec.size();
-    std::vector<double> zt_input_calc(num_points, 0.0);
-    std::vector<double> pibar_input(num_points, 0), tv_input(num_points, 0);
+    auto z_mid = params_.z_mid.get_host_data(); 
+    auto z_up = params_.z_up.get_host_data(); 
+    auto flex_height_coef_up = params_.flex_height_coef_up.get_host_data();
 
-    zt_input_calc[0] = 0.0;
-    for (size_t i = 0; i < num_points; ++i) {
-        pibar_input[i] = std::pow(pbar_vec[i].second / P0, Rd / Cp);
-        tv_input[i] = Tbar_vec[i].second * (1.0 + 0.608 * qvbar_vec[i].second);
+    auto Tbar = state.get_field<1>("Tbar").get_host_data();
+    auto qvbar = state.get_field<1>("qvbar").get_host_data();
+    auto pbar = state.get_field<1>("pbar").get_host_data();
+    auto pibar = state.get_field<1>("pibar").get_host_data();
+    auto thbar = state.get_field<1>("thbar").get_host_data();
+    auto Tvbar = state.get_field<1>("Tvbar").get_host_data();
+    auto rhobar = state.get_field<1>("rhobar").get_host_data();
+    auto rhobar_up = state.get_field<1>("rhobar_up").get_host_data();
+    
+    double P0 = config_.get_value<double>("constants.P0");
+    double Rd = config_.get_value<double>("constants.Rd");
+    double Cp = config_.get_value<double>("constants.Cp");
+    double g = config_.get_value<double>("constants.gravity");
+    double dz = config_.get_value<double>("grid.dz");
+    double RbCp = Rd / Cp;
+    double GDZBCP = 2. * g * dz / Cp;
+    
+    double P_sfc_val = raw_data_.at("pbar")[0];
+    double T_sfc_val = raw_data_.at("Tbar")[0];
+    double Qv_sfc_val = raw_data_.at("qvbar")[0];
+
+    pbar(h-1) = P_sfc_val;
+    Tbar(h-1) = T_sfc_val;
+    qvbar(h-1) = Qv_sfc_val;
+    
+    const auto& T_in = raw_data_.at("Tbar");
+    const auto& Qv_in = raw_data_.at("qvbar");
+
+    for (int k = h; k < nz; ++k) {
+        double z = z_mid(k);
+        Tbar(k) = interpolate(z, input_z_, T_in);
+        qvbar(k) = interpolate(z, input_z_, Qv_in);
     }
-    for (size_t k = 1; k < num_points; ++k) {
-        double log_pi_curr = std::log(pibar_input[k]);
-        double log_pi_prev = std::log(pibar_input[k-1]);
-        double tv_sum = tv_input[k] + tv_input[k-1];
 
-        zt_input_calc[k] = zt_input_calc[k-1] - Cp / (2.0 * gravity) * ((log_pi_curr - log_pi_prev) * tv_sum);
-    }
+    std::vector<double> pilog(nz);
+    
+    double pi_sfc = std::pow(pbar(h-1) / P0, RbCp);
+    pibar(h-1) = pi_sfc;
+    pilog[h-1] = std::log(pi_sfc);
 
-    for (auto& profile_pair : all_profiles_) {
-        auto& data_vec = profile_pair.second;
-        if (data_vec.size() != num_points) {
-            if (rank == 0) std::cerr << "Warning: Column " << profile_pair.first << " size mismatch." << std::endl;
-            continue;
+    for (int iter = 0; iter < 3; ++iter) {
+        for (int k = h-1; k < nz; ++k) {
+            Tvbar(k) = Tbar(k) * (1.0 + 0.608 * qvbar(k));
         }
 
-        for (size_t i = 0; i < num_points; ++i) {
-            data_vec[i].first = zt_input_calc[i];
+        pilog[h] = pilog[h-1] - GDZBCP / (Tvbar(h-1) + Tvbar(h)) * (z_mid(h)-z_up(h-1)) / dz;
+        for (int k = h + 1; k < nz; ++k) {
+            pilog[k] = pilog[k-1] - GDZBCP/(Tvbar(k-1)+Tvbar(k)) / flex_height_coef_up(k-1); 
         }
+
+        for (int k = h; k < nz; ++k) {
+            pibar(k) = std::exp(pilog[k]);
+            pbar(k) = P0 * std::pow(pibar(k), Cp/Rd);
+            thbar(k) = Tbar(k) / pibar(k);
+        }
+        thbar(h-1) = Tbar(h-1) / pibar(h-1);
     }
-    this->zt_input = zt_input_calc;
+
+    for (int k = h-1; k < nz; ++k) {
+        rhobar(k) = pbar(k) / (Rd * Tvbar(k));
+    }
+    
+    for (int k = h-1; k < nz - 1; ++k) {
+        double alpha_k = 1.0 / rhobar(k);
+        double alpha_kp1 = 1.0 / rhobar(k+1);
+        double alpha_w = 0.5 * (alpha_k + alpha_kp1);
+        rhobar_up(k) = 1.0 / alpha_w;
+    }
+    rhobar_up(h-1) = rhobar(h-1); 
+
+    for (int k = 0; k < h-1; ++k) {
+        Tbar(k) = Tbar(h-1);
+        qvbar(k) = qvbar(h-1);
+        pbar(k) = pbar(h-1);
+        pibar(k) = pibar(h-1);
+        thbar(k) = thbar(h-1);
+        Tvbar(k) = Tvbar(h-1);
+        rhobar(k) = rhobar(h-1);
+        rhobar_up(k) = rhobar_up(h-1);
+    }
+
+    // Sync
+    Kokkos::deep_copy(state.get_field<1>("Tbar").get_mutable_device_data(), Tbar);
+    Kokkos::deep_copy(state.get_field<1>("qvbar").get_mutable_device_data(), qvbar);
+    Kokkos::deep_copy(state.get_field<1>("pbar").get_mutable_device_data(), pbar);
+    Kokkos::deep_copy(state.get_field<1>("pibar").get_mutable_device_data(), pibar);
+    Kokkos::deep_copy(state.get_field<1>("thbar").get_mutable_device_data(), thbar);
+    Kokkos::deep_copy(state.get_field<1>("Tvbar").get_mutable_device_data(), Tvbar);
+    Kokkos::deep_copy(state.get_field<1>("rhobar").get_mutable_device_data(), rhobar);
+    Kokkos::deep_copy(state.get_field<1>("rhobar_up").get_mutable_device_data(), rhobar_up);
 }
 
-} // namespace IO
-} // namespace VVM
-*/
+void TxtReader::initialize_forcing(VVM::Core::State& state) {
+    const int nz = grid_.get_local_total_points_z();
+    const int h = grid_.get_halo_cells();
+    bool has_q1 = raw_data_.count("Q1");
+    bool has_q2 = raw_data_.count("Q2");
+    bool has_u = raw_data_.count("U");
+    bool has_v = raw_data_.count("V");
 
+    Kokkos::View<double*> Q1LS, Q2LS, U, V;
+    Kokkos::View<double*>::HostMirror Q1LS_h, Q2LS_h, U_h, V_h;
 
-#include "TxtReader.hpp"
-#include <fstream>
-#include <stdexcept>
-#include <iostream>
-#include <sstream>
-#include <algorithm>
-#include <vector>
-#include <string>
-#include <map>
-#include <utility>
-
-namespace VVM {
-namespace IO {
-
-TxtReader::TxtReader(const std::string& filepath, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params, const VVM::Utils::ConfigurationManager& config) 
-    : grid_(grid), params_(params), source_file_(filepath), config_(config) {
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
-    std::ifstream infile(source_file_);
-    if (!infile.is_open()) {
-        throw std::runtime_error("Failed to open initial conditions file: " + source_file_);
+    if (has_q1) {
+        if (!state.has_field("Q1")) state.add_field<1>("Q1", {nz});
+        Q1LS = state.get_field<1>("Q1").get_mutable_device_data(); 
+        Q1LS_h = Kokkos::create_mirror_view(Q1LS);
+    }
+    if (has_q2) {
+        if (!state.has_field("Q2")) state.add_field<1>("Q2", {nz});
+        Q2LS = state.get_field<1>("Q2").get_mutable_device_data(); 
+        Q2LS_h = Kokkos::create_mirror_view(Q2LS);
     }
 
-    std::string line;
-    // Skip comment lines and separator lines
-    while (std::getline(infile, line)) {
-        if (line.empty() || line[0] == '#' || line.find("===") != std::string::npos) {
-            continue;
+    if (has_u) {
+        U = state.get_field<1>("U").get_mutable_device_data();
+        U_h = state.get_field<1>("U").get_host_data();
+    }
+    if (has_v) {
+        V = state.get_field<1>("V").get_mutable_device_data();
+        V_h = state.get_field<1>("V").get_host_data();
+    }
+    
+    auto pbar = state.get_field<1>("pbar").get_host_data();
+    auto pibar = state.get_field<1>("pibar").get_host_data();
+    const auto& P_in = raw_data_.at("pbar");
+
+    double Cp = config_.get_value<double>("constants.Cp");
+    double Lv = config_.get_value<double>("constants.Lv");
+    double secday = 86400.0;
+    double gamfac = Lv / Cp;
+
+    for (int k = h-1; k < nz; ++k) {
+        double p_target = pbar(k);
+
+        if (has_u) U_h(k) = interpolate(p_target, P_in, raw_data_.at("U"), true);
+        if (has_v) V_h(k) = interpolate(p_target, P_in, raw_data_.at("V"), true);
+
+        // Interpolate Q1, Q2
+        if (has_q1) {
+            double q1_val = interpolate(p_target, P_in, raw_data_.at("Q1"), true);
+            // Unit Conv: K/day -> K/s (divided by Exner) -> Advective Form
+            Q1LS_h(k) = -1.0 * q1_val / pibar(k) / secday;
         }
-        break; // First non-comment/separator line is the header
-    }
-
-    // Parse header to find column indices
-    std::stringstream ss_header(line);
-    std::string header_token;
-    std::vector<std::string> column_names;
-    std::map<std::string, int> header_indices; // Store original column name to index mapping
-    int col_idx = 0;
-    while (ss_header >> header_token) {
-        column_names.push_back(header_token);
-        header_indices[header_token] = col_idx++;
-        // Initialize an empty vector for each profile in all_profiles_
-        all_profiles_[header_token] = std::vector<std::pair<double, double>>();
-    }
-
-    if (header_indices.find("ZT") == header_indices.end()) {
-        throw std::runtime_error("Missing 'ZT' column in profile file header.");
-    }
-
-    // Read data rows
-    int zt_col_idx = header_indices["ZT"];
-    while (std::getline(infile, line)) {
-        if (line.empty()) continue; // Skip empty lines
-
-        std::stringstream ss_data(line);
-        std::vector<double> row_data;
-        double val;
-        while (ss_data >> val) {
-            row_data.push_back(val);
-        }
-
-        if (row_data.size() <= static_cast<size_t>(zt_col_idx)) {
-            if (rank == 0) std::cerr << "Warning: Skipping malformed row (missing ZT) in profile file: " << line << std::endl;
-            continue;
-        }
-
-        double zt_val = row_data[zt_col_idx];
-
-        // Populate all_profiles_ for each column found in the header
-        for (const auto& col_name : column_names) {
-            int current_col_idx = header_indices[col_name];
-            if (row_data.size() > static_cast<size_t>(current_col_idx)) {
-                all_profiles_[col_name].emplace_back(zt_val, row_data[current_col_idx]);
-            } 
-            else {
-                if (rank == 0) std::cerr << "Warning: Missing data for column '" << col_name << "' in row: " << line << std::endl;
-            }
+        if (has_q2) {
+            double q2_val = interpolate(p_target, P_in, raw_data_.at("Q2"), true);
+            // Unit Conv: K/day -> kg/kg/s
+            Q2LS_h(k) = q2_val / (gamfac * secday);
         }
     }
 
-    if (rank == 0) {
-        if (all_profiles_.empty() || all_profiles_.at("ZT").empty()) {
-            std::cerr << "Warning: No profile data loaded from " << source_file_ << std::endl;
+    if (has_u) {
+        U_h(h-1) = U_h(h); U_h(nz-h) = U_h(nz-h-1);
+        Kokkos::deep_copy(U, U_h);
+    }
+    if (has_v) {
+        V_h(h-1) = V_h(h); V_h(nz-h) = V_h(nz-h-1);
+        Kokkos::deep_copy(V, V_h);
+    }
+
+    if (has_q1) {
+        Q1LS_h(h-1) = Q1LS_h(h); Q1LS_h(nz-h) = Q1LS_h(nz-h-1);
+        Kokkos::deep_copy(Q1LS, Q1LS_h);
+    }
+    if (has_q2) {
+        Q2LS_h(h-1) = Q2LS_h(h); Q2LS_h(nz-h) = Q2LS_h(nz-h-1);
+        Kokkos::deep_copy(Q2LS, Q2LS_h);
+    }
+}
+
+double TxtReader::interpolate(double target_x, const std::vector<double>& x_vec, 
+                              const std::vector<double>& y_vec, bool is_pressure_coord) const {
+    size_t n = x_vec.size();
+    if (n == 0) return 0.0;
+    if (n == 1) return y_vec[0];
+
+    size_t k1 = 0;
+    size_t k2 = 1;
+
+    if (!is_pressure_coord) {
+        // Ascending Order (Height)
+        // Extrapolation Check (Lower Bound)
+        if (target_x <= x_vec[0]) {
+            k1 = 0; k2 = 1;
+        } 
+        // Extrapolation Check (Upper Bound)
+        else if (target_x >= x_vec[n-1]) {
+            k1 = n-2; k2 = n-1;
         } 
         else {
-            std::cout << "Profiles loaded from: " << source_file_ << std::endl;
-            std::cout << "--- Loaded Profile Data Summary ---" << std::endl;
-            for (const auto& pair : all_profiles_) {
-                std::cout << "- " << pair.first << ": " << pair.second.size() << " data points" << std::endl;
+            // Find interval
+            for (size_t i = 0; i < n - 1; ++i) {
+                if (target_x >= x_vec[i] && target_x < x_vec[i+1]) {
+                    k1 = i;
+                    k2 = i + 1;
+                    break;
+                }
             }
-            std::cout << "-----------------------------------" << std::endl;
         }
-    }
-}
-
-double TxtReader::linear_interpolate(const std::string& field_name, double target_z) const {
-    // Ensure the ZT profile exists and has data before proceeding
-    if (all_profiles_.find("ZT") == all_profiles_.end() || all_profiles_.at("ZT").empty()) {
-        throw std::runtime_error("ZT profile data is not available for interpolation.");
-    }
-
-    const auto& profile_data = all_profiles_.at(field_name);
-    
-    if (profile_data.empty()) {
-        throw std::runtime_error("Profile data for field '" + field_name + "' is empty for interpolation.");
-    }
-
-    static std::map<std::string, bool> warned_below;
-    static std::map<std::string, bool> warned_above;
-
-    // Handle extrapolation
-    if (target_z < profile_data.front().first) {
-        if (!warned_below[field_name]) {
-            std::cerr << "Warning for field '" << field_name << "': Target Z (" << target_z << "m) is below profile range (" << profile_data.front().first << "m). Extrapolating..." << std::endl;
-            warned_below[field_name] = true;
+    } 
+    else {
+        // Descending Order (Pressure)
+        // Extrapolation Check (Higher Pressure / Lower Index)
+        if (target_x >= x_vec[0]) {
+            k1 = 0; k2 = 1;
         }
-        return profile_data.front().second;
-    }
-    if (target_z > profile_data.back().first) {
-        if (!warned_above[field_name]) {
-             std::cerr << "Warning for field '" << field_name << "': Target Z (" << target_z << "m) is above profile range (" << profile_data.back().first << "m). Extrapolating..." << std::endl;
-            warned_above[field_name] = true;
+        // Extrapolation Check (Lower Pressure / Higher Index)
+        else if (target_x <= x_vec[n-1]) {
+            k1 = n-2; k2 = n-1;
         }
-        return profile_data.back().second;
-    }
-
-    auto it = std::lower_bound(profile_data.begin(), profile_data.end(), target_z,
-        [](const std::pair<double, double>& elem, double val) {
-            return elem.first < val;
-        });
-    const auto& p2 = *it;
-    const auto& p1 = *(it - 1);
-
-    if (target_z == p2.first) {
-        return p2.second;
-    }
-
-    if (target_z == p1.first) {
-        return p1.second;
-    }
-
-    if (p2.first == p1.first) {
-        return p1.second;
-    }
-    const double factor = (target_z - p1.first) / (p2.first - p1.first);
-    return p1.second + factor * (p2.second - p1.second);
-}
-
-void TxtReader::read_and_initialize(VVM::Core::State& state) {
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
-    if (all_profiles_.empty() || all_profiles_.at("ZT").empty()) {
-        std::cout << "No profile data loaded. Skipping file-based initialization." << std::endl;
-        return;
-    }
-
-    auto z_mid_host = params_.z_mid.get_host_data();
-    
-    // Iterate through all loaded profiles (e.g., "ZT", "RHO", "THBAR", etc.)
-    for (const auto& profile_pair : all_profiles_) {
-        const std::string& profile_name = profile_pair.first;
-        // Skip 'ZT' profile itself, as it's used for coordinates, not a field to initialize directly
-        if (profile_name == "ZT") {
-            continue;
-        }
-
-        // Try to get the 1D field from the State using the profile name
-        try {
-            auto& field_1d = state.get_field<1>(profile_name);
-            auto host_mirror = Kokkos::create_mirror_view(field_1d.get_mutable_device_data());
-            
-            const int nz = grid_.get_local_total_points_z();
-            const int h = grid_.get_halo_cells(); 
-
-            // Initialize only physical points of the 1D field
-            for (int k = 0; k < nz; ++k) {
-                double target_z = z_mid_host(k);
-                host_mirror(k) = linear_interpolate(profile_name, target_z);
+        else {
+            // Find interval (target_x is smaller than current, bigger than next)
+            for (size_t i = 0; i < n - 1; ++i) {
+                if (target_x <= x_vec[i] && target_x > x_vec[i+1]) {
+                    k1 = i;
+                    k2 = i + 1;
+                    break;
+                }
             }
-
-            Kokkos::deep_copy(field_1d.get_mutable_device_data(), host_mirror);
-            if (rank == 0) std::cout << "Successfully initialized field: " << profile_name << std::endl;
-        } 
-        catch (const std::runtime_error& e) {
-            // Catch if the field is not a 1D field or doesn't exist in the State
-            if (rank == 0) std::cerr << "Warning: Could not initialize 1D field for profile '" << profile_name << "'. Reason: " << e.what() << std::endl;
         }
     }
-    Kokkos::fence();
+    double X  = target_x;
+    double X1 = x_vec[k1];
+    double X2 = x_vec[k2];
+    double F1 = y_vec[k1];
+    double F2 = y_vec[k2];
+
+    return F1 + (F1 - F2) * (X - X1) / (X1 - X2);
 }
+
 
 } // namespace IO
 } // namespace VVM

@@ -65,7 +65,7 @@ int main(int argc, char *argv[]) {
         }
 
         VVM::Utils::ConfigurationManager config(config_file_path);
-        if (rank == 0) config.print_config(); // Print loaded configuration
+        // if (rank == 0) config.print_config(); // Print loaded configuration
 
 
         cudaStream_t stream = Kokkos::Cuda().cuda_stream();
@@ -73,7 +73,7 @@ int main(int argc, char *argv[]) {
         // Create a VVM model instance and run the simulation
         VVM::Core::Grid grid(config);
         VVM::Core::Parameters parameters(config, grid);
-        // grid.print_info();
+        grid.print_info();
 
 #if defined(ENABLE_NCCL)
         VVM::Core::State state(config, parameters, grid, nccl_comm, stream);
