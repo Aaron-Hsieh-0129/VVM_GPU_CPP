@@ -65,7 +65,7 @@ public:
 
     std::string name() const { return "rrtmgp"; }
 
-    void initialize(const VVM::Core::State& state);
+    void initialize(VVM::Core::State& state);
     // void set_grids(const VVM::Core::State& state);
     void run(VVM::Core::State& state, const double dt);
     void finalize();

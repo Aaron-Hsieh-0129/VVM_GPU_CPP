@@ -677,7 +677,13 @@ void Takacs::calculate_buoyancy_tendency_x(
     const auto& thbar = state.get_field<1>("thbar").get_device_data();
     const auto& th = state.get_field<3>("th").get_device_data();
     const auto& qv = state.get_field<3>("qv").get_device_data();
-    const auto& qp = state.get_field<3>("qp").get_device_data();
+
+    // qp is used when P3 is turned on. 
+    // To prevent 'if' at each step or #define flags, qp points to a random variables and times a 0 coefficient if P3 is not defined.
+    bool has_qp = state.has_field("qp");
+    auto qp = has_qp ? state.get_field<3>("qp").get_device_data() : qv;
+    const double qp_coeff = has_qp ? 1.0 : 0.0;
+
     auto& tendency = out_tendency.get_mutable_device_data();
     const auto& rdy = params.rdy;
     const auto& gravity = params.gravity;
@@ -693,7 +699,7 @@ void Takacs::calculate_buoyancy_tendency_x(
             const double dB_dy = (th(k  ,j+1,i)-th(k  ,j,i)) / thbar(k)
                                + (th(k+1,j+1,i)-th(k+1,j,i)) / thbar(k+1)
                                + 0.608*(qv(k,j+1,i)-qv(k,j,i)+qv(k+1,j+1,i)-qv(k+1,j,i))
-                               - (qp(k,j+1,i)-qp(k,j,i)+qp(k+1,j+1,i)-qp(k+1,j,i));
+                               - qp_coeff * (qp(k,j+1,i)-qp(k,j,i)+qp(k+1,j+1,i)-qp(k+1,j,i));
             // const double dB_dy = (th(k  ,j+1,i)-th(k  ,j,i)) / thbar(k)
             //                    + (th(k+1,j+1,i)-th(k+1,j,i)) / thbar(k+1);
 
@@ -719,7 +725,13 @@ void Takacs::calculate_buoyancy_tendency_y(
     const auto& thbar = state.get_field<1>("thbar").get_device_data();
     const auto& th = state.get_field<3>("th").get_device_data();
     const auto& qv = state.get_field<3>("qv").get_device_data();
-    const auto& qp = state.get_field<3>("qp").get_device_data();
+
+    // qp is used when P3 is turned on. 
+    // To prevent 'if' at each step or #define flags, qp points to a random variables and times a 0 coefficient if P3 is not defined.
+    bool has_qp = state.has_field("qp");
+    auto qp = has_qp ? state.get_field<3>("qp").get_device_data() : qv;
+    const double qp_coeff = has_qp ? 1.0 : 0.0;
+
     auto& tendency = out_tendency.get_mutable_device_data();
     auto& rdx = params.rdx;
     auto& gravity = params.gravity;
@@ -735,7 +747,7 @@ void Takacs::calculate_buoyancy_tendency_y(
             const double dB_dx = (th(k  ,j,i+1)-th(k  ,j,i)) / thbar(k)
                                + (th(k+1,j,i+1)-th(k+1,j,i)) / thbar(k+1)
                                + (0.608*(qv(k,j,i+1)-qv(k,j,i)+qv(k+1,j,i+1)-qv(k+1,j,i)))
-                               - (qp(k,j,i+1)-qp(k,j,i)+qp(k+1,j,i+1)-qp(k+1,j,i));
+                               - qp_coeff * (qp(k,j,i+1)-qp(k,j,i)+qp(k+1,j,i+1)-qp(k+1,j,i));
 
             // const double dB_dx = (th(k  ,j,i+1)-th(k  ,j,i)) / thbar(k)
             //                    + (th(k+1,j,i+1)-th(k+1,j,i)) / thbar(k+1);

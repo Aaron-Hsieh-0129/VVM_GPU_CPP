@@ -56,7 +56,17 @@ RRTMGPRadiation::RRTMGPRadiation(const VVM::Utils::ConfigurationManager& config,
 
 RRTMGPRadiation::~RRTMGPRadiation() {}
 
-void RRTMGPRadiation::initialize(const VVM::Core::State& state) {
+void RRTMGPRadiation::initialize(VVM::Core::State& state) {
+    int nx_total = m_grid.get_local_total_points_x();
+    int ny_total = m_grid.get_local_total_points_y();
+    int nz_total = m_grid.get_local_total_points_z();
+
+    if (!state.has_field("sw_heating")) state.add_field<3>("sw_heating", {nz_total, ny_total, nx_total});
+    if (!state.has_field("lw_heating")) state.add_field<3>("lw_heating", {nz_total, ny_total, nx_total});
+    if (!state.has_field("net_heating")) state.add_field<3>("net_heating", {nz_total, ny_total, nx_total});
+    if (!state.has_field("net_sw_flux")) state.add_field<3>("net_sw_flux", {nz_total, ny_total, nx_total});
+    if (!state.has_field("net_lw_flux")) state.add_field<3>("net_lw_flux", {nz_total, ny_total, nx_total});
+
     using PC = scream::physics::Constants<Real>;
 
     // Determine rad timestep, specified as number of atm steps

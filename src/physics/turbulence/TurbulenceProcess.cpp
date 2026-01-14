@@ -56,7 +56,10 @@ TurbulenceProcess::TurbulenceProcess(const Utils::ConfigurationManager& config,
     if (!state.has_field("RKH")) state.add_field<3>("RKH", dims);
 
     dynamics_vars_ = {"xi", "eta", "zeta"};
-    thermodynamics_vars_ = {"th", "qv", "qc", "qr", "qi", "nc", "nr", "ni"};
+    thermodynamics_vars_ = {"th", "qv"};
+    if (config.get_value<bool>("physics.p3.enable_p3", false)) {
+        thermodynamics_vars_.insert(thermodynamics_vars_.end(), {"qc", "qr", "qi", "nc", "nr", "ni"});
+    }
 
     Kokkos::deep_copy(dx_, params_.dx);
     Kokkos::deep_copy(dy_, params_.dy);

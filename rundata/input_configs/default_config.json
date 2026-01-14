@@ -260,7 +260,7 @@
         "rrtmgp": {
             "enable_rrtmgp": false,
             "column_chunk_size": 512,
-            "rad_frequency": 120,
+            "rad_frequency_step": 120,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
             "fixed_total_solar_irradiance": 340,
             "fixed_solar_zenith_angle": -9999,
