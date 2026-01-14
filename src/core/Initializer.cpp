@@ -288,6 +288,8 @@ void Initializer::assign_vars() const {
     if (rank == 0) parameters_.z_up.print_profile(grid_, 0, 0, 0);
     if (rank == 0) parameters_.flex_height_coef_mid.print_profile(grid_, 0, 0, 0);
     if (rank == 0) parameters_.flex_height_coef_up.print_profile(grid_, 0, 0, 0);
+    if (rank == 0) state_.get_field<1>("U").print_profile(grid_, 0, 0, 0);
+    if (rank == 0 && state_.has_field("Q1")) state_.get_field<1>("Q1").print_profile(grid_, 0, 0, 0);
 
     const auto& rdx = parameters_.rdx;
     const auto& rdy = parameters_.rdy;
