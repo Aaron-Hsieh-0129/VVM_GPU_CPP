@@ -8,9 +8,15 @@
 #include "core/HaloExchanger.hpp"
 #include <stdexcept>
 #include <iostream>
+#include <unordered_set>
 
 namespace VVM {
 namespace Dynamics {
+
+bool startsWith(const std::string& fullString, const std::string& prefix) {
+    if (fullString.length() < prefix.length()) return false;
+    return fullString.compare(0, prefix.length(), prefix) == 0;
+}
 
 DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config, 
                              const Core::Grid& grid, 
@@ -23,9 +29,26 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
 
     int rank = grid_.get_mpi_rank();
     if (rank == 0) std::cout << "\n--- Initializing Dynamical Core ---" << std::endl;
+    std::vector<std::string> common_thermo = {"th", "qv"};
     
     auto prognostic_config = config_.get_value<nlohmann::json>("dynamics.prognostic_variables");
-    std::vector<std::string> common_thermo = {"th", "qv", "qc", "qr", "qi", "nc", "nr", "ni", "qm", "bm"};
+    if (!config.get_value<bool>("physics.p3.enable_p3", false)) {
+        if (rank == 0) std::cout << "[WARNING] P3 is not turned on but the P3 variables are listed in prognostic variables so they are deleted!!" << std::endl;
+        std::unordered_set<std::string> P3toRemove = {"qc", "qi", "qr", "qm", "nc", "ni", "nr", "bm"};
+        std::vector<std::string> keysToDelete;
+        for (auto& [key, value] : prognostic_config.items()) {
+            for (const auto& prefix : P3toRemove) {
+                if (startsWith(key, prefix)) {
+                    keysToDelete.push_back(key);
+                    break;
+                }
+            }
+        }
+        for (const auto& key : keysToDelete) {
+            prognostic_config.erase(key);
+        }
+    }
+    else common_thermo.insert(common_thermo.end(), {"qc", "qr", "qi", "nc", "nr", "ni", "qm", "bm"});
     
     for (auto& [var_name, var_conf] : prognostic_config.items()) {
         if (rank == 0) {

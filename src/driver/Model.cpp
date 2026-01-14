@@ -25,7 +25,7 @@ Model::Model(const Utils::ConfigurationManager& config,
 
     if (config_.get_value<bool>("physics.rrtmgp.enable_rrtmgp", false)) {
         radiation_ = std::make_unique<Physics::RRTMGP::RRTMGPRadiation>(config_, grid_, params_);
-        rad_freq_in_steps_ = config_.get_value<int>("physics.rrtmgp.rad_frequency", 1);
+        rad_freq_in_steps_ = config_.get_value<int>("physics.rrtmgp.rad_frequency_step", 1);
     }
 }
 
@@ -57,7 +57,7 @@ void Model::run_step(double dt) {
     if (radiation_) {
         // Update net heating used for calculating th tendency
         // FIXME: If the grid size (nx, ny) can't be divided by core number, it will cause kokkos copy errors here.
-        if (current_step % rad_freq_in_steps_ == 0) {
+        if (state_.get_step() % rad_freq_in_steps_ == 0) {
             radiation_->run(state_, dt); 
         }
         

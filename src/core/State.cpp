@@ -52,6 +52,7 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
 
     // 3D field
     add_field<3>("th", {nz_total, ny_total, nx_total});
+    add_field<3>("qv", {nz_total, ny_total, nx_total});
     add_field<3>("T", {nz_total, ny_total, nx_total});
     add_field<3>("T_m", {nz_total, ny_total, nx_total});
     add_field<3>("xi", {nz_total, ny_total, nx_total});
@@ -69,29 +70,6 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<3>("w_topo", {nz_total, ny_total, nx_total});
     add_field<3>("xi_topo", {nz_total, ny_total, nx_total});
     add_field<3>("eta_topo", {nz_total, ny_total, nx_total});
-    // P3
-    add_field<3>("qv", {nz_total, ny_total, nx_total});
-    add_field<3>("qc", {nz_total, ny_total, nx_total});
-    add_field<3>("qr", {nz_total, ny_total, nx_total});
-    add_field<3>("qi", {nz_total, ny_total, nx_total});
-    add_field<3>("qm", {nz_total, ny_total, nx_total});
-    add_field<3>("nc", {nz_total, ny_total, nx_total});
-    add_field<3>("nr", {nz_total, ny_total, nx_total});
-    add_field<3>("ni", {nz_total, ny_total, nx_total});
-    add_field<3>("bm", {nz_total, ny_total, nx_total});
-    add_field<2>("precip_liq_surf_mass", {ny_total, nx_total});
-    add_field<2>("precip_ice_surf_mass", {ny_total, nx_total});
-    add_field<3>("qp", {nz_total, ny_total, nx_total}); // qc+qr+qi
-    add_field<3>("diag_eff_radius_qc", {nz_total, ny_total, nx_total}); // qc+qr+qi
-    add_field<3>("diag_eff_radius_qi", {nz_total, ny_total, nx_total}); // qc+qr+qi
-    add_field<3>("diag_eff_radius_qr", {nz_total, ny_total, nx_total}); // qc+qr+qi
-    add_field<3>("P_wet", {nz_total, ny_total, nx_total});
-    // rrtmgp
-    add_field<3>("sw_heating", {nz_total, ny_total, nx_total});
-    add_field<3>("lw_heating", {nz_total, ny_total, nx_total});
-    add_field<3>("net_heating", {nz_total, ny_total, nx_total});
-    add_field<3>("net_sw_flux", {nz_total, ny_total, nx_total});
-    add_field<3>("net_lw_flux", {nz_total, ny_total, nx_total});
 
     // Rotation term
     add_field<3>("R_xi", {nz_total, ny_total, nx_total});

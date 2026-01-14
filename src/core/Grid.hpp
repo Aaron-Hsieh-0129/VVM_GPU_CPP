@@ -69,6 +69,7 @@ public:
 
     // MPI info
     int get_mpi_rank() const { return mpi_rank_; }
+    int get_mpi_size() const { return mpi_size_; }
     KOKKOS_INLINE_FUNCTION
     MPI_Comm get_cart_comm() const { return cart_comm_; }
 

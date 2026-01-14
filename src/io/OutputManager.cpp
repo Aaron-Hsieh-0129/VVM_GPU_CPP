@@ -4,16 +4,15 @@
 #include <adios2/cxx11/KokkosView.h>
 #include <Kokkos_Core.hpp> 
 #include <algorithm>
+#include <unordered_set>
 
 namespace VVM {
 namespace IO {
 
 OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params, VVM::Core::State& state, MPI_Comm comm)
     : grid_(grid), params_(params), state_(state), comm_(comm), adios_(comm) {
-    rank_ = 0;
-    mpi_size_ = 1;
-    MPI_Comm_rank(comm_, &rank_);
-    MPI_Comm_size(comm_, &mpi_size_);
+    rank_ = grid_.get_mpi_rank();
+    mpi_size_ = grid_.get_mpi_size();
 
     output_dir_ = config.get_value<std::string>("output.output_dir");
     filename_prefix_ = config.get_value<std::string>("output.output_filename_prefix");

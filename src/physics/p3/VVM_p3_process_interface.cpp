@@ -120,6 +120,26 @@ void VVM_P3_Interface::allocate_p3_buffers() {
 }
 
 void VVM_P3_Interface::initialize(VVM::Core::State& state) {
+    int nx_total = grid_.get_local_total_points_x();
+    int ny_total = grid_.get_local_total_points_y();
+    int nz_total = grid_.get_local_total_points_z();
+    
+    if (!state.has_field("qc")) state.add_field<3>("qc", {nz_total, ny_total, nx_total});
+    if (!state.has_field("qr")) state.add_field<3>("qr", {nz_total, ny_total, nx_total});
+    if (!state.has_field("qi")) state.add_field<3>("qi", {nz_total, ny_total, nx_total});
+    if (!state.has_field("qm")) state.add_field<3>("qm", {nz_total, ny_total, nx_total});
+    if (!state.has_field("nc")) state.add_field<3>("nc", {nz_total, ny_total, nx_total});
+    if (!state.has_field("nr")) state.add_field<3>("nr", {nz_total, ny_total, nx_total});
+    if (!state.has_field("ni")) state.add_field<3>("ni", {nz_total, ny_total, nx_total});
+    if (!state.has_field("bm")) state.add_field<3>("bm", {nz_total, ny_total, nx_total});
+    if (!state.has_field("precip_liq_surf_mass")) state.add_field<2>("precip_liq_surf_mass", {ny_total, nx_total});
+    if (!state.has_field("precip_ice_surf_mass")) state.add_field<2>("precip_ice_surf_mass", {ny_total, nx_total});
+    if (!state.has_field("qp")) state.add_field<3>("qp", {nz_total, ny_total, nx_total}); // qc+qr+qi
+    if (!state.has_field("diag_eff_radius_qc")) state.add_field<3>("diag_eff_radius_qc", {nz_total, ny_total, nx_total}); // qc+qr+qi
+    if (!state.has_field("diag_eff_radius_qi")) state.add_field<3>("diag_eff_radius_qi", {nz_total, ny_total, nx_total}); // qc+qr+qi
+    if (!state.has_field("diag_eff_radius_qr")) state.add_field<3>("diag_eff_radius_qr", {nz_total, ny_total, nx_total}); // qc+qr+qi
+    if (!state.has_field("P_wet")) state.add_field<3>("P_wet", {nz_total, ny_total, nx_total});
+
     // Gather runtime options
     m_runtime_options.max_total_ni = config_.get_value<double>("physics.p3.max_total_ni"); 
 
