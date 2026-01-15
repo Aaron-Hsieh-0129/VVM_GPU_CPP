@@ -81,7 +81,9 @@
             "lw_heating",
             "net_heating",
             "net_sw_flux",
-            "net_lw_flux"
+            "net_lw_flux",
+            "precip_liq_surf_flux",
+            "precip_ice_surf_flux"
         ],
         "output_grid": {
             "x_start": 0,
@@ -252,13 +254,13 @@
     },
     "physics": {
         "p3": {
-            "enable_p3": false,
+            "enable_p3": true,
             "do_predict_nc": true,
             "do_prescribed_ccn": false,
             "max_total_ni": 740.0e3
         },
         "rrtmgp": {
-            "enable_rrtmgp": false,
+            "enable_rrtmgp": true,
             "column_chunk_size": 512,
             "rad_frequency_step": 120,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],

@@ -134,6 +134,8 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
     if (!state.has_field("bm")) state.add_field<3>("bm", {nz_total, ny_total, nx_total});
     if (!state.has_field("precip_liq_surf_mass")) state.add_field<2>("precip_liq_surf_mass", {ny_total, nx_total});
     if (!state.has_field("precip_ice_surf_mass")) state.add_field<2>("precip_ice_surf_mass", {ny_total, nx_total});
+    if (!state.has_field("precip_liq_surf_flux")) state.add_field<2>("precip_liq_surf_flux", {ny_total, nx_total});
+    if (!state.has_field("precip_ice_surf_flux")) state.add_field<2>("precip_ice_surf_flux", {ny_total, nx_total});
     if (!state.has_field("qp")) state.add_field<3>("qp", {nz_total, ny_total, nx_total}); // qc+qr+qi
     if (!state.has_field("diag_eff_radius_qc")) state.add_field<3>("diag_eff_radius_qc", {nz_total, ny_total, nx_total}); // qc+qr+qi
     if (!state.has_field("diag_eff_radius_qi")) state.add_field<3>("diag_eff_radius_qi", {nz_total, ny_total, nx_total}); // qc+qr+qi
@@ -665,6 +667,8 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
 
     auto precip_liq_surf_2d = state.get_field<2>("precip_liq_surf_mass").get_mutable_device_data();
     auto precip_ice_surf_2d = state.get_field<2>("precip_ice_surf_mass").get_mutable_device_data();
+    auto precip_liq_surf_flux_2d = state.get_field<2>("precip_liq_surf_flux").get_mutable_device_data();
+    auto precip_ice_surf_flux_2d = state.get_field<2>("precip_ice_surf_flux").get_mutable_device_data();
 
     auto ITYPEW = state.get_field<3>("ITYPEW").get_device_data();
     auto thbar  = state.get_field<1>("thbar").get_device_data();
@@ -689,6 +693,8 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
 
     auto precip_liq_surf_p3 = m_precip_liq_surf_mass_view;
     auto precip_ice_surf_p3 = m_precip_ice_surf_mass_view;
+    auto precip_liq_surf_flux_p3 = m_precip_liq_surf_flux_view;
+    auto precip_ice_surf_flux_p3 = m_precip_ice_surf_flux_view;
 
     Kokkos::parallel_for("Fused_PostProc_Unpack", m_policy,
         KOKKOS_LAMBDA(const MemberType& team) {
@@ -702,6 +708,8 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
             Kokkos::single(Kokkos::PerTeam(team), [&]() {
                 precip_liq_surf_2d(iy_vvm, ix_vvm) = precip_liq_surf_p3(icol);
                 precip_ice_surf_2d(iy_vvm, ix_vvm) = precip_ice_surf_p3(icol);
+                precip_liq_surf_flux_2d(iy_vvm, ix_vvm) = precip_liq_surf_flux_p3(icol);
+                precip_ice_surf_flux_2d(iy_vvm, ix_vvm) = precip_ice_surf_flux_p3(icol);
             });
 
             Kokkos::parallel_for(Kokkos::TeamThreadRange(team, nlev_packs), [&](const int k_pack) {
