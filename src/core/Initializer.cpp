@@ -382,6 +382,16 @@ void Initializer::assign_vars() const {
     auto& lat = state_.get_field<1>("lat").get_mutable_device_data();
     Kokkos::deep_copy(lat, 23.5);
 
+    double OMEGA = config_.get_value<double>("constants.OMEGA", 7.292e-5);
+    double PI = config_.get_value<double>("constants.PI", 3.14159265);
+    auto& f = state_.get_field<1>("f").get_mutable_device_data();
+    Kokkos::parallel_for("Init_Coriolis", Kokkos::RangePolicy<>(0, ny),
+        KOKKOS_LAMBDA(const int j) {
+            f(j) = 2. * OMEGA * Kokkos::sin(lat(j) * PI / 180.);
+        }
+    );
+
+
     // WARNING: This is the test of horizontal mean
     auto& htflx_sfc = state_.get_field<2>("htflx_sfc");
     auto htflx_sfc_mutable = htflx_sfc.get_mutable_device_data();
@@ -420,6 +430,7 @@ void Initializer::initialize_perturbation() const {
     const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
     const int nx = grid_.get_local_total_points_x();
+    double PI = config_.get_value<double>("constants.PI");
 
     if (perturbation == "none") return;
     else if (perturbation == "bubble") {
@@ -438,7 +449,7 @@ void Initializer::initialize_perturbation() const {
                                       std::pow((z_mid(k) - 3000.) / 2000., 2)
                                      );
                 if (radius_norm <= 1) {
-                    th(k, j, i) += 5. * (std::cos(3.14159265 * 0.5 * radius_norm));
+                    th(k, j, i) += 5. * (std::cos(PI * 0.5 * radius_norm));
                 }
             }
         );

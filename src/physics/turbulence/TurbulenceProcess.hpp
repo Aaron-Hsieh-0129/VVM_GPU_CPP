@@ -90,7 +90,6 @@ public:
 
     void initialize(Core::State& state);
     void init_boundary_masks(Core::State& state);
-    // void init_dh_coefficients(Core::State& state);
 
 private:
     const Utils::ConfigurationManager& config_;
@@ -115,16 +114,6 @@ private:
     double vk_;
 
     TerrainMasks masks_;
-
-    // VVM::Core::Field<3> DHUU1_, DHUU2_;
-    // VVM::Core::Field<3> DHUV1_, DHUV2_;
-    // VVM::Core::Field<3> DHUW1_, DHUW2_;
-    // VVM::Core::Field<3> DHVU1_, DHVU2_;
-    // VVM::Core::Field<3> DHVV1_, DHVV2_;
-    // VVM::Core::Field<3> DHVW1_, DHVW2_;
-    // VVM::Core::Field<3> DHWU1_, DHWU2_;
-    // VVM::Core::Field<3> DHWV1_, DHWV2_;
-    // VVM::Core::Field<3> DHWW1_, DHWW2_;
 };
 
 } // namespace Physics

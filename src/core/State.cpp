@@ -38,6 +38,7 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
 
     add_field<1>("lon", {nx_total});
     add_field<1>("lat", {ny_total});
+    add_field<1>("f", {ny_total});
 
     // 2D field
     add_field<2>("htflx_sfc", {ny_total, nx_total});

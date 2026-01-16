@@ -73,6 +73,18 @@ public:
     virtual void calculate_buoyancy_tendency_y(
         const Core::State& state, const Core::Grid& grid,
         const Core::Parameters& params, Core::Field<3>& out_tendency) const = 0;
+
+
+    // Coriolis Term
+    virtual void calculate_coriolis_tendency_x(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_tendency) const = 0;
+    virtual void calculate_coriolis_tendency_y(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_tendency) const = 0;
+    virtual void calculate_coriolis_tendency_z(
+        const Core::State& state, const Core::Grid& grid,
+        const Core::Parameters& params, Core::Field<3>& out_tendency) const = 0;
 };
 
 } // namespace Dynamics

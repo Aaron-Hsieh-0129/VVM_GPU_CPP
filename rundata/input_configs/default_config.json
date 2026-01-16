@@ -100,7 +100,9 @@
         "PSFC": 100000,
         "P0": 100000,
         "Cp": 1004.5,
-        "Lv": 2.5e6
+        "Lv": 2.5e6,
+        "OMEGA": 7.292e-5,
+        "PI": 3.14159265
     },
     "dynamics": {
         "solver": {
@@ -139,6 +141,10 @@
                     "twisting": {
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
+                    },
+                    "coriolis": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
                     }
                 }
             },
@@ -159,6 +165,10 @@
                     "twisting": {
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
+                    },
+                    "coriolis": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
                     }
                 }
             },
@@ -173,6 +183,10 @@
                         "spatial_scheme": "Takacs"
                     },
                     "twisting": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    },
+                    "coriolis": {
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
