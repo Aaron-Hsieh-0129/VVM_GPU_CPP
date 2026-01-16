@@ -284,6 +284,9 @@
         },
         "turbulence": {
             "enable_turbulence": true
+        },
+        "surface": {
+            "enable_surface": true
         }
     },
     "optimization": {
