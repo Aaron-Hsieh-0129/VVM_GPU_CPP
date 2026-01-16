@@ -57,7 +57,7 @@ public:
     // --- Initialization Methods (executed on device) ---
 
     // Initialize all field values to zero
-    void initialize_to_zero() {
+    void set_to_zero() {
         Kokkos::deep_copy(data_, 0.0);
         Kokkos::fence();
     }

@@ -50,13 +50,13 @@ public:
         std::array<int, Dim> dims;
         std::copy(dims_list.begin(), dims_list.end(), dims.begin());
         auto [it, inserted] = fields_.try_emplace(name, std::in_place_type_t<Field<Dim>>(), name, dims);
-        if (inserted) std::get<Field<Dim>>(it->second).initialize_to_zero();
+        if (inserted) std::get<Field<Dim>>(it->second).set_to_zero();
     }
 
     template<size_t Dim>
     void add_field(const std::string& name, const std::array<int, Dim>& dims) {
         auto [it, inserted] = fields_.try_emplace(name, std::in_place_type_t<Field<Dim>>(), name, dims);
-        if (inserted) std::get<Field<Dim>>(it->second).initialize_to_zero();
+        if (inserted) std::get<Field<Dim>>(it->second).set_to_zero();
     }
 
     // Get a field by name

@@ -36,7 +36,7 @@ void TendencyCalculator::calculate_tendencies(Core::State& state, const Core::Gr
         }
 
         auto& current_tendency_field = *temp_tendency_field_;
-        current_tendency_field.initialize_to_zero();
+        current_tendency_field.set_to_zero();
 
         size_t now_idx = state.get_step() % 2;
         auto& tendency_history = state.get_field<4>("d_" + variable_name_);
@@ -51,7 +51,7 @@ void TendencyCalculator::calculate_tendencies(Core::State& state, const Core::Gr
     // Calculate Forward Euler tendencies
     if (!fe_tendency_terms_.empty()) {
         auto& fe_tendency_field = state.get_field<3>("fe_tendency_" + variable_name_);
-        fe_tendency_field.initialize_to_zero();
+        fe_tendency_field.set_to_zero();
         for (const auto& term : fe_tendency_terms_) {
             term->compute_tendency(state, grid, params, fe_tendency_field);
         }

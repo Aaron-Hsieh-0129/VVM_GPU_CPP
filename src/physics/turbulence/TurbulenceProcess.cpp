@@ -539,7 +539,7 @@ void TurbulenceProcess::process_thermodynamics(Core::State& state, double dt) {
 
     for (const auto& var_name : thermodynamics_vars_) {
         auto& var_data = state.get_field<3>(var_name).get_mutable_device_data();
-        temp3d_tendency_.initialize_to_zero();
+        temp3d_tendency_.set_to_zero();
         calculate_tendencies(state, var_name, temp3d_tendency_);
         const auto& tend_data = temp3d_tendency_.get_device_data(); 
 
