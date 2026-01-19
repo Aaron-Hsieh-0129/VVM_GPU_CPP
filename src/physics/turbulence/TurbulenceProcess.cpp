@@ -14,15 +14,6 @@ TurbulenceProcess::TurbulenceProcess(const Utils::ConfigurationManager& config,
                                      Core::HaloExchanger& halo_exchanger,
                                      Core::State& state)
     : config_(config), grid_(grid), params_(params), halo_exchanger_(halo_exchanger),
-        temp3d_tendency_("temp3d", std::array<int, 3>{
-              grid.get_local_total_points_z(),
-              grid.get_local_total_points_y(),
-              grid.get_local_total_points_x()
-        }),
-        temp2d_tendency_("temp2d", std::array<int, 2>{
-            grid.get_local_total_points_y(),
-            grid.get_local_total_points_x()
-        }),
       masks_(grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()) 
 {
     int nz = grid_.get_local_total_points_z();
@@ -547,94 +538,10 @@ void TurbulenceProcess::calculate_tendencies(Core::State& state,
             );
         }
     }
-
 }
 
-void TurbulenceProcess::process_thermodynamics(Core::State& state, double dt) {
-    const int h = grid_.get_halo_cells();
-    const int nz = grid_.get_local_total_points_z();
-    const int ny = grid_.get_local_total_points_y();
-    const int nx = grid_.get_local_total_points_x();
-
-    for (const auto& var_name : thermodynamics_vars_) {
-        auto& var_data = state.get_field<3>(var_name).get_mutable_device_data();
-        temp3d_tendency_.set_to_zero();
-        calculate_tendencies(state, var_name, temp3d_tendency_);
-        const auto& tend_data = temp3d_tendency_.get_device_data(); 
-
-        Kokkos::parallel_for("Turbulence_Update_" + var_name,
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({{h, h, h}}, {{nz-h, ny-h, nx-h}}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                var_data(k, j, i) += dt * tend_data(k, j, i);
-            }
-        );
-        halo_exchanger_.exchange_halos(state.get_field<3>(var_name));
-        // TODO: This is a temporary soution. Make it a method for boundary process
-        if (var_name == "th" || var_name == "qv") {
-            Kokkos::parallel_for("Boundary" + var_name,
-                Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{0, 0}}, {{ny, nx}}),
-                KOKKOS_LAMBDA(const int j, const int i) {
-                    var_data(h-1, j, i) = var_data(h, j, i);
-                    var_data(nz-h, j, i) = var_data(nz-h-1, j, i);
-                }
-            );
-        }
-        else {
-            Kokkos::parallel_for("Boundary" + var_name,
-                Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{0, 0}}, {{ny, nx}}),
-                KOKKOS_LAMBDA(const int j, const int i) {
-                    var_data(h-1, j, i) = var_data(h, j, i);
-                    var_data(nz-h, j, i) = 0.;
-                }
-            );
-        }
-    }
-}
-
-void TurbulenceProcess::process_dynamics(Core::State& state, double dt) {
-    const int h = grid_.get_halo_cells();
-    const int nz = grid_.get_local_total_points_z();
-    const int ny = grid_.get_local_total_points_y();
-    const int nx = grid_.get_local_total_points_x();
-    int NK2 = nz-h-1;
-
-    for (const auto& var_name : dynamics_vars_) {
-        auto& var_data = state.get_field<3>(var_name).get_mutable_device_data();
-        if (var_name == "zeta") {
-            calculate_tendencies(state, var_name, temp2d_tendency_);
-            const auto& tend_data = temp2d_tendency_.get_device_data(); 
-
-            Kokkos::parallel_for("Turbulence_Update_" + var_name,
-                Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
-                KOKKOS_LAMBDA(const int j, const int i) {
-                    var_data(NK2, j, i) += dt * tend_data(j, i);
-                }
-            );
-        }
-        else {
-            calculate_tendencies(state, var_name, temp3d_tendency_);
-            const auto& tend_data = temp3d_tendency_.get_device_data(); 
-
-            Kokkos::parallel_for("Turbulence_Update_" + var_name,
-                Kokkos::MDRangePolicy<Kokkos::Rank<3>>({{h, h, h}}, {{nz-h-1, ny-h, nx-h}}),
-                KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                    var_data(k, j, i) += dt * tend_data(k, j, i);
-                }
-            );
-        }
-        halo_exchanger_.exchange_halos(state.get_field<3>(var_name));
-        if (var_name == "xi" || var_name == "eta") {
-            Kokkos::parallel_for("Boundary" + var_name,
-                Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{0, 0}}, {{ny, nx}}),
-                KOKKOS_LAMBDA(const int j, const int i) {
-                    var_data(h-1, j, i) = 0.;
-                    var_data(nz-h-1, j, i) = 0.;
-                }
-            );
-        }
-    }
-}
-
+template void TurbulenceProcess::calculate_tendencies(Core::State& state, const std::string& var_name, Core::Field<2ul>& out_tendency);
+template void TurbulenceProcess::calculate_tendencies(Core::State& state, const std::string& var_name, Core::Field<3ul>& out_tendency);
 
 } // namespace Physics
 } // namespace VVM

@@ -60,7 +60,8 @@ void Model::run_step(double dt) {
         }
         
         // Update forward th tendency
-        radiation_->apply_heating(state_);
+        // The effects of radiation is updated in update_thermodynamics
+        radiation_->calculate_tendencies(state_);
     }
 
     // Update thermodynamics variables using tendencies above
