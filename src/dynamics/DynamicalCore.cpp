@@ -350,6 +350,7 @@ void DynamicalCore::compute_uvtopmn() {
     auto mean_v_turb = state_.calculate_horizontal_mean(tempv_field);
 #endif
 
+/*
     // Coriolis force
     Kokkos::parallel_for("calculate_utopmn_coriolis",
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h, nx-h}),
@@ -367,7 +368,7 @@ void DynamicalCore::compute_uvtopmn() {
     auto mean_u_coriolis = state_.calculate_horizontal_mean(tempu_field);
     auto mean_v_coriolis = state_.calculate_horizontal_mean(tempv_field);
 #endif
-
+*/
 
     auto& utopmn_to_update = state_.get_field<0>("utopmn");
     auto& utopmn_new_view = utopmn_to_update.get_mutable_device_data();
@@ -392,12 +393,16 @@ void DynamicalCore::compute_uvtopmn() {
         Kokkos::parallel_for("Cauculate_uvtopmn", 
             1, 
             KOKKOS_LAMBDA(const int i) {
+                // d_utopmn(now_idx) = 0.25 * flex_height_coef_mid(NK2) * tempumn() * rdz() / rhobar(NK2)
+                //                    -0.25 * flex_height_coef_mid(NK2) * mean_u_turb() * rdz() / rhobar(NK2)
+                //                    +mean_u_coriolis();
+                // d_vtopmn(now_idx) = 0.25 * flex_height_coef_mid(NK2) * tempvmn() * rdz() / rhobar(NK2)
+                //                    -0.25 * flex_height_coef_mid(NK2) * mean_v_turb() * rdz() / rhobar(NK2)
+                //                    -mean_v_coriolis();
                 d_utopmn(now_idx) = 0.25 * flex_height_coef_mid(NK2) * tempumn() * rdz() / rhobar(NK2)
-                                   -0.25 * flex_height_coef_mid(NK2) * mean_u_turb() * rdz() / rhobar(NK2)
-                                   +mean_u_coriolis();
+                                   -0.25 * flex_height_coef_mid(NK2) * mean_u_turb() * rdz() / rhobar(NK2);
                 d_vtopmn(now_idx) = 0.25 * flex_height_coef_mid(NK2) * tempvmn() * rdz() / rhobar(NK2)
-                                   -0.25 * flex_height_coef_mid(NK2) * mean_v_turb() * rdz() / rhobar(NK2)
-                                   -mean_v_coriolis();
+                                   -0.25 * flex_height_coef_mid(NK2) * mean_v_turb() * rdz() / rhobar(NK2);
 
                 utopmn_new_view() = utopmn_old_view() + dt() * d_utopmn(now_idx);
                 vtopmn_new_view() = vtopmn_old_view() + dt() * d_vtopmn(now_idx);
@@ -408,12 +413,16 @@ void DynamicalCore::compute_uvtopmn() {
         Kokkos::parallel_for("Cauculate_uvtopmn", 
             1, 
             KOKKOS_LAMBDA(const int i) {
+                // d_utopmn(now_idx) = 0.25 * flex_height_coef_mid(NK2) * tempumn() * rdz() / rhobar(NK2)
+                //                    -0.25 * flex_height_coef_mid(NK2) * mean_u_turb() * rdz() / rhobar(NK2)
+                //                    +mean_u_coriolis();
+                // d_vtopmn(now_idx) = 0.25 * flex_height_coef_mid(NK2) * tempvmn() * rdz() / rhobar(NK2)
+                //                    -0.25 * flex_height_coef_mid(NK2) * mean_v_turb() * rdz() / rhobar(NK2)
+                //                    -mean_v_coriolis();
                 d_utopmn(now_idx) = 0.25 * flex_height_coef_mid(NK2) * tempumn() * rdz() / rhobar(NK2)
-                                   -0.25 * flex_height_coef_mid(NK2) * mean_u_turb() * rdz() / rhobar(NK2)
-                                   +mean_u_coriolis();
+                                   -0.25 * flex_height_coef_mid(NK2) * mean_u_turb() * rdz() / rhobar(NK2);
                 d_vtopmn(now_idx) = 0.25 * flex_height_coef_mid(NK2) * tempvmn() * rdz() / rhobar(NK2)
-                                   -0.25 * flex_height_coef_mid(NK2) * mean_v_turb() * rdz() / rhobar(NK2)
-                                   -mean_v_coriolis();
+                                   -0.25 * flex_height_coef_mid(NK2) * mean_v_turb() * rdz() / rhobar(NK2);
 
                 utopmn_new_view() = utopmn_old_view() 
                         + dt() * (1.5 * d_utopmn(now_idx) - 0.5 * d_utopmn(prev_idx));
