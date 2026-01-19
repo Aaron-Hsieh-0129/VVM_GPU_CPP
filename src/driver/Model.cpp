@@ -37,8 +37,6 @@ void Model::init() {
     Core::Initializer initializer(config_, grid_, params_, state_, halo_exchanger_);
     initializer.initialize_state();
 
-    // TODO: Do vertical boundary condition for initiali condition to prevent not physical values for initial turbulence
-
     if (microphysics_) microphysics_->initialize(state_);
     if (turbulence_) turbulence_->initialize(state_);
     if (radiation_) radiation_->initialize(state_);
@@ -97,7 +95,6 @@ void Model::run_step(double dt) {
                 bc_manager_.apply_zero_gradient_bottom_zero_top(state_.get_field<3>(var_name));
             }
         }
-        // turbulence_->process_thermodynamics(state_, dt);
     }
 
     // Calculate buoyancy based on thermodynamics variables at t+1
@@ -111,7 +108,29 @@ void Model::run_step(double dt) {
 
     // Vorticity diffusion
     if (turbulence_) {
-        turbulence_->process_dynamics(state_, dt);
+        for (const auto& var_name : turbulence_->get_dynamics_vars()) {
+            std::string fe_name = "fe_tendency_" + var_name;
+            
+            if (!state_.has_field(fe_name)) {
+                std::cout << "Error: fe_tendency_" << var_name << " doesn't exist" << std::endl;
+                exit(1);
+            }
+
+            if (var_name == "zeta") {
+                auto& fe_tend_field = state_.get_field<2>(fe_name);
+                fe_tend_field.set_to_zero(); 
+                turbulence_->calculate_tendencies(state_, var_name, fe_tend_field);
+                VVM::Dynamics::TimeIntegrator::apply_forward_update(state_, var_name, grid_, dt, fe_tend_field);
+            }
+            else {
+                auto& fe_tend_field = state_.get_field<3>(fe_name);
+                fe_tend_field.set_to_zero(); 
+                turbulence_->calculate_tendencies(state_, var_name, fe_tend_field);
+                VVM::Dynamics::TimeIntegrator::apply_forward_update(state_, var_name, grid_, dt, fe_tend_field);
+            }
+            halo_exchanger_.exchange_halos(state_.get_field<3>(var_name));
+            bc_manager_.apply_vorticity_bc(state_.get_field<3>(var_name));
+        }
         dycore_->compute_zeta_vertical_structure(state_);
     }
     dycore_->diagnose_wind_fields(state_);
