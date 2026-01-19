@@ -58,6 +58,13 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
         bool has_ab2 = false;
         bool has_fe = false;
 
+        if (var_name == "th" && config.get_value<bool>("physics.rrtmgp.enable_rrtmgp", false)) {
+            has_fe = true;
+            if (rank == 0) {
+                std::cout << "    - Enabled radiation forcing integration. " << std::endl;
+            }
+        }
+
         bool is_thermo = std::find(common_thermo.begin(), common_thermo.end(), var_name) != common_thermo.end();
 
         if (is_thermo) thermo_vars_.push_back(var_name);

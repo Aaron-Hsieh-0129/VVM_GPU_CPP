@@ -78,9 +78,6 @@ public:
                       Core::HaloExchanger& halo_exchanger,
                       Core::State& state);
 
-    void process_thermodynamics(Core::State& state, double dt);
-    void process_dynamics(Core::State& state, double dt);
-
     void compute_coefficients(Core::State& state, double dt);
 
     template<size_t Dim>
@@ -100,8 +97,6 @@ private:
     const Core::Parameters& params_;
     Core::HaloExchanger& halo_exchanger_;
 
-    VVM::Core::Field<3> temp3d_tendency_;
-    VVM::Core::Field<2> temp2d_tendency_;
     std::vector<std::string> dynamics_vars_;
     std::vector<std::string> thermodynamics_vars_;
 
