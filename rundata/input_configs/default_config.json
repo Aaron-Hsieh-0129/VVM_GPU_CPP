@@ -110,6 +110,10 @@
                     "twisting": {
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
+                    },
+                    "coriolis": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
                     }
                 }
             },
@@ -130,6 +134,10 @@
                     "twisting": {
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
+                    },
+                    "coriolis": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
                     }
                 }
             },
@@ -144,6 +152,10 @@
                         "spatial_scheme": "Takacs"
                     },
                     "twisting": {
+                        "temporal_scheme": "AdamsBashforth2",
+                        "spatial_scheme": "Takacs"
+                    },
+                    "coriolis": {
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
