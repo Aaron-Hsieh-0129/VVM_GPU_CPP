@@ -69,6 +69,25 @@ TurbulenceProcess::TurbulenceProcess(const Utils::ConfigurationManager& config,
 
 
 void TurbulenceProcess::initialize(Core::State& state) {
+    int nz = grid_.get_local_total_points_z();
+    int ny = grid_.get_local_total_points_y();
+    int nx = grid_.get_local_total_points_x();
+
+    auto dims = std::array<int, 3>{nz, ny, nx};
+    for (const auto& var_name : thermodynamics_vars_) {
+        std::string fe_tendency_name = "fe_tendency_" + var_name;
+        if (!state.has_field(fe_tendency_name)) {
+            state.add_field<3>(fe_tendency_name, dims);
+        }
+    }
+    for (const auto& var_name : dynamics_vars_) {
+        std::string fe_tendency_name = "fe_tendency_" + var_name;
+        if (!state.has_field(fe_tendency_name)) {
+            if (var_name == "zeta") state.add_field<2>(fe_tendency_name, {ny, nx});
+            else state.add_field<3>(fe_tendency_name, dims);
+        }
+    }
+
     init_boundary_masks(state);
     return;
 }

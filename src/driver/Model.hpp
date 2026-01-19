@@ -5,6 +5,7 @@
 #include "physics/turbulence/TurbulenceProcess.hpp"
 #include "core/Initializer.hpp"
 #include "core/BoundaryConditionManager.hpp"
+#include "dynamics/temporal_schemes/TimeIntegrator.hpp"
 
 namespace VVM {
 namespace Driver {
