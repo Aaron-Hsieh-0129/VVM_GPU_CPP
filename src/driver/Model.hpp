@@ -4,6 +4,7 @@
 #include "physics/rrtmgp/VVM_rrtmgp_process_interface.hpp"
 #include "physics/turbulence/TurbulenceProcess.hpp"
 #include "core/Initializer.hpp"
+#include "core/BoundaryConditionManager.hpp"
 
 namespace VVM {
 namespace Driver {
@@ -25,6 +26,7 @@ private:
     Core::Parameters& params_;
     const Core::Grid& grid_;
     Core::HaloExchanger& halo_exchanger_;
+    Core::BoundaryConditionManager bc_manager_;
 
     Core::State& state_;
 

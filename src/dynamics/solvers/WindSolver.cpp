@@ -91,7 +91,6 @@ void WindSolver::solve_w(Core::State& state) {
     const auto& bn_new = params_.bn_new.get_device_data();
     const auto& cn_new = params_.cn_new.get_device_data();
 
-    VVM::Core::BoundaryConditionManager bc_manager(grid_, config_, "w");
     if (w_solver_method_ == WSolverMethod::TRIDIAGONAL) {
         for (int iter = 0; iter < iter_num; iter++) {
             // Copy w to w3dn
@@ -162,7 +161,6 @@ void WindSolver::solve_w(Core::State& state) {
             halo_exchanger_.exchange_halos(state.get_field<3>("w"));
         }
     }
-    // bc_manager.apply_z_bcs_to_field(state.get_field<3>("w"));
     halo_exchanger_.exchange_halos(state.get_field<3>("w"));
     return;
 }
@@ -283,11 +281,8 @@ void WindSolver::solve_uv(Core::State& state) {
                       + ((w(nz-h-1,j+1,i) - w(nz-h-1,j,i))*rdy() -  xi(nz-h-1,j,i)) * dz() / flex_height_coef_up(nz-h-1); 
         }
     );
-    VVM::Core::BoundaryConditionManager bc_manager(grid_);
     halo_exchanger_.exchange_halos(u_field);
     halo_exchanger_.exchange_halos(v_field);
-    // bc_manager.apply_z_bcs_to_field(u_field);
-    // bc_manager.apply_z_bcs_to_field(v_field);
     return;
 }
 

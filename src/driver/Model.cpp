@@ -12,7 +12,7 @@ Model::Model(const Utils::ConfigurationManager& config,
       params_(params),
       grid_(grid),
       state_(state),
-      halo_exchanger_(halo_exchanger)
+      halo_exchanger_(halo_exchanger), bc_manager_(grid)
 {
     dycore_ = std::make_unique<Dynamics::DynamicalCore>(config_, grid_, params_, state_, halo_exchanger_);
     if (config_.get_value<bool>("physics.p3.enable_p3", false)) {

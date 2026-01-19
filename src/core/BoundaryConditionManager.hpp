@@ -2,36 +2,35 @@
 #define VVM_CORE_BOUNDARYCONDITIONMANAGER_HPP
 
 #include "core/Grid.hpp"
-#include "core/State.hpp"
+#include "core/Field.hpp"
 
 namespace VVM {
 namespace Core {
 
-enum class ZBoundaryType {
-    ZERO,           // Set to 0
-    ZERO_GRADIENT,   // Zero gradient (0 = 1, nz-1 = nz-2)
-    PERIODIC
-};
-
 class BoundaryConditionManager {
 public:
-    explicit BoundaryConditionManager(const Grid& grid, 
-                                      ZBoundaryType top_bc = ZBoundaryType::ZERO_GRADIENT, 
-                                      ZBoundaryType bottom_bc = ZBoundaryType::ZERO_GRADIENT);
-
-    BoundaryConditionManager(const Grid& grid, const Utils::ConfigurationManager& config, const std::string& var_name);
-
-    void apply_z_bcs(State& state) const;
+    explicit BoundaryConditionManager(const Grid& grid);
 
     template<size_t Dim>
-    void apply_z_bcs_to_field(Field<Dim>& field) const;
-private:
-    ZBoundaryType string_to_bc_type(const std::string& bc_string) const;
+    void apply_dirichlet_zero(Field<Dim>& field) const;
 
-    const Grid& grid_ref_;
-    ZBoundaryType top_bc_;
-    ZBoundaryType bottom_bc_;
-    std::string var_name_;
+    template<size_t Dim>
+    void apply_vorticity_bc(Field<Dim>& field) const;
+
+    template<size_t Dim>
+    void apply_zero_gradient(Field<Dim>& field) const;
+
+    template<size_t Dim>
+    void apply_fixed_profile_z(Field<Dim>& field, const Field<1>& profile) const;
+
+    template<size_t Dim>
+    void apply_periodic(Field<Dim>& field) const;
+
+    template<size_t Dim>
+    void apply_zero_gradient_bottom_zero_top(Field<Dim>& field) const;
+
+private:
+    const Grid& grid_;
 };
 
 } // namespace Core
