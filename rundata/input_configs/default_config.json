@@ -14,37 +14,6 @@
         "dt_s": 1.0,
         "output_interval_s": 1.0
     },
-    "boundary_conditions": {
-        "default": {
-            "top": "ZERO_GRADIENT",
-            "bottom": "ZERO_GRADIENT"
-        },
-        "flux": {
-            "top": "ZERO",
-            "bottom": "ZERO"
-        },
-        "th": {
-            "top": "ZERO_GRADIENT",
-            "bottom": "ZERO_GRADIENT"
-        },
-        "w": {
-            "top": "ZERO",
-            "bottom": "ZERO"
-        },
-        "xi": {
-            "top": "ZERO",
-            "bottom": "ZERO"
-        },
-        "eta": {
-            "top": "ZERO",
-            "bottom": "ZERO"
-        }
-    },
-    "add_model_fields": {
-        "3d": [
-            "tracer1"
-        ]
-    },
     "initial_conditions": {
         "format": "txt",
         "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/initial_conditions/profile_p3.txt",
@@ -141,10 +110,6 @@
                     "twisting": {
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
-                    },
-                    "coriolis": {
-                        "temporal_scheme": "AdamsBashforth2",
-                        "spatial_scheme": "Takacs"
                     }
                 }
             },
@@ -165,10 +130,6 @@
                     "twisting": {
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
-                    },
-                    "coriolis": {
-                        "temporal_scheme": "AdamsBashforth2",
-                        "spatial_scheme": "Takacs"
                     }
                 }
             },
@@ -183,10 +144,6 @@
                         "spatial_scheme": "Takacs"
                     },
                     "twisting": {
-                        "temporal_scheme": "AdamsBashforth2",
-                        "spatial_scheme": "Takacs"
-                    },
-                    "coriolis": {
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -268,13 +225,13 @@
     },
     "physics": {
         "p3": {
-            "enable_p3": true,
+            "enable_p3": false,
             "do_predict_nc": true,
             "do_prescribed_ccn": false,
             "max_total_ni": 740.0e3
         },
         "rrtmgp": {
-            "enable_rrtmgp": true,
+            "enable_rrtmgp": false,
             "column_chunk_size": 512,
             "rad_frequency_step": 120,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
@@ -291,5 +248,10 @@
     },
     "optimization": {
         "cuda_graph_halo_exchange": ["u", "w", "xi", "eta", "zeta", "th", "qv", "qc", "qi", "qr", "qm", "nc", "ni", "nr", "bm"]
+    },
+    "add_model_fields": {
+        "3d": [
+            "tracer1"
+        ]
     }
 }

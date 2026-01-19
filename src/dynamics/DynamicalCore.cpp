@@ -26,7 +26,7 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
                              Core::HaloExchanger& halo_exchanger)
     : config_(config), grid_(grid), params_(params), state_(state), 
       wind_solver_(std::make_unique<WindSolver>(grid, config, params, halo_exchanger)), 
-      halo_exchanger_(halo_exchanger) {
+      halo_exchanger_(halo_exchanger), bc_manager_(grid) {
 
     int rank = grid_.get_mpi_rank();
     if (rank == 0) std::cout << "\n--- Initializing Dynamical Core ---" << std::endl;
@@ -482,24 +482,11 @@ void DynamicalCore::update_thermodynamics(double dt) {
                 );
             }
             halo_exchanger_.exchange_halos(state_.get_field<3>(var_name));
-            // TODO: This is a temporary soution. Make it a method for boundary process
             if (var_name == "th" || var_name == "qv") {
-                Kokkos::parallel_for("Boundary" + var_name,
-                    Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{0, 0}}, {{ny, nx}}),
-                    KOKKOS_LAMBDA(const int j, const int i) {
-                        var(h-1, j, i) = var(h, j, i);
-                        var(nz-h, j, i) = var(nz-h-1, j, i);
-                    }
-                );
+                bc_manager_.apply_zero_gradient(state_.get_field<3>(var_name));
             }
             else {
-                Kokkos::parallel_for("Boundary" + var_name,
-                    Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{0, 0}}, {{ny, nx}}),
-                    KOKKOS_LAMBDA(const int j, const int i) {
-                        var(h-1, j, i) = var(h, j, i);
-                        var(nz-h, j, i) = 0.;
-                    }
-                );
+                bc_manager_.apply_zero_gradient_bottom_zero_top(state_.get_field<3>(var_name));
             }
         }
     }
@@ -577,16 +564,8 @@ void DynamicalCore::update_vorticity(double dt) {
             halo_exchanger_.exchange_halos(state_.get_field<3>(var_name));
         }
     }
-    // TODO: Make this to method
-    Kokkos::parallel_for("vetical_bc",
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, nx}),
-        KOKKOS_LAMBDA(const int j, const int i) {
-            xi(h-1,j,i) = 0;
-            xi(nz-h-1,j,i) = 0;
-            eta(h-1,j,i) = 0;
-            eta(nz-h-1,j,i) = 0;
-        }
-    );
+    bc_manager_.apply_vorticity_bc(state_.get_field<3>("xi"));
+    bc_manager_.apply_vorticity_bc(state_.get_field<3>("eta"));
 
     compute_zeta_vertical_structure(state_);
 }

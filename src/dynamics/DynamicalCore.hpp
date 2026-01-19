@@ -12,6 +12,7 @@
 #include "temporal_schemes/TemporalScheme.hpp"
 #include "tendency_processes/TendencyCalculator.hpp"
 #include "solvers/WindSolver.hpp"
+#include "core/BoundaryConditionManager.hpp"
 
 namespace VVM {
 namespace Dynamics {
@@ -50,6 +51,7 @@ private:
     Core::State& state_;
     const Core::Grid& grid_;
     const Core::Parameters& params_;
+    Core::BoundaryConditionManager bc_manager_;
     std::vector<std::string> thermo_vars_;
     std::vector<std::string> vorticity_vars_;
     

@@ -1,7 +1,7 @@
 #include "OutputManager.hpp"
 #include <sys/stat.h>
 #include <cerrno>
-#include <adios2/cxx11/KokkosView.h>
+#include <adios2/cxx/KokkosView.h>
 #include <Kokkos_Core.hpp> 
 #include <algorithm>
 #include <unordered_set>

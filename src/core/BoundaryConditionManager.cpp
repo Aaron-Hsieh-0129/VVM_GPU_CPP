@@ -4,89 +4,24 @@
 namespace VVM {
 namespace Core {
 
-BoundaryConditionManager::BoundaryConditionManager(const Grid& grid, ZBoundaryType top_bc, ZBoundaryType bottom_bc)
-    : grid_ref_(grid), top_bc_(top_bc), bottom_bc_(bottom_bc) {}
-
-void BoundaryConditionManager::apply_z_bcs(State& state) const {
-    for (auto& field_pair : state) {
-        std::visit([this](auto& field) {
-            using T = std::decay_t<decltype(field)>;
-            if constexpr (!std::is_same_v<T, std::monostate>) {
-                this->apply_z_bcs_to_field(field);
-            }
-        }, field_pair.second);
-    }
-}
-
-BoundaryConditionManager::BoundaryConditionManager(const Grid& grid, const Utils::ConfigurationManager& config, const std::string& var_name)
-    : grid_ref_(grid), var_name_(var_name) {
-    ZBoundaryType default_top_bc = ZBoundaryType::ZERO_GRADIENT;
-    ZBoundaryType default_bottom_bc = ZBoundaryType::ZERO_GRADIENT;
-
-    if (config.has_key("boundary_conditions.default.top")) {
-        default_top_bc = string_to_bc_type(config.get_value<std::string>("boundary_conditions.default.top"));
-    }
-    if (config.has_key("boundary_conditions.default.bottom")) {
-        default_bottom_bc = string_to_bc_type(config.get_value<std::string>("boundary_conditions.default.bottom"));
-    }
-
-    top_bc_ = default_top_bc;
-    bottom_bc_ = default_bottom_bc;
-
-    std::string var_top_key = "boundary_conditions." + var_name + ".top";
-    if (config.has_key(var_top_key)) {
-        top_bc_ = string_to_bc_type(config.get_value<std::string>(var_top_key));
-    }
-
-    std::string var_bottom_key = "boundary_conditions." + var_name + ".bottom";
-    if (config.has_key(var_bottom_key)) {
-        bottom_bc_ = string_to_bc_type(config.get_value<std::string>(var_bottom_key));
-    }
-}
-
-ZBoundaryType BoundaryConditionManager::string_to_bc_type(const std::string& bc_string) const {
-    if (bc_string == "ZERO") return ZBoundaryType::ZERO;
-    if (bc_string == "ZERO_GRADIENT") return ZBoundaryType::ZERO_GRADIENT;
-    if (bc_string == "PERIODIC") return ZBoundaryType::PERIODIC;
-    throw std::runtime_error("Unknown boundary condition type: " + bc_string);
-}
+BoundaryConditionManager::BoundaryConditionManager(const Grid& grid)
+    : grid_(grid) {}
 
 template<size_t Dim>
-void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
-    const int h = grid_ref_.get_halo_cells();
+void BoundaryConditionManager::apply_dirichlet_zero(Field<Dim>& field) const {
+    const int h = grid_.get_halo_cells();
     if (h == 0) return;
 
     auto data = field.get_mutable_device_data();
-    const int nz = grid_ref_.get_local_total_points_z();
+    const int nz = grid_.get_local_total_points_z();
 
-    const ZBoundaryType top_bc = top_bc_;
-    const ZBoundaryType bottom_bc = bottom_bc_;
-    
-    const bool is_special_zero_bc = (top_bc == ZBoundaryType::ZERO && (var_name_ == "xi" || var_name_ == "eta" || var_name_ == "w" || var_name_ == "flux"));
     if constexpr (Dim == 1) {
-        Kokkos::parallel_for("apply_bc_1d", Kokkos::RangePolicy<>(0, h),
-            KOKKOS_LAMBDA(const int k_h) {
-                // Bottom Boundary Condition
-                if (bottom_bc == ZBoundaryType::ZERO_GRADIENT) {
-                    data(k_h) = data(h);
-                } 
-                else if (bottom_bc == ZBoundaryType::ZERO) {
-                    data(k_h) = 0.0;
-                }
-                else if (bottom_bc == ZBoundaryType::PERIODIC) {
-                    data(k_h) = data(nz-2*h+k_h);
-                }
-
-                // Top Boundary Condition
-                if (top_bc == ZBoundaryType::ZERO_GRADIENT) {
-                    data(nz-1-k_h) = data(nz-1-h);
-                } 
-                else if (top_bc == ZBoundaryType::ZERO) {
-                    data(nz-1-k_h) = 0.0;
-                }
-                else if (top_bc == ZBoundaryType::PERIODIC) {
-                    data(nz-h+k_h) = data(h+k_h);
-                }
+        Kokkos::parallel_for("bc_dirichlet_0_1d", Kokkos::RangePolicy<>(0, h),
+            KOKKOS_LAMBDA(const int k) {
+                // Bottom Halo
+                data(k) = 0.0;
+                // Top Halo
+                data(nz-1-k) = 0.0;
             }
         );
     }
@@ -94,38 +29,13 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
         const int ny = data.extent(1);
         const int nx = data.extent(2);
         
-        // Bottom B.C.
-        Kokkos::parallel_for("apply_bc_3d", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {h, ny, nx}),
-            KOKKOS_LAMBDA(int k_h, int j, int i) {
-                // Bottom Boundary Condition
-                if (bottom_bc == ZBoundaryType::ZERO_GRADIENT) {
-                    data(k_h, j, i) = data(h, j, i);
-                } 
-                else if (bottom_bc == ZBoundaryType::ZERO) {
-                    data(k_h, j, i) = 0.0;
-                }
-                else if (bottom_bc == ZBoundaryType::PERIODIC) {
-                    data(k_h, j, i) = data(nz-2*h+k_h, j, i);
-                }
-            
-                // Top Boundary Condition
-                if (top_bc == ZBoundaryType::ZERO_GRADIENT) {
-                    data(nz-1-k_h, j, i) = data(nz-1-h, j, i);
-                } 
-                else if (top_bc == ZBoundaryType::ZERO) {
-                    data(nz-1-k_h, j, i) = 0.0;
-                }
-                else if (top_bc == ZBoundaryType::PERIODIC) {
-                    data(nz-h+k_h, j, i) = data(h+k_h, j, i);
-                }
-            }
-        );
-        Kokkos::parallel_for("apply_bc_3d", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, nx}),
-            KOKKOS_LAMBDA(int j, int i) {
-                // This is for top (xi, eta, w) 
-                if (is_special_zero_bc) {
-                    data(nz-h-1, j, i) = 0.0;
-                }
+        Kokkos::parallel_for("bc_dirichlet_0_3d", 
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {h, ny, nx}),
+            KOKKOS_LAMBDA(int k, int j, int i) {
+                // Bottom Halo
+                data(k, j, i) = 0.0;
+                // Top Halo
+                data(nz-1-k, j, i) = 0.0;
             }
         );
     }
@@ -133,37 +43,240 @@ void BoundaryConditionManager::apply_z_bcs_to_field(Field<Dim>& field) const {
         const int N = data.extent(0);
         const int ny = data.extent(2);
         const int nx = data.extent(3);
-        
-        // Bottom B.C.
-        Kokkos::parallel_for("apply_bottom_bc_4d", Kokkos::MDRangePolicy<Kokkos::Rank<4>>({0, 0, 0, 0}, {N, h, ny, nx}),
-            KOKKOS_LAMBDA(int N_h, int k_h, int j, int i) {
-                // Bottom Boundary Condition
-                if (bottom_bc == ZBoundaryType::ZERO_GRADIENT) {
-                    data(N_h, k_h, j, i) = data(N_h, h, j, i);
-                } 
-                else if (bottom_bc == ZBoundaryType::ZERO) {
-                    data(N_h, k_h, j, i) = 0.0;
-                }
-                else if (bottom_bc == ZBoundaryType::PERIODIC) {
-                    data(N_h, k_h, j, i) = data(N_h, nz-2*h+k_h, j, i);
-                }
-            
-                // Top Boundary Condition
-                if (top_bc == ZBoundaryType::ZERO_GRADIENT) {
-                    data(N_h, nz-1-k_h, j, i) = data(N_h, nz-1-h, j, i);
-                } 
-                else if (top_bc == ZBoundaryType::ZERO) {
-                    data(N_h, nz-1-k_h, j, i) = 0.0;
-                }
-                else if (top_bc == ZBoundaryType::PERIODIC) {
-                    data(N_h, nz-h+k_h, j, i) = data(N_h, h+k_h, j, i);
-                }
+
+        Kokkos::parallel_for("bc_dirichlet_0_4d", 
+            Kokkos::MDRangePolicy<Kokkos::Rank<4>>({0, 0, 0, 0}, {N, h, ny, nx}),
+            KOKKOS_LAMBDA(int n, int k, int j, int i) {
+                // Bottom Halo
+                data(n, k, j, i) = 0.0;
+                // Top Halo
+                data(n, nz-1-k, j, i) = 0.0;
             }
         );
     }
-    
+}
+
+template<size_t Dim>
+void BoundaryConditionManager::apply_vorticity_bc(Field<Dim>& field) const {
+    const int h = grid_.get_halo_cells();
+    if (h == 0) return;
+
+    auto data = field.get_mutable_device_data();
+    const int nz = grid_.get_local_total_points_z();
+
+    apply_dirichlet_zero(field);
+
+    // NOTE: VVM requires physical top (nz-h-1) to be zero 
+    if constexpr (Dim == 3) {
+        const int ny = data.extent(1);
+        const int nx = data.extent(2);
+
+        Kokkos::parallel_for("bc_vorticity_special_3d", 
+            Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, nx}),
+            KOKKOS_LAMBDA(int j, int i) {
+                data(h-1, j, i) = 0.0;
+                data(nz-h-1, j, i) = 0.0;
+            }
+        );
+    }
+}
+
+template<size_t Dim>
+void BoundaryConditionManager::apply_zero_gradient(Field<Dim>& field) const {
+    const int h = grid_.get_halo_cells();
+    if (h == 0) return;
+
+    auto data = field.get_mutable_device_data();
+    const int nz = grid_.get_local_total_points_z();
+
+    if constexpr (Dim == 1) {
+        Kokkos::parallel_for("bc_zerograd_1d", Kokkos::RangePolicy<>(0, h),
+            KOKKOS_LAMBDA(const int k) {
+                // Bottom: copy from h
+                data(k) = data(h);
+                // Top: copy from nz-1-h
+                data(nz-1-k) = data(nz-1-h);
+            }
+        );
+    }
+    else if constexpr (Dim == 3) {
+        const int ny = data.extent(1);
+        const int nx = data.extent(2);
+        
+        Kokkos::parallel_for("bc_zerograd_3d", 
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {h, ny, nx}),
+            KOKKOS_LAMBDA(int k, int j, int i) {
+                // Bottom
+                data(k, j, i) = data(h, j, i);
+                // Top
+                data(nz-1-k, j, i) = data(nz-1-h, j, i);
+            }
+        );
+    }
+    else if constexpr (Dim == 4) {
+        const int N = data.extent(0);
+        const int ny = data.extent(2);
+        const int nx = data.extent(3);
+
+        Kokkos::parallel_for("bc_zerograd_4d", 
+            Kokkos::MDRangePolicy<Kokkos::Rank<4>>({0, 0, 0, 0}, {N, h, ny, nx}),
+            KOKKOS_LAMBDA(int n, int k, int j, int i) {
+                // Bottom
+                data(n, k, j, i) = data(n, h, j, i);
+                // Top
+                data(n, nz-1-k, j, i) = data(n, nz-1-h, j, i);
+            }
+        );
+    }
     Kokkos::fence();
 }
+
+template<size_t Dim>
+void BoundaryConditionManager::apply_fixed_profile_z(Field<Dim>& field, const Field<1>& profile) const {
+    const int h = grid_.get_halo_cells();
+    if (h == 0) return;
+
+    auto data = field.get_mutable_device_data();
+    auto p_data = profile.get_device_data();
+    const int nz = grid_.get_local_total_points_z();
+
+    if constexpr (Dim == 3) {
+        const int ny = data.extent(1);
+        const int nx = data.extent(2);
+
+        Kokkos::parallel_for("bc_fixed_profile_3d", 
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {h, ny, nx}),
+            KOKKOS_LAMBDA(int k, int j, int i) {
+                // Bottom
+                data(k, j, i) = p_data(k);
+                // Top
+                data(nz-1-k, j, i) = p_data(nz-1-k);
+            }
+        );
+    }
+    Kokkos::fence();
+}
+
+template<size_t Dim>
+void BoundaryConditionManager::apply_periodic(Field<Dim>& field) const {
+    const int h = grid_.get_halo_cells();
+    if (h == 0) return;
+
+    auto data = field.get_mutable_device_data();
+    const int nz = grid_.get_local_total_points_z();
+
+    if constexpr (Dim == 1) {
+        Kokkos::parallel_for("bc_periodic_1d", Kokkos::RangePolicy<>(0, h),
+            KOKKOS_LAMBDA(const int k) {
+                // Bottom: data(nz - 2h + k)
+                data(k) = data(nz-2*h+k);
+                // Top: data(h + k)
+                data(nz-h+k) = data(h+k);
+            }
+        );
+    }
+    else if constexpr (Dim == 3) {
+        const int ny = data.extent(1);
+        const int nx = data.extent(2);
+
+        Kokkos::parallel_for("bc_periodic_3d", 
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {h, ny, nx}),
+            KOKKOS_LAMBDA(int k, int j, int i) {
+                // Bottom
+                data(k, j, i) = data(nz-2*h + k, j, i);
+                // Top
+                data(nz-h+k, j, i) = data(h+k, j, i);
+            }
+        );
+    }
+    else if constexpr (Dim == 4) {
+        const int N = data.extent(0);
+        const int ny = data.extent(2);
+        const int nx = data.extent(3);
+
+        Kokkos::parallel_for("bc_periodic_4d", 
+            Kokkos::MDRangePolicy<Kokkos::Rank<4>>({0, 0, 0, 0}, {N, h, ny, nx}),
+            KOKKOS_LAMBDA(int n, int k, int j, int i) {
+                // Bottom
+                data(n, k, j, i) = data(n, nz-2*h + k, j, i);
+                // Top
+                data(n, nz-h+k, j, i) = data(n, h+k, j, i);
+            }
+        );
+    }
+    Kokkos::fence();
+}
+
+template<size_t Dim>
+void BoundaryConditionManager::apply_zero_gradient_bottom_zero_top(Field<Dim>& field) const {
+    const int h = grid_.get_halo_cells();
+    if (h == 0) return;
+
+    auto data = field.get_mutable_device_data();
+    const int nz = grid_.get_local_total_points_z();
+
+    if constexpr (Dim == 1) {
+        Kokkos::parallel_for("bc_mixed_bot_grad_top_zero_1d", Kokkos::RangePolicy<>(0, h),
+            KOKKOS_LAMBDA(const int k) {
+                // Bottom: Copy from h (Zero Gradient)
+                data(k) = data(h);
+                // Top: Set to 0 (Zero Value)
+                data(nz - 1 - k) = 0.0;
+            }
+        );
+    }
+    else if constexpr (Dim == 3) {
+        const int ny = data.extent(1);
+        const int nx = data.extent(2);
+        Kokkos::parallel_for("bc_mixed_bot_grad_top_zero_3d", 
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {h, ny, nx}),
+            KOKKOS_LAMBDA(int k, int j, int i) {
+                // Bottom: Copy from h (Zero Gradient)
+                data(k, j, i) = data(h, j, i);
+                // Top: Set to 0 (Zero Value)
+                data(nz - 1 - k, j, i) = 0.0;
+            }
+        );
+    }
+    else if constexpr (Dim == 4) {
+        const int N = data.extent(0);
+        const int ny = data.extent(2);
+        const int nx = data.extent(3);
+        Kokkos::parallel_for("bc_mixed_bot_grad_top_zero_4d", 
+            Kokkos::MDRangePolicy<Kokkos::Rank<4>>({0, 0, 0, 0}, {N, h, ny, nx}),
+            KOKKOS_LAMBDA(int n, int k, int j, int i) {
+                // Bottom
+                data(n, k, j, i) = data(n, h, j, i);
+                // Top
+                data(n, nz-1-k, j, i) = 0.0;
+            }
+        );
+    }
+    Kokkos::fence();
+}
+
+// Explicit Instantiation
+// Dim = 1
+template void BoundaryConditionManager::apply_dirichlet_zero<1>(Field<1>&) const;
+template void BoundaryConditionManager::apply_vorticity_bc<1>(Field<1>&) const;
+template void BoundaryConditionManager::apply_zero_gradient<1>(Field<1>&) const;
+template void BoundaryConditionManager::apply_periodic<1>(Field<1>&) const;
+template void BoundaryConditionManager::apply_zero_gradient_bottom_zero_top<1>(Field<1>&) const;
+
+// Dim = 3
+template void BoundaryConditionManager::apply_dirichlet_zero<3>(Field<3>&) const;
+template void BoundaryConditionManager::apply_vorticity_bc<3>(Field<3>&) const;
+template void BoundaryConditionManager::apply_zero_gradient<3>(Field<3>&) const;
+template void BoundaryConditionManager::apply_fixed_profile_z<3>(Field<3>&, const Field<1>&) const;
+template void BoundaryConditionManager::apply_periodic<3>(Field<3>&) const;
+template void BoundaryConditionManager::apply_zero_gradient_bottom_zero_top<3>(Field<3>&) const;
+
+// Dim = 4
+template void BoundaryConditionManager::apply_dirichlet_zero<4>(Field<4>&) const;
+template void BoundaryConditionManager::apply_vorticity_bc<4>(Field<4>&) const;
+template void BoundaryConditionManager::apply_zero_gradient<4>(Field<4>&) const;
+template void BoundaryConditionManager::apply_periodic<4>(Field<4>&) const;
+template void BoundaryConditionManager::apply_zero_gradient_bottom_zero_top<4>(Field<4>&) const;
 
 } // namespace Core
 } // namespace VVM
