@@ -87,9 +87,9 @@ int main(int argc, char *argv[]) {
 
         VVM::Utils::TimingManager::get_instance().stop_timer("initialize");
 
-        VVM::IO::OutputManager output_manager(config, grid, parameters, state, MPI_COMM_WORLD);
-        output_manager.write(0, 0.0);
-        output_manager.write_static_topo_file();
+        auto output_manager = std::make_unique<VVM::IO::OutputManager>(config, grid, parameters, state, MPI_COMM_WORLD);
+        output_manager->write(0, 0.0);
+        output_manager->write_static_topo_file();
 
         // Simulation loop parameters
         double total_time = config.get_value<double>("simulation.total_time_s");
@@ -108,7 +108,7 @@ int main(int argc, char *argv[]) {
 
              // Output data at specified intervals
             if (state.get_time() >= next_output_time) {
-                output_manager.write(state.get_step(), state.get_time());
+                output_manager->write(state.get_step(), state.get_time());
                 next_output_time += output_interval;
             }
         }

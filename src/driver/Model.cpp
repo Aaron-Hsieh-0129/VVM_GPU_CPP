@@ -76,7 +76,28 @@ void Model::run_step(double dt) {
     // Turbulence diffusion on thermodynamics variables
     if (turbulence_) {
         turbulence_->compute_coefficients(state_, dt);
-        turbulence_->process_thermodynamics(state_, dt);
+        for (const auto& var_name : turbulence_->get_thermodynamics_vars()) {
+            std::string fe_name = "fe_tendency_" + var_name;
+
+            if (!state_.has_field(fe_name)) {
+                std::cout << "Error: fe_tendency_" << var_name << " doesn't exist" << std::endl;
+                exit(1);
+            }
+
+            auto& fe_tend_field = state_.get_field<3>(fe_name);
+            fe_tend_field.set_to_zero(); 
+            turbulence_->calculate_tendencies(state_, var_name, fe_tend_field);
+
+            VVM::Dynamics::TimeIntegrator::apply_forward_update(state_, var_name, grid_, dt, fe_tend_field);
+            halo_exchanger_.exchange_halos(state_.get_field<3>(var_name));
+            if (var_name == "th" || var_name == "qv") {
+                 bc_manager_.apply_zero_gradient(state_.get_field<3>(var_name));
+            }
+            else {
+                bc_manager_.apply_zero_gradient_bottom_zero_top(state_.get_field<3>(var_name));
+            }
+        }
+        // turbulence_->process_thermodynamics(state_, dt);
     }
 
     // Calculate buoyancy based on thermodynamics variables at t+1

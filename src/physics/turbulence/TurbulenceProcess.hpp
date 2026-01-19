@@ -91,6 +91,9 @@ public:
     void initialize(Core::State& state);
     void init_boundary_masks(Core::State& state);
 
+    const std::vector<std::string>& get_thermodynamics_vars() const { return thermodynamics_vars_; }
+    const std::vector<std::string>& get_dynamics_vars() const { return dynamics_vars_; }
+
 private:
     const Utils::ConfigurationManager& config_;
     const Core::Grid& grid_;
