@@ -31,30 +31,7 @@ TurbulenceProcess::TurbulenceProcess(const Utils::ConfigurationManager& config,
     dynamics_vars_ = {"xi", "eta", "zeta"};
     thermodynamics_vars_ = {"th", "qv"};
     if (config.get_value<bool>("physics.p3.enable_p3", false)) {
-        thermodynamics_vars_.insert(thermodynamics_vars_.end(), {"qc", "qr", "qi", "nc", "nr", "ni"});
-    }
-
-    Kokkos::deep_copy(dx_, params_.dx);
-    Kokkos::deep_copy(dy_, params_.dy);
-    Kokkos::deep_copy(dz_, params_.dz);
-    Kokkos::deep_copy(rdx_, params_.rdx);
-    Kokkos::deep_copy(rdy_, params_.rdy);
-    Kokkos::deep_copy(rdz_, params_.rdz);
-    Kokkos::deep_copy(rdx2_, params_.rdx2);
-    Kokkos::deep_copy(rdy2_, params_.rdy2);
-    Kokkos::deep_copy(rdz2_, params_.rdz2);
-    Kokkos::deep_copy(grav_, params_.gravity);
-    
-    vk_ = 0.4;
-    deld_ = std::pow(dx_ * dy_ * dz_, 1.0/3.0);
-    ramd0s_ = std::pow(0.23 * deld_, 2.0);
-    critmn_ = 1.0;
-
-    int rank = grid_.get_mpi_rank();
-    if (rank == 0) {
-        std::cout << "--- Initializing Turbulence Process ---" << std::endl;
-        std::cout << "    Grid Scale (DELD): " << deld_ << " m" << std::endl;
-        std::cout << "    Mixing Length Sq (RAMD0S): " << ramd0s_ << " m^2" << std::endl;
+        thermodynamics_vars_.insert(thermodynamics_vars_.end(), {"qc", "qr", "qi", "nc", "nr", "ni", "bm", "qm"});
     }
 }
 
@@ -78,6 +55,21 @@ void TurbulenceProcess::initialize(Core::State& state) {
             else state.add_field<3>(fe_tendency_name, dims);
         }
     }
+    Kokkos::deep_copy(dx_, params_.dx);
+    Kokkos::deep_copy(dy_, params_.dy);
+    Kokkos::deep_copy(dz_, params_.dz);
+    Kokkos::deep_copy(rdx_, params_.rdx);
+    Kokkos::deep_copy(rdy_, params_.rdy);
+    Kokkos::deep_copy(rdz_, params_.rdz);
+    Kokkos::deep_copy(rdx2_, params_.rdx2);
+    Kokkos::deep_copy(rdy2_, params_.rdy2);
+    Kokkos::deep_copy(rdz2_, params_.rdz2);
+    Kokkos::deep_copy(grav_, params_.gravity);
+    
+    vk_ = 0.4;
+    deld_ = std::pow(dx_ * dy_ * dz_, 1.0/3.0);
+    ramd0s_ = std::pow(0.23 * deld_, 2.0);
+    critmn_ = 1.0;
 
     init_boundary_masks(state);
     return;
@@ -348,39 +340,6 @@ void TurbulenceProcess::compute_coefficients(Core::State& state, double dt)
 
     halo_exchanger_.exchange_halos(state.get_field<3>("RKM"));
     halo_exchanger_.exchange_halos(state.get_field<3>("RKH"));
-
-
-    // This is for debugging
-    double local_max_rkm = 0.0;
-    double local_max_rkh = 0.0;
-
-    Kokkos::parallel_reduce("Find_Max_RKM",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({{h, h, h}}, {{nz-h, ny-h, nx-h}}),
-        KOKKOS_LAMBDA(const int k, const int j, const int i, double& lmax) {
-            if (rkm(k, j, i) > lmax) lmax = rkm(k, j, i);
-        },
-        Kokkos::Max<double>(local_max_rkm)
-    );
-
-    Kokkos::parallel_reduce("Find_Max_RKH",
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>>({{h, h, h}}, {{nz-h, ny-h, nx-h}}),
-        KOKKOS_LAMBDA(const int k, const int j, const int i, double& lmax) {
-            if (rkh(k, j, i) > lmax) lmax = rkh(k, j, i);
-        },
-        Kokkos::Max<double>(local_max_rkh)
-    );
-
-    double global_max_rkm = 0.0;
-    double global_max_rkh = 0.0;
-
-    MPI_Reduce(&local_max_rkm, &global_max_rkm, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&local_max_rkh, &global_max_rkh, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-
-    if (grid_.get_mpi_rank() == 0) {
-        std::cout << "[Turbulence] Step " << state.get_step() 
-                  << " | Max RKM: " << global_max_rkm 
-                  << " | Max RKH: " << global_max_rkh << std::endl;
-    }
 }
 
 template<size_t Dim>

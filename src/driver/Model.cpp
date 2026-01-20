@@ -27,6 +27,15 @@ Model::Model(const Utils::ConfigurationManager& config,
         radiation_ = std::make_unique<Physics::RRTMGP::RRTMGPRadiation>(config_, grid_, params_);
         rad_freq_in_steps_ = config_.get_value<int>("physics.rrtmgp.rad_frequency_step", 1);
     }
+
+    if (config_.get_value<bool>("dynamics.filters.sponge_layer.enable", false)) {
+        sponge_layer_ = std::make_unique<Dynamics::SpongeLayer>(config_, grid_, params_, halo_exchanger_, state_);
+    }
+    dynamics_vars_ = {"xi", "eta", "zeta"};
+    thermodynamics_vars_ = {"th", "qv"};
+    if (config.get_value<bool>("physics.p3.enable_p3", false)) {
+        thermodynamics_vars_.insert(thermodynamics_vars_.end(), {"qc", "qr", "qi", "nc", "nr", "ni", "bm", "qm"});
+    }
 }
 
 void Model::init() {
@@ -40,6 +49,7 @@ void Model::init() {
     if (microphysics_) microphysics_->initialize(state_);
     if (turbulence_) turbulence_->initialize(state_);
     if (radiation_) radiation_->initialize(state_);
+    if (sponge_layer_) sponge_layer_->initialize(state_);
     
     halo_exchanger_.exchange_halos(state_);
     
@@ -77,17 +87,27 @@ void Model::run_step(double dt) {
         turbulence_->compute_coefficients(state_, dt);
         for (const auto& var_name : turbulence_->get_thermodynamics_vars()) {
             std::string fe_name = "fe_tendency_" + var_name;
-
-            if (!state_.has_field(fe_name)) {
-                std::cout << "Error: fe_tendency_" << var_name << " doesn't exist" << std::endl;
-                exit(1);
-            }
-
             auto& fe_tend_field = state_.get_field<3>(fe_name);
             fe_tend_field.set_to_zero(); 
             turbulence_->calculate_tendencies(state_, var_name, fe_tend_field);
 
             VVM::Dynamics::TimeIntegrator::apply_forward_update(state_, var_name, grid_, dt, fe_tend_field);
+        }
+    }
+    // Apply sponge layer
+    if (sponge_layer_) {
+        for (const auto& var_name : turbulence_->get_thermodynamics_vars()) {
+            std::string fe_name = "fe_tendency_" + var_name;
+            auto& fe_tend_field = state_.get_field<3>(fe_name);
+            fe_tend_field.set_to_zero(); 
+            sponge_layer_->calculate_tendencies(state_, var_name, fe_tend_field);
+
+            VVM::Dynamics::TimeIntegrator::apply_forward_update(state_, var_name, grid_, dt, fe_tend_field);
+        }
+    }
+
+    if (turbulence_ || sponge_layer_) {
+        for (const auto& var_name : thermodynamics_vars_) {
             halo_exchanger_.exchange_halos(state_.get_field<3>(var_name));
             if (var_name == "th" || var_name == "qv") {
                  bc_manager_.apply_zero_gradient(state_.get_field<3>(var_name));
@@ -112,11 +132,6 @@ void Model::run_step(double dt) {
         for (const auto& var_name : turbulence_->get_dynamics_vars()) {
             std::string fe_name = "fe_tendency_" + var_name;
             
-            if (!state_.has_field(fe_name)) {
-                std::cout << "Error: fe_tendency_" << var_name << " doesn't exist" << std::endl;
-                exit(1);
-            }
-
             if (var_name == "zeta") {
                 auto& fe_tend_field = state_.get_field<2>(fe_name);
                 fe_tend_field.set_to_zero(); 
@@ -129,6 +144,30 @@ void Model::run_step(double dt) {
                 turbulence_->calculate_tendencies(state_, var_name, fe_tend_field);
                 VVM::Dynamics::TimeIntegrator::apply_forward_update(state_, var_name, grid_, dt, fe_tend_field);
             }
+        }
+    }
+
+    if (sponge_layer_) {
+        for (const auto& var_name : turbulence_->get_dynamics_vars()) {
+            if (var_name == "zeta") {
+                std::string fe_name = "fe_tendency_" + var_name;
+                auto& fe_tend_field = state_.get_field<2>(fe_name);
+                fe_tend_field.set_to_zero(); 
+                sponge_layer_->calculate_tendencies(state_, var_name, fe_tend_field);
+                VVM::Dynamics::TimeIntegrator::apply_forward_update(state_, var_name, grid_, dt, fe_tend_field);
+            }
+            else {
+                std::string fe_name = "fe_tendency_" + var_name;
+                auto& fe_tend_field = state_.get_field<3>(fe_name);
+                fe_tend_field.set_to_zero(); 
+                sponge_layer_->calculate_tendencies(state_, var_name, fe_tend_field);
+                VVM::Dynamics::TimeIntegrator::apply_forward_update(state_, var_name, grid_, dt, fe_tend_field);
+            }
+        }
+    }
+
+    if (turbulence_ || sponge_layer_) {
+        for (const auto& var_name : dynamics_vars_) {
             halo_exchanger_.exchange_halos(state_.get_field<3>(var_name));
             bc_manager_.apply_vorticity_bc(state_.get_field<3>(var_name));
         }

@@ -54,6 +54,13 @@
             "iteration": 200,
             "WRXMU": 2.5e-7
         },
+        "filters": {
+            "sponge_layer": {
+                "enable": true,
+                "sponge_layer_base": 13000.0,
+                "inv_CRAD": 3600.0
+            }
+        },
         "prognostic_variables": {
             "th": {
                 "tendency_terms": {
