@@ -16,43 +16,27 @@
     },
     "initial_conditions": {
         "format": "txt",
-        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/initial_conditions/profile_p3.txt",
+        "source_file": "/home/mog/Aaron/VVM_GPU_CPP_dev/rundata/initial_conditions/profile_p3.txt",
         "perturbation": "bubble"
     },
     "netcdf_reader": {
-        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/TOPO.nc",
+        "source_file": "/home/mog/Aaron/VVM_GPU_CPP_dev/rundata/TOPO.nc",
         "variables_to_read": {
             "2d": ["topo"]
         }
     },
     "output": {
-        "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/profile_test",
+        "output_dir": "/home/mog/Aaron/VVM_GPU_CPP_dev/output/profile_test",
         "enable_netcdf": true,
         "output_filename_prefix": "vvm_output",
         "fields_to_output": [
-            "thbar",
-            "pibar",
-            "rhobar",
-            "rhobar_up",
+            "thbar", "pibar", "rhobar", "rhobar_up",
             "htflx_sfc",
-            "u",
-            "v",
-            "w",
-            "th",
-            "xi",
-            "eta",
-            "zeta",
-            "qv",
-            "qc",
-            "qr",
-            "qi",
-            "sw_heating",
-            "lw_heating",
-            "net_heating",
-            "net_sw_flux",
-            "net_lw_flux",
-            "precip_liq_surf_flux",
-            "precip_ice_surf_flux"
+            "u", "v", "w", "th", "xi", "eta", "zeta",
+            "qv", "qc", "qr", "qi",
+            "sw_heating", "lw_heating", "net_heating",
+            "net_sw_flux", "net_lw_flux",
+            "precip_liq_surf_flux", "precip_ice_surf_flux"
         ],
         "output_grid": {
             "x_start": 0,
@@ -62,16 +46,6 @@
             "z_start": 0,
             "z_end": -1
         }
-    },
-    "constants": {
-        "gravity": 9.806,
-        "Rd": 287.04,
-        "PSFC": 100000,
-        "P0": 100000,
-        "Cp": 1004.5,
-        "Lv": 2.5e6,
-        "OMEGA": 7.292e-5,
-        "PI": 3.14159265
     },
     "dynamics": {
         "solver": {
@@ -84,34 +58,36 @@
             "th": {
                 "tendency_terms": {
                     "advection": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
-                    },
-                    "forcing": {
-                        "temporal_scheme": "ForwardEuler",
-                        "spatial_scheme": "Radiation"
                     }
                 }
             },
             "xi": {
                 "tendency_terms": {
                     "advection": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     },
                     "buoyancy": {
+                        "enable": true,
                         "temporal_scheme": "ForwardEuler",
                         "spatial_scheme": "Takacs"
                     },
                     "stretching": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     },
                     "twisting": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     },
                     "coriolis": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -120,22 +96,27 @@
             "eta": {
                 "tendency_terms": {
                     "advection": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     },
                     "buoyancy": {
+                        "enable": true,
                         "temporal_scheme": "ForwardEuler",
                         "spatial_scheme": "Takacs"
                     },
                     "stretching": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     },
                     "twisting": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     },
                     "coriolis": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -144,18 +125,22 @@
             "zeta": {
                 "tendency_terms": {
                     "advection": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     },
                     "stretching": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     },
                     "twisting": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     },
                     "coriolis": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -164,6 +149,7 @@
             "qv": {
                 "tendency_terms": {
                     "advection": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -172,6 +158,7 @@
             "qc": {
                 "tendency_terms": {
                     "advection": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -180,6 +167,7 @@
             "qr": {
                 "tendency_terms": {
                     "advection": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -188,6 +176,7 @@
             "qi": {
                 "tendency_terms": {
                     "advection": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -196,6 +185,7 @@
             "qm": {
                 "tendency_terms": {
                     "advection": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -204,6 +194,7 @@
             "nc": {
                 "tendency_terms": {
                     "advection": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -212,6 +203,7 @@
             "nr": {
                 "tendency_terms": {
                     "advection": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -220,6 +212,7 @@
             "ni": {
                 "tendency_terms": {
                     "advection": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -228,6 +221,7 @@
             "bm": {
                 "tendency_terms": {
                     "advection": {
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -260,6 +254,16 @@
     },
     "optimization": {
         "cuda_graph_halo_exchange": ["u", "w", "xi", "eta", "zeta", "th", "qv", "qc", "qi", "qr", "qm", "nc", "ni", "nr", "bm"]
+    },
+    "constants": {
+        "gravity": 9.806,
+        "Rd": 287.04,
+        "PSFC": 100000,
+        "P0": 100000,
+        "Cp": 1004.5,
+        "Lv": 2.5e6,
+        "OMEGA": 7.292e-5,
+        "PI": 3.14159265
     },
     "add_model_fields": {
         "3d": [
