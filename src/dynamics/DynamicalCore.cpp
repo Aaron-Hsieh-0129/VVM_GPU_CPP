@@ -75,19 +75,13 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
 
         if (var_conf.contains("tendency_terms")) {
             for (auto& [term_name, term_conf] : var_conf.at("tendency_terms").items()) {
-                if (term_name == "forcing") {
-                    std::string time_scheme = term_conf.value("temporal_scheme", "ForwardEuler");
-                    
-                    if (time_scheme == "ForwardEuler") {
-                        has_fe = true; 
-                    } 
-
+                bool is_enabled = term_conf.value("enable", true);
+                if (!is_enabled) {
                     if (rank == 0) {
-                        std::cout << "    - Enabled external forcing container (ForwardEuler) for " << term_name << std::endl;
+                        std::cout << "    - [Disabled] Tendency term: " << term_name << " is skipped." << std::endl;
                     }
-                    continue; 
+                    continue;
                 }
-
 
                 std::string spatial_scheme_name = term_conf.at("spatial_scheme");
                 std::string time_scheme_name = term_conf.value("temporal_scheme", "AdamsBashforth2");
