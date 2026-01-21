@@ -445,7 +445,7 @@ void Initializer::initialize_perturbation() const {
 
                 double radius_norm = std::sqrt(
                                       std::pow(((global_i + 1) - (int) (nx/2)) * dx() / 2000., 2) +
-                                      // std::pow(((global_j + 1) - (int) (ny/2)) * dy() / 2000., 2) +
+                                      std::pow(((global_j + 1) - (int) (ny/2)) * dy() / 2000., 2) +
                                       std::pow((z_mid(k) - 3000.) / 2000., 2)
                                      );
                 if (radius_norm <= 1) {
