@@ -347,6 +347,7 @@ void TurbulenceProcess::calculate_tendencies(Core::State& state,
                                              const std::string& var_name, 
                                              Core::Field<Dim>& out_tendency) 
 {
+    VVM::Utils::Timer turbulence_timer("Turbulence");
     const auto& RKM = state.get_field<3>("RKM").get_device_data();
     const auto& RKH = state.get_field<3>("RKH").get_device_data();
     const auto& var = state.get_field<3>(var_name).get_device_data();
@@ -399,20 +400,6 @@ void TurbulenceProcess::calculate_tendencies(Core::State& state,
                     tend(k,j,i) = d2dx2 + d2dy2 + d2dz2;
                 }
             );
-
-            // This is for surface flux
-            /*
-            Kokkos::parallel_for("Compute_Diff_Tendency_" + var_name,
-                Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
-                KOKKOS_LAMBDA(const int j, const int i) {
-                    int hxp = hx(j,i) + 1;
-                    int hxvp = hxv(j,i) + 1;
-
-                    if (hxvp > 1) tend(hxvp,j,i) = tend(hxvp,j,i)+flex_height_coef_up(hxvp)*flex_height_coef_mid(hxvp)*WV(I,J)/(RHOU(hxvp)*DZ*DZ)
-
-                }
-            );
-            */
         }
         else if (var_name == "eta") {
             Kokkos::parallel_for("Compute_Diff_Tendency_" + var_name,

@@ -11,9 +11,14 @@
 #include "core/HaloExchanger.hpp"
 #include "core/Field.hpp"
 #include "utils/ConfigurationManager.hpp"
+#include "utils/Timer.hpp"
+#include "utils/TimingManager.hpp"
 
 namespace VVM {
 namespace Physics {
+
+class SurfaceProcess {
+public:
 
     SurfaceProcess(const Utils::ConfigurationManager& config, 
                       const Core::Grid& grid, 
@@ -29,6 +34,20 @@ namespace Physics {
                               const std::string& var_name, 
                               Core::Field<Dim>& out_tendency);
 
+private:
+    const Utils::ConfigurationManager& config_;
+    const Core::Grid& grid_;
+    const Core::Parameters& params_;
+    Core::HaloExchanger& halo_exchanger_;
+
+    static KOKKOS_INLINE_FUNCTION
+    void sflux_2d(double sigmau, double thvm, double thvsm, double speed1, 
+                  double zr, double zrough, 
+                  double& ustar, double ventfc[2], double& molen);
+
+    static KOKKOS_INLINE_FUNCTION
+    double compute_es(double t);
+};
 
 } // namespace Physics
 } // namespace VVM

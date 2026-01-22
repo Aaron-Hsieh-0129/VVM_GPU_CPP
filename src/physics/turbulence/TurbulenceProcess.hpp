@@ -11,6 +11,8 @@
 #include "core/HaloExchanger.hpp"
 #include "core/Field.hpp"
 #include "utils/ConfigurationManager.hpp"
+#include "utils/Timer.hpp"
+#include "utils/TimingManager.hpp"
 
 namespace VVM {
 namespace Physics {
