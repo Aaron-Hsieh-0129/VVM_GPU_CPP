@@ -23,6 +23,11 @@ Model::Model(const Utils::ConfigurationManager& config,
         turbulence_ = std::make_unique<Physics::TurbulenceProcess>(config_, grid_, params_, halo_exchanger_, state_);
     }
 
+    if (config_.get_value<bool>("physics.surface.enable_surface", false)) {
+        surface_ = std::make_unique<Physics::SurfaceProcess>(config_, grid_, params_, halo_exchanger_, state_);
+        surface_freq_in_steps_ = config_.get_value<int>("physics.surface.frequency_step", 12);
+    }
+
     if (config_.get_value<bool>("physics.rrtmgp.enable_rrtmgp", false)) {
         radiation_ = std::make_unique<Physics::RRTMGP::RRTMGPRadiation>(config_, grid_, params_);
         rad_freq_in_steps_ = config_.get_value<int>("physics.rrtmgp.rad_frequency_step", 1);
@@ -36,6 +41,7 @@ Model::Model(const Utils::ConfigurationManager& config,
     if (config.get_value<bool>("physics.p3.enable_p3", false)) {
         thermodynamics_vars_.insert(thermodynamics_vars_.end(), {"qc", "qr", "qi", "nc", "nr", "ni", "bm", "qm"});
     }
+    sfc_vars_ = {"th", "qv"};
 }
 
 void Model::init() {
@@ -50,6 +56,7 @@ void Model::init() {
     if (turbulence_) turbulence_->initialize(state_);
     if (radiation_) radiation_->initialize(state_);
     if (sponge_layer_) sponge_layer_->initialize(state_);
+    if (surface_) surface_->initialize(state_);
     
     halo_exchanger_.exchange_halos(state_);
     
@@ -90,10 +97,28 @@ void Model::run_step(double dt) {
             auto& fe_tend_field = state_.get_field<3>(fe_name);
             fe_tend_field.set_to_zero(); 
             turbulence_->calculate_tendencies(state_, var_name, fe_tend_field);
-
-            VVM::Dynamics::TimeIntegrator::apply_forward_update(state_, var_name, grid_, dt, fe_tend_field);
         }
     }
+    if (surface_) {
+        surface_->compute_coefficients(state_);
+        for (const auto& var_name : sfc_vars_) {
+            if ((state_.get_step()-1) % surface_freq_in_steps_ == 0) {
+                std::string fe_name = "fe_tendency_" + var_name;
+                auto& fe_tend_field = state_.get_field<3>(fe_name);
+                if (!turbulence_) fe_tend_field.set_to_zero(); 
+                surface_->calculate_tendencies(state_, var_name, fe_tend_field);
+            }
+        }
+    }
+    if (turbulence_ || surface_) {
+        for (const auto& var_name : (turbulence_ ? turbulence_->get_thermodynamics_vars() : sfc_vars_) ) {
+            std::string fe_name = "fe_tendency_" + var_name;
+            auto& fe_tend_field = state_.get_field<3>(fe_name);
+            VVM::Dynamics::TimeIntegrator::apply_forward_update(state_, var_name, grid_, dt, fe_tend_field);
+        }
+    } 
+
+
     // Apply sponge layer
     if (sponge_layer_) {
         for (const auto& var_name : turbulence_->get_thermodynamics_vars()) {
@@ -106,7 +131,7 @@ void Model::run_step(double dt) {
         }
     }
 
-    if (turbulence_ || sponge_layer_) {
+    if (turbulence_ || sponge_layer_ || surface_) {
         for (const auto& var_name : thermodynamics_vars_) {
             halo_exchanger_.exchange_halos(state_.get_field<3>(var_name));
             if (var_name == "th" || var_name == "qv") {
