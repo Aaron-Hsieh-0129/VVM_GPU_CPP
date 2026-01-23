@@ -37,11 +37,12 @@ public:
 
     template<size_t Dim>
     void exchange_halos(Field<Dim>& field, int depth = -1) const {
+        VVM::Utils::Timer exchange_halos_timer("Exchnage_halos");
         exchange_halos_impl(field, depth);
         
         cudaStreamCaptureStatus capture_status;
         cudaStreamIsCapturing(stream_, &capture_status);
-        if (depth == -1 && capture_status == cudaStreamCaptureStatusNone) {
+        if (depth == -1 && capture_status == cudaStreamCaptureStatusNone && grid_ref_.get_mpi_size() > 1) {
              cudaStreamSynchronize(stream_);
         }
     }
@@ -94,10 +95,7 @@ inline HaloExchanger::HaloExchanger(const Utils::ConfigurationManager& config, c
         enabled_graph_vars_.insert(vars.begin(), vars.end());
     }
 
-    int world_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-    
-    if (world_rank == 0 && !enabled_graph_vars_.empty()) {
+    if (grid_ref_.get_mpi_rank() == 0 && !enabled_graph_vars_.empty()) {
         std::cout << "HaloExchanger: CUDA Graph enabled for fields: ";
         for (const auto& var : enabled_graph_vars_) std::cout << var << " ";
         std::cout << std::endl;
@@ -215,9 +213,6 @@ inline void HaloExchanger::exchange_halos(State& state) {
     
     cudaStreamCaptureStatus capture_status;
     cudaStreamIsCapturing(stream_, &capture_status);
-    if (capture_status == cudaStreamCaptureStatusNone) {
-        cudaStreamSynchronize(stream_);
-    }
 }
 
 template<size_t Dim>
@@ -234,6 +229,8 @@ void HaloExchanger::exchange_halos_impl(Field<Dim>& field, int depth) const {
     const int neighbor_right = neighbor_right_;
     const int neighbor_bottom = neighbor_bottom_;
     const int neighbor_top = neighbor_top_;
+
+    const int my_rank = grid_ref_.get_mpi_rank();
 
     size_t count_x = 0;
     size_t count_y = 0;
@@ -287,18 +284,24 @@ void HaloExchanger::exchange_halos_impl(Field<Dim>& field, int depth) const {
             });
         }
 
-        // NCCL Communication
-        ncclGroupStart();
-        if(neighbor_right != MPI_PROC_NULL) 
-            ncclSend(send_r.data(), count_x, ncclDouble, neighbor_right, nccl_comm_, stream_);
-        if(neighbor_left != MPI_PROC_NULL) 
-            ncclRecv(recv_l.data(), count_x, ncclDouble, neighbor_left, nccl_comm_, stream_);
+        if (neighbor_left != MPI_PROC_NULL && neighbor_left == my_rank && neighbor_right == my_rank) {
+            Kokkos::deep_copy(exec_space_, recv_l, send_r);
+            Kokkos::deep_copy(exec_space_, recv_r, send_l);
+        }
+        else {
+            // NCCL Communication
+            ncclGroupStart();
+            if(neighbor_right != MPI_PROC_NULL) 
+                ncclSend(send_r.data(), count_x, ncclDouble, neighbor_right, nccl_comm_, stream_);
+            if(neighbor_left != MPI_PROC_NULL) 
+                ncclRecv(recv_l.data(), count_x, ncclDouble, neighbor_left, nccl_comm_, stream_);
 
-        if(neighbor_left != MPI_PROC_NULL) 
-            ncclSend(send_l.data(), count_x, ncclDouble, neighbor_left, nccl_comm_, stream_);
-        if(neighbor_right != MPI_PROC_NULL) 
-            ncclRecv(recv_r.data(), count_x, ncclDouble, neighbor_right, nccl_comm_, stream_);
-        ncclGroupEnd();
+            if(neighbor_left != MPI_PROC_NULL) 
+                ncclSend(send_l.data(), count_x, ncclDouble, neighbor_left, nccl_comm_, stream_);
+            if(neighbor_right != MPI_PROC_NULL) 
+                ncclRecv(recv_r.data(), count_x, ncclDouble, neighbor_right, nccl_comm_, stream_);
+            ncclGroupEnd();
+        }
 
         // Unpack Data from Buffers
         if constexpr (Dim == 2) {
@@ -369,18 +372,24 @@ void HaloExchanger::exchange_halos_impl(Field<Dim>& field, int depth) const {
             });
         }
 
-        // NCCL
-        ncclGroupStart();
-        if(neighbor_top != MPI_PROC_NULL) 
-            ncclSend(send_t.data(), count_y, ncclDouble, neighbor_top, nccl_comm_, stream_);
-        if(neighbor_bottom != MPI_PROC_NULL) 
-            ncclRecv(recv_b.data(), count_y, ncclDouble, neighbor_bottom, nccl_comm_, stream_);
+        if (neighbor_bottom != MPI_PROC_NULL && neighbor_bottom == my_rank && neighbor_top == my_rank) {
+             Kokkos::deep_copy(exec_space_, recv_b, send_t);
+             Kokkos::deep_copy(exec_space_, recv_t, send_b);
+        }
+        else {
+            // NCCL
+            ncclGroupStart();
+            if(neighbor_top != MPI_PROC_NULL) 
+                ncclSend(send_t.data(), count_y, ncclDouble, neighbor_top, nccl_comm_, stream_);
+            if(neighbor_bottom != MPI_PROC_NULL) 
+                ncclRecv(recv_b.data(), count_y, ncclDouble, neighbor_bottom, nccl_comm_, stream_);
 
-        if(neighbor_bottom != MPI_PROC_NULL) 
-            ncclSend(send_b.data(), count_y, ncclDouble, neighbor_bottom, nccl_comm_, stream_);
-        if(neighbor_top != MPI_PROC_NULL) 
-            ncclRecv(recv_t.data(), count_y, ncclDouble, neighbor_top, nccl_comm_, stream_);
-        ncclGroupEnd();
+            if(neighbor_bottom != MPI_PROC_NULL) 
+                ncclSend(send_b.data(), count_y, ncclDouble, neighbor_bottom, nccl_comm_, stream_);
+            if(neighbor_top != MPI_PROC_NULL) 
+                ncclRecv(recv_t.data(), count_y, ncclDouble, neighbor_top, nccl_comm_, stream_);
+            ncclGroupEnd();
+        }
 
         // Unpack
         if constexpr (Dim == 2) {
@@ -416,8 +425,8 @@ void HaloExchanger::exchange_halos_impl(Field<Dim>& field, int depth) const {
     
     cudaStreamCaptureStatus capture_status;
     cudaStreamIsCapturing(stream_, &capture_status);
-    if (capture_status == cudaStreamCaptureStatusNone) {
-        cudaStreamSynchronize(stream_);
+    if (depth == -1 && capture_status == cudaStreamCaptureStatusNone && grid_ref_.get_mpi_size() > 1) {
+         cudaStreamSynchronize(stream_);
     }
 }
 
@@ -437,7 +446,7 @@ inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) co
     const int neighbor_bottom = neighbor_bottom_;
     const int neighbor_top = neighbor_top_;
 
-    Kokkos::fence(); 
+    // Kokkos::fence(); 
 
     // --- Y-Direction Slice ---
     {
