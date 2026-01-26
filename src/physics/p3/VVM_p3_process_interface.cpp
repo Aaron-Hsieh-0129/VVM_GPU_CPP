@@ -152,7 +152,7 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
 
     // Initialize p3
     bool is_root = (grid_.get_mpi_rank() == 0);
-    m_lookup_tables = P3F::p3_init(/* write_tables = */ false, is_root);
+    m_lookup_tables = P3F::p3_init(/* write_tables = */ true, is_root);
 
 
     // This section ties the variables in m_prog_state/m_diag_inputs/m_diag_outputs with m_variables --Prognostic State Variables: m_prog_state.qc = m_qc_view; m_prog_state.nc = m_nc_view; m_prog_state.qr = m_qr_view;
@@ -837,16 +837,21 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
     // Constants
     const Real nccn_val = 2.0e8; // Target CCN concentration (#/kg) or use m_nccn_view
     const Real min_qc = 1.0e-12; // Threshold for "new cloud"
+    const Real Lv = 2.501e6;
+    const Real Cp = Constants::Cpair;
+    const Real Rv = Constants::RH2O;
     using Physics = scream::physics::Functions<Real, scream::DefaultDevice>;
     const int nlev_packs = m_num_lev_packs;
 
     auto qv_view = m_qv_view;
     auto qc_view = m_qc_view;
+    auto qr_view = m_qr_view;
     auto nc_view = m_nc_view;
+    auto nr_view = m_nr_view;
     auto th_view = m_th_view;
     auto p_view  = m_pmid_dry_view; 
     auto inv_exner_view = m_inv_exner_view;
-    Kokkos::parallel_for("p3_saturation_adjustment_library_call", m_policy,
+    Kokkos::parallel_for("saturation_adjustment", m_policy,
         KOKKOS_LAMBDA(const MemberType& team) {
             const int icol = team.league_rank();
 
@@ -860,37 +865,54 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
 
                 Spack T_pack = th_pack / inv_exner_pack;
 
+                // Calculate Saturation
                 Smask range_mask(true);
-
                 Spack qvs_pack = Physics::qv_sat_dry(
                     T_pack, p_pack, 
                     false, // is_ice = false 
                     range_mask, 
-                    Physics::Polysvp1, // scream::physics::Polysvp1
-                    "VVM_Sat_Adj"
+                    Physics::Polysvp1, 
+                    "VVM_Sat_Adj_Opt"
                 );
 
-                auto is_supersaturated = (qv_pack > qvs_pack);
+                // delta_q > 0: Supersaturated
+                // delta_q < 0: Subsaturated
+                Spack delta_q_potential = qv_pack - qvs_pack;
 
-                if (is_supersaturated.any()) {
-                    const Real Lv = 2.501e6; 
-                    Spack numerator = qv_pack - qvs_pack;
-                    Spack denominator = 1.0 + (Lv * Lv * qvs_pack) / (Constants::Cpair * Constants::RH2O * T_pack * T_pack);
+                // A: delta_q > 0
+                // B: delta_q < 0 && qc > 1e-12
+                auto need_condense = (delta_q_potential > 0.0);
+                auto need_evaporate = (delta_q_potential < 0.0) && (qc_pack > 1.0e-12);
+                auto need_adjustment = need_condense || need_evaporate;
 
-                    Spack adjustment(0.0);
-                    adjustment.set(is_supersaturated, numerator / denominator);
+                if (need_adjustment.any()) {
+                    auto is_new_cloud = need_condense && (qc_pack < min_qc);
+                    
+                    // Thermal Inertia Factor
+                    Spack denominator = 1.0 + (Lv * Lv * qvs_pack) / (Cp * Rv * T_pack * T_pack);
+                    Spack adjustment = delta_q_potential / denominator;
 
-                    // If qc was tiny, and we are adding mass, we MUST initialize nc (qcnuc behavior)
-                    auto is_activation = is_supersaturated && (qc_pack < min_qc);
+                    // Evaporation Limiter
+                    // adjustment < 0, only evaporates qc
+                    // if adjustment < -qc, adjustment = -qc
+                    auto limit_mask = (adjustment < -qc_pack);
+                    adjustment.set(limit_mask, -qc_pack);
 
-                    qc_pack += adjustment;
-                    qv_pack -= adjustment;
-                    th_pack += inv_exner_pack * (Lv / Constants::Cpair) * adjustment;
-                    // Update number (Activation logic)
-                    // If activating, set nc to CCN concentration. 
-                    // Note: If predictNc is true, P3 expects nc to exist to evolve it.
-                    if (is_activation.any()) {
-                        nc_pack.set(is_activation, nccn_val);
+                    // Update State
+                    qv_pack.set(need_adjustment, qv_pack - adjustment);
+                    qc_pack.set(need_adjustment, qc_pack + adjustment);
+                    
+                    Spack d_th = inv_exner_pack * (Lv / Cp) * adjustment;
+                    th_pack.set(need_adjustment, th_pack + d_th);
+
+                    if (is_new_cloud.any()) {
+                         nc_pack.set(is_new_cloud, nccn_val);
+                    }
+
+                    // Full Evaporation
+                    auto is_cloud_gone = (qc_pack < 1.0e-12); 
+                    if (is_cloud_gone.any()) {
+                        nc_pack.set(is_cloud_gone, 0.0);
                     }
                 }
             });
@@ -907,48 +929,65 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
         workspace_mgr, m_num_cols, m_num_levs
     );
 
-    Kokkos::parallel_for("p3_post_sat_adj", m_policy,
+    Kokkos::parallel_for("post_p3_saturation_adjustment", m_policy,
         KOKKOS_LAMBDA(const MemberType& team) {
             const int icol = team.league_rank();
 
             Kokkos::parallel_for(Kokkos::TeamThreadRange(team, nlev_packs), [&](const int k_pack) {
                 auto& qv_pack = qv_view(icol, k_pack);
                 auto& qc_pack = qc_view(icol, k_pack);
+                auto& nc_pack = nc_view(icol, k_pack);
                 auto& th_pack = th_view(icol, k_pack);
                 const auto& p_pack = p_view(icol, k_pack);
                 const auto& inv_exner_pack = inv_exner_view(icol, k_pack);
 
+                Spack qc_post_p3 = qc_pack; 
+
                 Spack T_pack = th_pack / inv_exner_pack;
 
                 Smask range_mask(true);
-
-                // Calculate Saturation (Polysvp1 - Liquid)
                 Spack qvs_pack = Physics::qv_sat_dry(
                     T_pack, p_pack, 
-                    false, // is_ice = false 
+                    false, 
                     range_mask, 
-                    Physics::Polysvp1, // scream::physics::Polysvp1
-                    "VVM_Sat_Adj_Post"
+                    Physics::Polysvp1, 
+                    "Post_P3_Sat_Adj"
                 );
 
-                auto is_supersaturated = (qv_pack > qvs_pack);
+                Spack delta_q = qv_pack - qvs_pack;
+                auto need_condense = (delta_q > 0.0);
+                
+                auto need_evaporate = (delta_q < 0.0) && (qc_pack > min_qc);
 
-                if (is_supersaturated.any()) {
-                    const Real Lv = 2.501e6; 
-                    Spack numerator = qv_pack - qvs_pack;
-                    Spack denominator = 1.0 + (Lv * Lv * qvs_pack) / (Constants::Cpair * Constants::RH2O * T_pack * T_pack);
+                auto need_adj = need_condense || need_evaporate;
 
-                    Spack adjustment(0.0);
-                    adjustment.set(is_supersaturated, numerator / denominator);
+                if (need_adj.any()) {
+                    Spack denominator = 1.0 + (Lv * Lv * qvs_pack) / (Cp * Rv * T_pack * T_pack);
+                    Spack adj = delta_q / denominator;
 
-                    qc_pack += adjustment;
-                    qv_pack -= adjustment;
-                    th_pack += inv_exner_pack * (Lv / Constants::Cpair) * adjustment;
+                    auto limit_mask = (adj < -qc_pack);
+                    adj.set(limit_mask, -qc_pack);
+
+                    qv_pack.set(need_adj, qv_pack - adj);
+                    qc_pack.set(need_adj, qc_pack + adj);
+                    
+                    Spack d_th = inv_exner_pack * (Lv / Cp) * adj;
+                    th_pack.set(need_adj, th_pack + d_th);
+
+                    auto is_numerical_creation = (adj > 0.0) && (qc_post_p3 < min_qc);
+
+                    if (is_numerical_creation.any()) {
+                        nc_pack.set(is_numerical_creation, nccn_val);
+                    }
+                    auto is_cloud_gone = (qc_pack < min_qc);
+                    
+                    if (is_cloud_gone.any()) {
+                        nc_pack.set(is_cloud_gone, 0.0);
+                    }
                 }
             });
         }
     );
-    Kokkos::fence();
 
     // Conduct the post-processing of the p3_main output.
     Kokkos::parallel_for("p3_main_local_vals",

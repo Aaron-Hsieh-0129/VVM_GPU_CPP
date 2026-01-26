@@ -119,6 +119,29 @@ void Functions<S,D>
 	  //The next line maintains consistency between nr_incld and nr
 	  nr(pk).set(qr_gt_small, nr_incld(pk)*cld_frac_r(pk));
 
+      auto Co_local = V_qr(pk) * dt_left * inv_dz(pk);
+        
+        Smask co_huge = qr_gt_small && (Co_local > 10.0);
+
+        if(co_huge.any()) {
+            for(int s=0; s<Spack::n; ++s) {
+                if(co_huge[s]) {
+                    printf("!! Pack %d Slot %d\n", pk, s);
+                    printf("   Co     = %.2f\n", Co_local[s]);
+                    printf("   V_qr   = %.2f m/s\n", V_qr(pk)[s]);
+                    
+                    printf("   qr = %.6e\n", qr(pk)[s]);
+                    printf("   nr = %.6e\n", nr(pk)[s]);
+                    printf("   lamr      = %.6e\n", lamr(pk)[s]);
+                    printf("   mass = %.6e kg\n", qr(pk)[s]/nr(pk)[s]);
+                    
+                    break; 
+                }
+            }
+        }
+
+
+
         }
         const auto Co_max_local = max(qr_gt_small, 0,
                                       V_qr(pk) * dt_left * inv_dz(pk));
