@@ -33,8 +33,12 @@ Model::Model(const Utils::ConfigurationManager& config,
         rad_freq_in_steps_ = config_.get_value<int>("physics.rrtmgp.rad_frequency_step", 1);
     }
 
-    if (config_.get_value<bool>("dynamics.filters.sponge_layer.enable", false)) {
+    if (config_.get_value<bool>("dynamics.forcings.sponge_layer.enable", false)) {
         sponge_layer_ = std::make_unique<Dynamics::SpongeLayer>(config_, grid_, params_, halo_exchanger_, state_);
+    }
+
+    if (config_.get_value<bool>("dynamics.forcings.random_perturbation.enable", false)) {
+        random_forcing_ = std::make_unique<Dynamics::RandomForcing>(config_, grid_, params_);
     }
     dynamics_vars_ = {"xi", "eta", "zeta"};
     thermodynamics_vars_ = {"th", "qv"};
@@ -57,6 +61,7 @@ void Model::init() {
     if (radiation_) radiation_->initialize(state_);
     if (sponge_layer_) sponge_layer_->initialize(state_);
     if (surface_) surface_->initialize(state_);
+    if (random_forcing_) random_forcing_->initialize(state_);
     
     halo_exchanger_.exchange_halos(state_);
     
@@ -70,35 +75,6 @@ void Model::init() {
 }
 
 void Model::run_step(double dt) {
-    if (state_.get_time() < 50) {
-        int nz = grid_.get_local_total_points_z();
-        int ny = grid_.get_local_total_points_y();
-        int nx = grid_.get_local_total_points_x();
-        int h = grid_.get_halo_cells();
-
-        auto& th_perturb = state_.get_field<3>("th_perturb").get_mutable_device_data();
-        auto seed = state_.get_step();
-        using GeneratorPool = Kokkos::Random_XorShift64_Pool<>;
-        GeneratorPool rand_pool(seed);
-        using PolicyType = Kokkos::MDRangePolicy<Kokkos::Rank<3>>;
-        PolicyType policy({0, 0, 0}, {nz, ny, nx});
-        Kokkos::parallel_for("fill_random", policy, 
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                auto gen = rand_pool.get_state();
-                th_perturb(k, j, i) = gen.drand(-1.0, 1.0);
-                rand_pool.free_state(gen);
-            });
-        Kokkos::fence();
-
-        auto& th = state_.get_field<3>("th").get_mutable_device_data();
-        Kokkos::parallel_for("Add_perturb",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({{h, h, h}}, {{h+4, ny-h, nx-h}}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                th(k,j,i) += th_perturb(k,j,i);
-            }
-        );
-    }
-
     size_t current_step = state_.get_step();
     // Caculate tendencies of thermodynamics variables
     dycore_->calculate_thermo_tendencies();
@@ -118,6 +94,10 @@ void Model::run_step(double dt) {
 
     // Update thermodynamics variables using tendencies above
     dycore_->update_thermodynamics(dt);
+
+    if (random_forcing_) {
+        random_forcing_->apply(state_);
+    }
 
     // P3 Microphysics based on (t+1) thermodynamics variables
     if (microphysics_) {

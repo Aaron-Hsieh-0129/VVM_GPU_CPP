@@ -152,7 +152,8 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
 
     // Initialize p3
     bool is_root = (grid_.get_mpi_rank() == 0);
-    m_lookup_tables = P3F::p3_init(/* write_tables = */ true, is_root);
+    bool make_lookup_table = config_.get_value<bool>("physics.p3.make_lookup_table", false);
+    m_lookup_tables = P3F::p3_init(make_lookup_table, is_root);
 
 
     // This section ties the variables in m_prog_state/m_diag_inputs/m_diag_outputs with m_variables --Prognostic State Variables: m_prog_state.qc = m_qc_view; m_prog_state.nc = m_nc_view; m_prog_state.qr = m_qr_view;

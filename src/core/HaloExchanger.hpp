@@ -68,6 +68,8 @@ private:
     int neighbor_left_, neighbor_right_;
     int neighbor_bottom_, neighbor_top_;
 
+    bool is_single_rank_;
+
     std::set<std::string> enabled_graph_vars_;
 
     std::map<std::string, cudaGraphExec_t> graph_map_;
@@ -90,6 +92,8 @@ inline HaloExchanger::HaloExchanger(const Utils::ConfigurationManager& config, c
       stream_(stream),
       exec_space_(stream)
 {
+    is_single_rank_ = (grid.get_mpi_size() == 1);
+
     if (config.has_key("optimization.cuda_graph_halo_exchange")) {
         auto vars = config.get_value<std::vector<std::string>>("optimization.cuda_graph_halo_exchange");
         enabled_graph_vars_.insert(vars.begin(), vars.end());
@@ -224,6 +228,78 @@ void HaloExchanger::exchange_halos_impl(Field<Dim>& field, int depth) const {
     auto data = field.get_mutable_device_data();
     const int nx_phys = grid_ref_.get_local_physical_points_x();
     const int ny_phys = grid_ref_.get_local_physical_points_y();
+
+    if (is_single_rank_) {
+        // X-Direction Periodic Copy
+        // Left Halo (start-h .. start) <== Right Phys (start+nx_phys-h .. start+nx_phys)
+        // Right Halo (start+nx_phys .. end) <== Left Phys (start .. start+h)
+        if constexpr (Dim == 2) {
+            const int ny = data.extent(0);
+            Kokkos::parallel_for("local_copy_x_2d", Kokkos::MDRangePolicy<Kokkos::Rank<2>, ExecSpace>(exec_space_, {0,0}, {ny, h}),
+                KOKKOS_LAMBDA(int j, int i_h) {
+                    // Left Halo gets Right Physical
+                    data(j, halo_start_offset - h + i_h) = data(j, halo_start_offset + nx_phys - h + i_h);
+                    // Right Halo gets Left Physical
+                    data(j, halo_start_offset + nx_phys + i_h) = data(j, halo_start_offset + i_h);
+            });
+        }
+        else if constexpr (Dim == 3) {
+            const int nz = data.extent(0);
+            const int ny = data.extent(1);
+            Kokkos::parallel_for("local_copy_x_3d", Kokkos::MDRangePolicy<Kokkos::Rank<3>, ExecSpace>(exec_space_, {0,0,0}, {nz, ny, h}),
+                KOKKOS_LAMBDA(int k, int j, int i_h) {
+                    // Left Halo gets Right Physical
+                    data(k, j, halo_start_offset - h + i_h) = data(k, j, halo_start_offset + nx_phys - h + i_h);
+                    // Right Halo gets Left Physical
+                    data(k, j, halo_start_offset + nx_phys + i_h) = data(k, j, halo_start_offset + i_h);
+            });
+        }
+        else if constexpr (Dim == 4) {
+            const int nw = data.extent(0);
+            const int nz = data.extent(1);
+            const int ny = data.extent(2);
+            Kokkos::parallel_for("local_copy_x_4d", Kokkos::MDRangePolicy<Kokkos::Rank<4>, ExecSpace>(exec_space_, {0,0,0,0}, {nw, nz, ny, h}),
+                KOKKOS_LAMBDA(int w, int k, int j, int i_h) {
+                    data(w, k, j, halo_start_offset - h + i_h) = data(w, k, j, halo_start_offset + nx_phys - h + i_h);
+                    data(w, k, j, halo_start_offset + nx_phys + i_h) = data(w, k, j, halo_start_offset + i_h);
+            });
+        }
+
+        // Y-Direction Periodic Copy
+        // Bottom Halo <== Top Phys
+        // Top Halo <== Bottom Phys
+        if constexpr (Dim == 2) {
+            const int nx = data.extent(1);
+            Kokkos::parallel_for("local_copy_y_2d", Kokkos::MDRangePolicy<Kokkos::Rank<2>, ExecSpace>(exec_space_, {0,0}, {nx, h}),
+                KOKKOS_LAMBDA(int i, int j_h) {
+                    // Bottom Halo gets Top Physical
+                    data(halo_start_offset - h + j_h, i) = data(halo_start_offset + ny_phys - h + j_h, i);
+                    // Top Halo gets Bottom Physical
+                    data(halo_start_offset + ny_phys + j_h, i) = data(halo_start_offset + j_h, i);
+            });
+        } 
+        else if constexpr (Dim == 3) {
+            const int nz = data.extent(0);
+            const int nx = data.extent(2);
+            Kokkos::parallel_for("local_copy_y_3d", Kokkos::MDRangePolicy<Kokkos::Rank<3>, ExecSpace>(exec_space_, {0,0,0}, {nz, nx, h}),
+                KOKKOS_LAMBDA(int k, int i, int j_h) {
+                    data(k, halo_start_offset - h + j_h, i) = data(k, halo_start_offset + ny_phys - h + j_h, i);
+                    data(k, halo_start_offset + ny_phys + j_h, i) = data(k, halo_start_offset + j_h, i);
+            });
+        }
+        else if constexpr (Dim == 4) {
+            const int nw = data.extent(0);
+            const int nz = data.extent(1);
+            const int nx = data.extent(3);
+            Kokkos::parallel_for("local_copy_y_4d", Kokkos::MDRangePolicy<Kokkos::Rank<4>, ExecSpace>(exec_space_, {0,0,0,0}, {nw, nz, nx, h}),
+                KOKKOS_LAMBDA(int w, int k, int i, int j_h) {
+                    data(w, k, halo_start_offset - h + j_h, i) = data(w, k, halo_start_offset + ny_phys - h + j_h, i);
+                    data(w, k, halo_start_offset + ny_phys + j_h, i) = data(w, k, halo_start_offset + j_h, i);
+            });
+        }
+        
+        return; // Skip the rest of NCCL/MPI logic
+    }
     
     const int neighbor_left = neighbor_left_;
     const int neighbor_right = neighbor_right_;
