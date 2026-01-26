@@ -48,8 +48,8 @@ void SpongeLayer::initialize(Core::State& state) {
     if (!state.has_field("CGR_vort")) state.add_field<1>("CGR_vort", {nz});
 
     auto& CRAD = CRAD_;
-    CRAD = 1. / config_.get_value<double>("dynamics.filters.sponge_layer.inv_CRAD", -1.);
-    double sponge_layer_base = config_.get_value<double>("dynamics.filters.sponge_layer.sponge_layer_base", -1);
+    CRAD = 1. / config_.get_value<double>("dynamics.forcings.sponge_layer.inv_CRAD", -1.);
+    double sponge_layer_base = config_.get_value<double>("dynamics.forcings.sponge_layer.sponge_layer_base", -1);
 
     auto& k_start_thermo = k_start_thermo_;
     for (int k = nz-h; k > h; k--) {

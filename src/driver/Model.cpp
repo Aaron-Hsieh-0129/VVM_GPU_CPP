@@ -33,8 +33,12 @@ Model::Model(const Utils::ConfigurationManager& config,
         rad_freq_in_steps_ = config_.get_value<int>("physics.rrtmgp.rad_frequency_step", 1);
     }
 
-    if (config_.get_value<bool>("dynamics.filters.sponge_layer.enable", false)) {
+    if (config_.get_value<bool>("dynamics.forcings.sponge_layer.enable", false)) {
         sponge_layer_ = std::make_unique<Dynamics::SpongeLayer>(config_, grid_, params_, halo_exchanger_, state_);
+    }
+
+    if (config_.get_value<bool>("dynamics.forcings.random_perturbation.enable", false)) {
+        random_forcing_ = std::make_unique<Dynamics::RandomForcing>(config_, grid_, params_);
     }
     dynamics_vars_ = {"xi", "eta", "zeta"};
     thermodynamics_vars_ = {"th", "qv"};
@@ -57,10 +61,17 @@ void Model::init() {
     if (radiation_) radiation_->initialize(state_);
     if (sponge_layer_) sponge_layer_->initialize(state_);
     if (surface_) surface_->initialize(state_);
+    if (random_forcing_) random_forcing_->initialize(state_);
     
     halo_exchanger_.exchange_halos(state_);
     
     if (rank == 0) std::cout << "=== Model Initialization Complete ===\n" << std::endl;
+
+    int nz = grid_.get_local_total_points_z();
+    int ny = grid_.get_local_total_points_y();
+    int nx = grid_.get_local_total_points_x();
+    int h = grid_.get_halo_cells();
+    if (!state_.has_field("th_perturb")) state_.add_field<3>("th_perturb", {nz, ny, nx});
 }
 
 void Model::run_step(double dt) {
@@ -83,6 +94,10 @@ void Model::run_step(double dt) {
 
     // Update thermodynamics variables using tendencies above
     dycore_->update_thermodynamics(dt);
+
+    if (random_forcing_) {
+        random_forcing_->apply(state_);
+    }
 
     // P3 Microphysics based on (t+1) thermodynamics variables
     if (microphysics_) {

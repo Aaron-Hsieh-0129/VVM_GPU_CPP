@@ -26,7 +26,7 @@
         }
     },
     "output": {
-        "output_dir": "/home/mog/Aaron/VVM_GPU_CPP_dev/output/profile_test",
+        "output_dir": "/home/mog/Aaron/VVM_GPU_CPP_dev/output/surface_flux",
         "enable_netcdf": true,
         "output_filename_prefix": "vvm_output",
         "fields_to_output": [
@@ -55,11 +55,19 @@
             "iteration": 200,
             "WRXMU": 2.5e-7
         },
-        "filters": {
+        "forcings": {
             "sponge_layer": {
                 "enable": true,
                 "sponge_layer_base": 13000.0,
                 "inv_CRAD": 3600.0
+            },
+            "random_perturbation": {
+                "enable": false,
+                "time_s": 50,
+                "amplitude": 1,
+                "z_start_m": 0,
+                "z_end_m": 2000,
+                "random_seed": 1116
             }
         },
         "prognostic_variables": {
@@ -240,6 +248,7 @@
     "physics": {
         "p3": {
             "enable_p3": false,
+            "make_lookup_table": false,
             "do_predict_nc": true,
             "do_prescribed_ccn": false,
             "max_total_ni": 740.0e3
@@ -249,8 +258,8 @@
             "column_chunk_size": 512,
             "rad_frequency_step": 120,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
-            "fixed_total_solar_irradiance": 340,
-            "fixed_solar_zenith_angle": -9999,
+            "fixed_total_solar_irradiance": 551.58,
+            "fixed_solar_zenith_angle": 0.74256,
             "pool_size_multiplier": 1.933
         },
         "turbulence": {
