@@ -7,7 +7,8 @@
 #include "core/Initializer.hpp"
 #include "core/BoundaryConditionManager.hpp"
 #include "dynamics/temporal_schemes/TimeIntegrator.hpp"
-#include "dynamics/filters/SpongeLayer.hpp"
+#include "dynamics/forcings/SpongeLayer.hpp"
+#include "dynamics/forcings/RandomForcing.hpp"
 #include <set>
 
 namespace VVM {
@@ -43,6 +44,7 @@ private:
     std::unique_ptr<Physics::SurfaceProcess> surface_;
     std::unique_ptr<Physics::RRTMGP::RRTMGPRadiation> radiation_;
     std::unique_ptr<Dynamics::SpongeLayer> sponge_layer_;
+    std::unique_ptr<Dynamics::RandomForcing> random_forcing_;
 
     int rad_freq_in_steps_;
     int surface_freq_in_steps_;

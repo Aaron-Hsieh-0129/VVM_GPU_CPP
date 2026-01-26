@@ -15,6 +15,10 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "NVHPC")
     set(CMAKE_DEPFILE_FLAGS_CXX "")
     set(CMAKE_DEPFILE_FLAGS_C "")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -mp" CACHE STRING "CUDA OpenMP flags" FORCE)
+
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -use_fast_math" CACHE STRING "CUDA flags" FORCE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fast" CACHE STRING "CXX flags" FORCE)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fast" CACHE STRING "C flags" FORCE)
 endif()
 
 add_compile_definitions(EAMXX_ENABLE_GPU)
@@ -52,7 +56,6 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "NVHPC")
     set(Kokkos_CUDA_OPTIONS "enable_lambda;enable_ldg" CACHE STRING "Kokkos CUDA options" FORCE)
 endif()
 
-set(SCREAM_DOUBLE_PRECISIION ON CACHE BOOL "Enable scream double precision" FORCE)
 option(BUILD_TESTS "Build the unit and integration tests" OFF)
 message(STATUS "Build tests: ${BUILD_TESTS}")
 
@@ -62,7 +65,7 @@ message(STATUS "Build tests: ${BUILD_TESTS}")
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -ffree-line-length-none -fdefault-real-8 -fdefault-double-8 -Wno-line-truncation -Wno-argument-mismatch")
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
-    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -Mallocatable=03 -Mdclchk -Mfreeform -Mextend")
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -Mallocatable=03 -Mdclchk -Mfreeform -Mextend -fast")
 endif()
 
 # ------------------------------
