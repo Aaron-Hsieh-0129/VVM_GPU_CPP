@@ -61,9 +61,44 @@ void Model::init() {
     halo_exchanger_.exchange_halos(state_);
     
     if (rank == 0) std::cout << "=== Model Initialization Complete ===\n" << std::endl;
+
+    int nz = grid_.get_local_total_points_z();
+    int ny = grid_.get_local_total_points_y();
+    int nx = grid_.get_local_total_points_x();
+    int h = grid_.get_halo_cells();
+    if (!state_.has_field("th_perturb")) state_.add_field<3>("th_perturb", {nz, ny, nx});
 }
 
 void Model::run_step(double dt) {
+    if (state_.get_time() < 50) {
+        int nz = grid_.get_local_total_points_z();
+        int ny = grid_.get_local_total_points_y();
+        int nx = grid_.get_local_total_points_x();
+        int h = grid_.get_halo_cells();
+
+        auto& th_perturb = state_.get_field<3>("th_perturb").get_mutable_device_data();
+        auto seed = state_.get_step();
+        using GeneratorPool = Kokkos::Random_XorShift64_Pool<>;
+        GeneratorPool rand_pool(seed);
+        using PolicyType = Kokkos::MDRangePolicy<Kokkos::Rank<3>>;
+        PolicyType policy({0, 0, 0}, {nz, ny, nx});
+        Kokkos::parallel_for("fill_random", policy, 
+            KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                auto gen = rand_pool.get_state();
+                th_perturb(k, j, i) = gen.drand(-1.0, 1.0);
+                rand_pool.free_state(gen);
+            });
+        Kokkos::fence();
+
+        auto& th = state_.get_field<3>("th").get_mutable_device_data();
+        Kokkos::parallel_for("Add_perturb",
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({{h, h, h}}, {{h+4, ny-h, nx-h}}),
+            KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                th(k,j,i) += th_perturb(k,j,i);
+            }
+        );
+    }
+
     size_t current_step = state_.get_step();
     // Caculate tendencies of thermodynamics variables
     dycore_->calculate_thermo_tendencies();
