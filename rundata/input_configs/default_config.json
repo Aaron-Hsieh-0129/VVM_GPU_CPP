@@ -1,23 +1,23 @@
 {
     "grid": {
-        "nx": 256,
-        "ny": 256,
+        "nx": 32,
+        "ny": 32,
         "nz": 33,
         "n_halo_cells": 2,
-        "dx": 2000.0,
-        "dy": 2000.0,
+        "dx": 500.0,
+        "dy": 500.0,
         "dz": 500.0,
         "dz1": 100.0
     },
     "simulation": {
-        "total_time_s": 1000.0,
-        "dt_s": 5.0,
-        "output_interval_s": 50.0
+        "total_time_s": 200.0,
+        "dt_s": 1.0,
+        "output_interval_s": 1.0
     },
     "initial_conditions": {
         "format": "txt",
         "source_file": "/home/mog/Aaron/VVM_GPU_CPP_dev/rundata/initial_conditions/profile_p3.txt",
-        "perturbation": "none"
+        "perturbation": "bubble"
     },
     "netcdf_reader": {
         "source_file": "/home/mog/Aaron/VVM_GPU_CPP_dev/rundata/TOPO.nc",
@@ -52,14 +52,22 @@
         "solver": {
             "w_solver_method": "tridiagonal",
             "_w_solver_method_options": "Choose 'tridiagonal' (original) or 'jacobi' (3D parallel)",
-            "iteration": 50,
+            "iteration": 200,
             "WRXMU": 2.5e-7
         },
-        "filters": {
+        "forcings": {
             "sponge_layer": {
                 "enable": true,
                 "sponge_layer_base": 13000.0,
                 "inv_CRAD": 3600.0
+            },
+            "random_perturbation": {
+                "enable": false,
+                "time_s": 50,
+                "amplitude": 1,
+                "z_start_m": 0,
+                "z_end_m": 2000,
+                "random_seed": 1116
             }
         },
         "prognostic_variables": {
@@ -239,13 +247,14 @@
     },
     "physics": {
         "p3": {
-            "enable_p3": true,
+            "enable_p3": false,
+            "make_lookup_table": false,
             "do_predict_nc": true,
             "do_prescribed_ccn": false,
             "max_total_ni": 740.0e3
         },
         "rrtmgp": {
-            "enable_rrtmgp": true,
+            "enable_rrtmgp": false,
             "column_chunk_size": 512,
             "rad_frequency_step": 120,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
