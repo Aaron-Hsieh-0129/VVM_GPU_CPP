@@ -30,7 +30,6 @@ void SurfaceProcess::initialize(Core::State& state) {
     if (!state.has_field("sfc_flux_u"))  state.add_field<2>("sfc_flux_u", {ny, nx});
     if (!state.has_field("sfc_flux_v"))  state.add_field<2>("sfc_flux_v", {ny, nx});
     
-    if (!state.has_field("Tg")) state.add_field<2>("Tg", {ny, nx}); // Surface Temperature (K)
     if (!state.has_field("gwet")) state.add_field<2>("gwet", {ny, nx}); // Surface Wetness
     if (!state.has_field("zrough")) state.add_field<2>("zrough", {ny, nx}); // Roughness Length
     if (!state.has_field("VEN2D")) state.add_field<2>("VEN2D", {ny, nx}); // Roughness Length
