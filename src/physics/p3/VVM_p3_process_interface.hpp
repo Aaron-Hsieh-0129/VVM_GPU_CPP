@@ -175,8 +175,8 @@ struct p3_preamble {
     view_2d       diag_eff_radius_qc;
     view_2d       diag_eff_radius_qi;
     view_2d       diag_eff_radius_qr;
-    view_1d_const precip_liq_surf_flux;
-    view_1d_const precip_ice_surf_flux;
+    view_1d       precip_liq_surf_flux;
+    view_1d       precip_ice_surf_flux;
     view_1d       precip_liq_surf_mass;
     view_1d       precip_ice_surf_mass;
     P3F::P3Runtime runtime_opts;
