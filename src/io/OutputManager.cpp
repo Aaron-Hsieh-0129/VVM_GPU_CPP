@@ -5,7 +5,6 @@
 #include <Kokkos_Core.hpp> 
 #include <algorithm>
 #include <unordered_set>
-#include <filesystem>
 
 namespace VVM {
 namespace IO {
@@ -37,11 +36,12 @@ OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VV
     if (rank_ == 0) std::cout << "  [OutputManager] Config loaded. Creating directory..." << std::endl;
 
     if (rank_ == 0) {
-        std::error_code ec;
-        if (!std::filesystem::create_directories(output_dir_, ec)) {
-            if (ec) {
-                std::cerr << "  [OutputManager] Failed to create directory " << output_dir_ 
-                          << ": " << ec.message() << std::endl;
+        if (!output_dir_.empty()) {
+            std::string cmd = "mkdir -p " + output_dir_;
+            int ret = system(cmd.c_str());
+            if (ret != 0) {
+                std::cerr << "  [OutputManager] Warning: Failed to create directory using system command: " 
+                          << output_dir_ << std::endl;
             }
         }
     }

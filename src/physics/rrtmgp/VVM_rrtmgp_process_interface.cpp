@@ -392,13 +392,15 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 int iy = col_idx / nx;
 
                 for (int k = 0; k < nlay_local; ++k) {
-                    buffer.p_lay_k(i, k) = pbar(k + halo); 
-                    buffer.t_lay_k(i, k) = th(k + halo, iy + halo, ix + halo) * pibar(k + halo);
-                    buffer.qc_k(i, k) = qc(k + halo, iy + halo, ix + halo);
-                    buffer.nc_k(i, k) = nc(k + halo, iy + halo, ix + halo);
-                    buffer.qi_k(i, k) = qi(k + halo, iy + halo, ix + halo);
-                    buffer.eff_radius_qc_k(i,k) = diag_eff_radius_qc(k+halo, iy+halo, ix+halo);
-                    buffer.eff_radius_qi_k(i,k) = diag_eff_radius_qi(k+halo, iy+halo, ix+halo);
+                    int k_vvm = (nlay_local - 1) - k + halo;
+
+                    buffer.p_lay_k(i, k) = pbar(k_vvm); 
+                    buffer.t_lay_k(i, k) = th(k_vvm, iy + halo, ix + halo) * pibar(k_vvm);
+                    buffer.qc_k(i, k) = qc(k_vvm, iy + halo, ix + halo);
+                    buffer.nc_k(i, k) = nc(k_vvm, iy + halo, ix + halo);
+                    buffer.qi_k(i, k) = qi(k_vvm, iy + halo, ix + halo);
+                    buffer.eff_radius_qc_k(i,k) = diag_eff_radius_qc(k_vvm, iy+halo, ix+halo);
+                    buffer.eff_radius_qi_k(i,k) = diag_eff_radius_qi(k_vvm, iy+halo, ix+halo);
 
                     
 
@@ -411,14 +413,13 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 }
                 
                 for (int k = 0; k <= nlay_local; ++k) {
-                     buffer.p_lev_k(i, k) = pbar_up(k+halo); 
+                    int k_vvm = nlay_local - k + halo;
+                    buffer.p_lev_k(i, k) = pbar_up(k_vvm); 
                 }
                 
                 for (int k = 0; k < nlay_local; ++k) {
-                    buffer.p_del_k(i, k) = dpbar_mid(k+halo); 
-                }
-
-                for (int k = 0; k < nlay_local; ++k) {
+                    int k_vvm = (nlay_local - 1) - k + halo;
+                    buffer.p_del_k(i, k) = dpbar_mid(k_vvm); 
                     buffer.d_dz(i, k) = dz_mid(k+halo); 
                 }
 
@@ -464,12 +465,16 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
 
         // Convert kg/m2 to g/m2 as required by RRTMGP
         Kokkos::parallel_for("convert_cld_mass_units", Kokkos::RangePolicy<>(0, ncol),
-             KOKKOS_LAMBDA(int i) {
-                  for(int k=0; k<nlay; ++k) {
-                       buffer.lwp_k(i,k) *= 1e3;
-                       buffer.iwp_k(i,k) *= 1e3;
-                  }
-             });
+            KOKKOS_LAMBDA(int i) {
+                for(int k=0; k<nlay; ++k) {
+                    buffer.lwp_k(i,k) *= 1e3;
+                    buffer.iwp_k(i,k) *= 1e3;
+                    if (buffer.lwp_k(i,k) < 0) buffer.lwp_k(i,k) = 0.;
+                    if (buffer.iwp_k(i,k) < 0) buffer.iwp_k(i,k) = 0.;
+                       
+                }
+            }
+        );
 
         // Compute Band-by-Band Surface Albedos
         interface_t::compute_band_by_band_surface_albedos(
@@ -547,14 +552,16 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 int iy = col_idx / nx;
                 
                 for (int k = 0; k < nlay; ++k) {
+                    int k_vvm = (nlay - 1) - k + halo;
+
                     Real net_heating_val = buffer.sw_heating_k(i, k) + buffer.lw_heating_k(i, k); // K/s
                     // Update Potential Temperature (th = T / Pi)
                     // d(th)/dt = (dT/dt) / Pi
                     // th(k + halo, iy + halo, ix + halo) += net_heating_val * dt / pibar(k + halo);
 
-                    sw_heating(k + halo, iy + halo, ix + halo) = buffer.sw_heating_k(i, k);
-                    lw_heating(k + halo, iy + halo, ix + halo) = buffer.lw_heating_k(i, k);
-                    net_heating(k + halo, iy + halo, ix + halo) = net_heating_val;
+                    sw_heating(k_vvm, iy + halo, ix + halo) = buffer.sw_heating_k(i, k);
+                    lw_heating(k_vvm, iy + halo, ix + halo) = buffer.lw_heating_k(i, k);
+                    net_heating(k_vvm, iy + halo, ix + halo) = net_heating_val;
                 }
 
                 for (int k = 0; k <= nlay; ++k) {
@@ -562,9 +569,11 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                     Real net_sw = buffer.sw_flux_dn_k(i, k) - buffer.sw_flux_up_k(i, k);
                     // Net LW Flux (Down - Up)
                     Real net_lw = buffer.lw_flux_dn_k(i, k) - buffer.lw_flux_up_k(i, k);
+
+                    int k_vvm = nlay - k + halo;
                     if (k < nlay) {
-                        net_sw_flux(k + halo, iy + halo, ix + halo) = net_sw;
-                        net_lw_flux(k + halo, iy + halo, ix + halo) = net_lw;
+                        net_sw_flux(k_vvm, iy + halo, ix + halo) = net_sw;
+                        net_lw_flux(k_vvm, iy + halo, ix + halo) = net_lw;
                     }
                  }
         });

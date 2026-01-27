@@ -403,7 +403,8 @@ void VVM_P3_Interface::pack_3d_to_2d_packed(const VVMViewType& vvm_view, const P
                         [&](const int k_vec) {
                             const int k_phys = k_offset + k_vec;
                             if (k_phys < nz_phys) {
-                                pack[k_vec] = vvm_view(k_phys + halo_offset, 
+                                int k_vvm = (nz_phys - 1) - k_phys + halo_offset;
+                                pack[k_vec] = vvm_view(k_vvm + halo_offset, 
                                                            iy_phys + halo_offset, 
                                                            ix_phys + halo_offset);
                             } else {
@@ -439,7 +440,8 @@ void VVM_P3_Interface::unpack_2d_packed_to_3d(const P3ViewType& p3_view, VVMView
                         [&](const int k_vec) {
                             const int k_phys = k_offset + k_vec;
                             if (k_phys < nz_phys) {
-                                vvm_view(k_phys + halo_offset, 
+                                int k_vvm = (nz_phys - 1) - k_phys + halo_offset;
+                                vvm_view(k_vvm  + halo_offset, 
                                          iy_phys + halo_offset, 
                                          ix_phys + halo_offset) = pack[k_vec];
                             }
@@ -546,7 +548,7 @@ void VVM_P3_Interface::preprocessing_and_packing(VVM::Core::State& state) {
                     const int k_phys = k_offset + k_vec;
                     
                     if (k_phys < nz_phys) {
-                        const int k_vvm = k_phys + halo;
+                        int k_vvm = (nz_phys - 1) - k_phys + halo;
 
                         Real qv_in = qv_3d(k_vvm, iy_vvm, ix_vvm);
                         if (qv_in < 0) { qv_in = 0; qv_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
@@ -736,7 +738,7 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
                 Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, (int)Spack::n), [&](const int k_vec) {
                     const int k_phys = k_offset + k_vec;
                     if (k_phys < nz_phys) {
-                        const int k_vvm = k_phys + halo;
+                        int k_vvm = (nz_phys - 1) - k_phys + halo;
                         
                         if (ITYPEW(k_vvm, iy_vvm, ix_vvm) != 1) {
                             qc_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
