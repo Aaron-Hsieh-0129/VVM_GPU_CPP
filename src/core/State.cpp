@@ -41,7 +41,6 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<1>("f", {ny_total});
 
     // 2D field
-    add_field<2>("htflx_sfc", {ny_total, nx_total});
     add_field<2>("psi", {ny_total, nx_total});
     add_field<2>("psinm1", {ny_total, nx_total});
     add_field<2>("chi", {ny_total, nx_total});
@@ -50,6 +49,7 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<2>("vtop", {ny_total, nx_total});
     add_field<2>("tempu", {ny_total, nx_total});
     add_field<2>("tempv", {ny_total, nx_total});
+    add_field<2>("Tg", {ny_total, nx_total});
 
     // 3D field
     add_field<3>("th", {nz_total, ny_total, nx_total});
