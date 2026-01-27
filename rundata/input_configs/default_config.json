@@ -1,18 +1,18 @@
 {
     "grid": {
-        "nx": 32,
-        "ny": 32,
+        "nx": 128,
+        "ny": 128,
         "nz": 33,
         "n_halo_cells": 2,
-        "dx": 500.0,
-        "dy": 500.0,
+        "dx": 2000.0,
+        "dy": 2000.0,
         "dz": 500.0,
         "dz1": 100.0
     },
     "simulation": {
-        "total_time_s": 200.0,
-        "dt_s": 1.0,
-        "output_interval_s": 1.0
+        "total_time_s": 1500.0,
+        "dt_s": 5.0,
+        "output_interval_s": 50.0
     },
     "initial_conditions": {
         "format": "txt",
@@ -20,24 +20,23 @@
         "perturbation": "bubble"
     },
     "netcdf_reader": {
-        "source_file": "/home/mog/Aaron/VVM_GPU_CPP_dev/rundata/TOPO.nc",
+        "source_file": "/home/mog/Aaron/VVM_GPU_CPP_dev/rundata/init.nc",
         "variables_to_read": {
-            "2d": ["topo"]
+            "2d": ["topo", "Tg"]
         }
     },
     "output": {
-        "output_dir": "/home/mog/Aaron/VVM_GPU_CPP_dev/output/surface_flux",
+        "output_dir": "/home/mog/Aaron/VVM_GPU_CPP_dev/output/bubble",
         "enable_netcdf": true,
         "output_filename_prefix": "vvm_output",
         "fields_to_output": [
             "thbar", "pibar", "rhobar", "rhobar_up",
-            "htflx_sfc", "topo", "topou", "topov", "VEN2D",
             "u", "v", "w", "th", "xi", "eta", "zeta",
             "qv", "qc", "qr", "qi",
             "sw_heating", "lw_heating", "net_heating",
             "net_sw_flux", "net_lw_flux",
             "precip_liq_surf_flux", "precip_ice_surf_flux",
-            "sfc_flux_th"
+            "sfc_flux_th", "sfc_flux_qv"
         ],
         "output_grid": {
             "x_start": 0,
@@ -52,7 +51,7 @@
         "solver": {
             "w_solver_method": "tridiagonal",
             "_w_solver_method_options": "Choose 'tridiagonal' (original) or 'jacobi' (3D parallel)",
-            "iteration": 200,
+            "iteration": 50,
             "WRXMU": 2.5e-7
         },
         "forcings": {
@@ -62,8 +61,8 @@
                 "inv_CRAD": 3600.0
             },
             "random_perturbation": {
-                "enable": false,
-                "time_s": 50,
+                "enable": true,
+                "time_s": 200,
                 "amplitude": 1,
                 "z_start_m": 0,
                 "z_end_m": 2000,
@@ -247,14 +246,14 @@
     },
     "physics": {
         "p3": {
-            "enable_p3": false,
+            "enable_p3": true,
             "make_lookup_table": false,
             "do_predict_nc": true,
             "do_prescribed_ccn": false,
             "max_total_ni": 740.0e3
         },
         "rrtmgp": {
-            "enable_rrtmgp": false,
+            "enable_rrtmgp": true,
             "column_chunk_size": 512,
             "rad_frequency_step": 120,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
