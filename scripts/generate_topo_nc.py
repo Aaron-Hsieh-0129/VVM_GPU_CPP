@@ -2,52 +2,77 @@ import numpy as np
 import netCDF4
 import os
 
-filename = '../rundata/TOPO.nc' 
+FILENAME = '../rundata/init.nc'
+NZ, NY, NX = 33, 128, 128
+DX, DY = 500.0, 500.0
 
-nz, ny, nx = 33, 256, 256
-DX = 500.0
-DY = 500.0
+os.makedirs(os.path.dirname(FILENAME), exist_ok=True)
 
-variable_name = 'topo'
+def get_topo_data(ny, nx):
+    topo = np.zeros((ny, nx), dtype='i4')
+    return topo
 
-z_levels = np.array([
-    46, 160, 301, 470, 667, 891, 1143, 1422, 1729, 2063, 2425, 2815, 
-    3232, 3677, 4150, 4650, 5177, 5732, 6315, 6925, 7563, 8229, 8922, 
-    9643, 10391, 11167, 11970, 12801, 13660, 14546, 15460, 16401, 17370
-])
+def get_tg_data(ny, nx, value=305.0):
+    return np.full((ny, nx), value, dtype='f4')
 
-center_y = ny // 2
-center_x = nx // 2
+def get_z_levels():
+    return np.array([
+        46, 160, 301, 470, 667, 891, 1143, 1422, 1729, 2063, 2425, 2815, 
+        3232, 3677, 4150, 4650, 5177, 5732, 6315, 6925, 7563, 8229, 8922, 
+        9643, 10391, 11167, 11970, 12801, 13660, 14546, 15460, 16401, 17370
+    ], dtype='f4')
 
-h_max = 10000.0
-radius_m = 10000.0
+variables_config = {
+    'topo': {
+        'data': get_topo_data(NY, NX),
+        'dims': ('ny', 'nx'),
+        'units': 'index',
+        'desc': '2D terrain height as a z-index',
+        'dtype': 'i4'
+    },
+    'Tg': {
+        'data': get_tg_data(NY, NX, value=305.0),
+        'dims': ('ny', 'nx'),
+        'units': 'K',
+        'desc': 'Ground Surface Temperature',
+        'dtype': 'f8'
+    },
+    # 'Psfc': {
+    #     'data': np.full((NY, NX), 101325.0),
+    #     'dims': ('ny', 'nx'),
+    #     'units': 'Pa',
+    #     'desc': 'Surface Pressure',
+    #     'dtype': 'f4'
+    # }
+}
 
-radius_x_grid = radius_m / DX
-radius_y_grid = radius_m / DY
+def write_netcdf(filename, vars_config, dims_size):
+    try:
+        with netCDF4.Dataset(filename, 'w', format='NETCDF4') as ncfile:
+            print(f"Writing File: {filename}")
 
-y = np.arange(ny)
-x = np.arange(nx)
-xx, yy = np.meshgrid(x, y)
+            for dim_name, size in dims_size.items():
+                ncfile.createDimension(dim_name, size)
+            
+            for var_name, info in vars_config.items():
+                var = ncfile.createVariable(
+                    var_name, 
+                    info['dtype'], 
+                    info['dims']
+                )
+                
+                var.units = info.get('units', '')
+                var.description = info.get('desc', '')
+                
+                var[:] = info['data']
+                
+                print(f"  -> Written: {var_name} ({info['dims']})")
+                
+        print("Finished")
 
-topo_index = np.zeros((ny, nx))
-# topo_index[center_y-6:center_y+6, center_x-15:center_x+15] = 15
-# topo_index[1:4, 1:4] = 15
-# topo_index[6:9, 1:4] = 15
-# topo_index[1:4, 6:9] = 15
-# topo_index[6:9, 6:9] = 15
+    except Exception as e:
+        print(f"\n[Error] Fail to write: {e}")
 
-try:
-    with netCDF4.Dataset(filename, 'w', format='NETCDF4') as ncfile:
-        
-        ncfile.createDimension('nz', nz) 
-        ncfile.createDimension('ny', ny)
-        ncfile.createDimension('nx', nx)
-        
-        var = ncfile.createVariable(variable_name, 'i4', ('ny', 'nx'))
-        var.description = '2D terrain height as a z-index (dx=500m, nx=256, r=4km)'
-        var.units = 'index'
-        
-        var[:] = topo_index
-
-except Exception as e:
-    print(f"\n{e}")
+if __name__ == "__main__":
+    dimensions = {'nz': NZ, 'ny': NY, 'nx': NX}
+    write_netcdf(FILENAME, variables_config, dimensions)

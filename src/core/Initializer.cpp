@@ -390,31 +390,6 @@ void Initializer::assign_vars() const {
             f(j) = 2. * OMEGA * Kokkos::sin(lat(j) * PI / 180.);
         }
     );
-
-
-    // WARNING: This is the test of horizontal mean
-    auto& htflx_sfc = state_.get_field<2>("htflx_sfc");
-    auto htflx_sfc_mutable = htflx_sfc.get_mutable_device_data();
-
-    Kokkos::parallel_for("InitHeatFluxField",
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, nx}),
-        KOKKOS_LAMBDA(const int j, const int i) {
-            htflx_sfc_mutable(j, i) = static_cast<double>(100 * rank + 10 * j + i);
-        }
-    );
-
-#ifdef NCCL
-    Kokkos::View<double> heat_flux_mean("heat_flux_mean");
-    state_.calculate_horizontal_mean(htflx_sfc, heat_flux_mean);
-#else
-    auto heat_flux_mean = state_.calculate_horizontal_mean(htflx_sfc);
-#endif
-    Kokkos::View<double, Kokkos::HostSpace> h_heat_flux_mean("h_heat_flux_mean");
-    Kokkos::deep_copy(h_heat_flux_mean, heat_flux_mean);
-    
-    if (rank == 0) {
-        std::cout << "Average of heat flux is: " << h_heat_flux_mean() << std::endl;
-    }
     return;
 }
 
