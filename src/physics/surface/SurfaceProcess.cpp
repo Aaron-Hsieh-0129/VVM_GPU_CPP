@@ -30,11 +30,11 @@ void SurfaceProcess::initialize(Core::State& state) {
     if (!state.has_field("sfc_flux_u"))  state.add_field<2>("sfc_flux_u", {ny, nx});
     if (!state.has_field("sfc_flux_v"))  state.add_field<2>("sfc_flux_v", {ny, nx});
     
-    if (!state.has_field("tg")) state.add_field<2>("tg", {ny, nx}); // Surface Temperature (K)
+    if (!state.has_field("Tg")) state.add_field<2>("Tg", {ny, nx}); // Surface Temperature (K)
     if (!state.has_field("gwet")) state.add_field<2>("gwet", {ny, nx}); // Surface Wetness
     if (!state.has_field("zrough")) state.add_field<2>("zrough", {ny, nx}); // Roughness Length
     if (!state.has_field("VEN2D")) state.add_field<2>("VEN2D", {ny, nx}); // Roughness Length
-    Kokkos::deep_copy(state.get_field<2>("tg").get_mutable_device_data(), 300.);
+    Kokkos::deep_copy(state.get_field<2>("Tg").get_mutable_device_data(), 305.);
     Kokkos::deep_copy(state.get_field<2>("gwet").get_mutable_device_data(), 0.8);
     Kokkos::deep_copy(state.get_field<2>("zrough").get_mutable_device_data(), 2e-4);
     
@@ -163,7 +163,7 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
     const auto& thbar = state.get_field<1>("thbar").get_device_data();
     const auto& flex_height_coef_mid = params_.flex_height_coef_mid.get_device_data();
 
-    const auto& tg = state.get_field<2>("tg").get_device_data();
+    const auto& Tg = state.get_field<2>("Tg").get_device_data();
     const auto& gwet = state.get_field<2>("gwet").get_device_data();
     const auto& zrough = state.get_field<2>("zrough").get_device_data();
 
@@ -204,16 +204,16 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
                             Kokkos::pow(v(hxp,j-1,i) + v(hxp,j,i), 2)
                          );
 
-            double es1 = compute_es(tg(j, i)); 
+            double es1 = compute_es(Tg(j, i)); 
             double qsfc = es1 * 0.622 / (pbar(hx1) - es1);
-            double ts = cp * tg(j, i) + grav() * z_up(hx1); 
+            double ts = cp * Tg(j, i) + grav() * z_up(hx1); 
 
             double Q = qv(hxp, j, i) + qc(hxp, j, i) + qi(hxp, j, i);
             double T = cp * th(hxp, j, i) * pibar(hxp) 
                          - hlf * qc(hxp, j, i)
                          + grav() * z_mid(hxp)
                          - (hlf + hlm) * qi(hxp, j, i);
-            double thvsm = tg(j,i) / pibar(hx1) - th(hxp,j,i) + 
+            double thvsm = Tg(j,i) / pibar(hx1) - th(hxp,j,i) + 
                            Kokkos::abs(gwet(j,i))*thbar(hxp) * (delta * (qsfc-qv(hxp,j,i)));
 
             double sigmau = 0.0;
