@@ -81,7 +81,6 @@ void SpongeLayer::initialize(Core::State& state) {
             CGR_thermo(k) = CRAD*(z_mid(k)-z_mid(k_start_thermo-1))/(z_mid(nz-h-1)-z_mid(k_start_thermo-1));
         }
     );
-    state.get_field<1>("CGR_thermo").print_profile(grid_, 0, 0, 0);
     
     auto& CGR_vort = state.get_field<1>("CGR_vort").get_mutable_device_data();
     Kokkos::parallel_for("assign_coefficient", Kokkos::RangePolicy<>(k_start_vort, nz-h-1),
@@ -91,7 +90,6 @@ void SpongeLayer::initialize(Core::State& state) {
             CGR_vort(k) = CRAD*(z_up(k)-z_mid(k_start_thermo-1))/(z_mid(nz-h-1)-z_mid(k_start_thermo-1));
         }
     );
-    state.get_field<1>("CGR_vort").print_profile(grid_, 0, 0, 0);
 }
 
 template<size_t Dim>
