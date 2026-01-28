@@ -129,6 +129,7 @@ public:
     Real m_f12vmr;
     Real m_n2vmr;
     Real m_covmr;
+    Real m_o3vmr;
 
     // Radiation Frequency
     int m_rad_freq_in_steps;

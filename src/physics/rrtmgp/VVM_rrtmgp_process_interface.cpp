@@ -96,6 +96,7 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
     m_f12vmr     = m_config.get_value<double>("physics.rrtmgp.f12vmr", 531.2820e-12);
     m_n2vmr      = m_config.get_value<double>("physics.rrtmgp.n2vmr", 0.7906);
     m_covmr      = m_config.get_value<double>("physics.rrtmgp.covmr", 1.0e-7);
+    m_o3vmr      = m_config.get_value<double>("physics.rrtmgp.o3vmr", 0.48e-7);
 
     // Whether or not to do MCICA subcolumn sampling
     m_do_subcol_sampling = m_config.get_value<bool>("do_subcol_sampling",true);
@@ -420,7 +421,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 for (int k = 0; k < nlay_local; ++k) {
                     int k_vvm = (nlay_local - 1) - k + halo;
                     buffer.p_del_k(i, k) = dpbar_mid(k_vvm); 
-                    buffer.d_dz(i, k) = dz_mid(k+halo); 
+                    buffer.d_dz(i, k) = dz_mid(k_vvm); 
                 }
 
                 // Initialize Broadband Surface Albedo  (TODO: Get from State)
@@ -498,7 +499,8 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                         int ix = col_idx % nx;
                         int iy = col_idx / nx;
                         for (int k = 0; k < nlay; ++k) {
-                            Real qv_val = qv(k + halo, iy + halo, ix + halo);
+                            int k_vvm = (nlay - 1) - k + halo;
+                            Real qv_val = qv(k_vvm, iy + halo, ix + halo);
                             vmr_view(i, k) = PF::calculate_vmr_from_mmr(gas_mol_weights(igas), qv_val, qv_val);
                         }
                     });
@@ -512,6 +514,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                  else if (name == "f12") pres_val = m_f12vmr;
                  else if (name == "n2")  pres_val = m_n2vmr;
                  else if (name == "co")  pres_val = m_covmr;
+                 else if (name == "o3")  pres_val = m_o3vmr;
                  Kokkos::deep_copy(vmr_view, pres_val);
              }
              m_gas_concs_k.set_vmr(name, vmr_view);
