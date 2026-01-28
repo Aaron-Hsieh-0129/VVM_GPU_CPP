@@ -104,7 +104,6 @@ void VVM_P3_Interface::allocate_p3_buffers() {
     m_precip_ice_surf_mass_view = view_1d("precip_ice_surf_mass_acc", m_num_cols);
 
     m_unused = view_2d("unused", m_num_cols, nk_pack_p1);
-    m_unused = view_2d("unused", m_num_cols, nk_pack_p1);                                                            
     m_dummy_input = view_2d("dummy_input_zeros", m_num_cols, nk_pack_p1);                                            
     Kokkos::deep_copy(m_unused, 0.0);                                                                                
     Kokkos::deep_copy(m_dummy_input, 0.0);   
@@ -868,6 +867,8 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
 
                 Spack T_pack = th_pack / inv_exner_pack;
 
+                auto is_too_cold = (T_pack < 233.15);
+
                 // Calculate Saturation
                 Smask range_mask(true);
                 Spack qvs_pack = Physics::qv_sat_dry(
@@ -886,7 +887,7 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
                 // B: delta_q < 0 && qc > 1e-12
                 auto need_condense = (delta_q_potential > 0.0);
                 auto need_evaporate = (delta_q_potential < 0.0) && (qc_pack > 1.0e-12);
-                auto need_adjustment = need_condense || need_evaporate;
+                auto need_adjustment = (need_condense || need_evaporate) && !is_too_cold;
 
                 if (need_adjustment.any()) {
                     auto is_new_cloud = need_condense && (qc_pack < min_qc);
@@ -947,6 +948,7 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
                 Spack qc_post_p3 = qc_pack; 
 
                 Spack T_pack = th_pack / inv_exner_pack;
+                auto is_too_cold = (T_pack < 233.15);
 
                 Smask range_mask(true);
                 Spack qvs_pack = Physics::qv_sat_dry(
@@ -962,7 +964,7 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
                 
                 auto need_evaporate = (delta_q < 0.0) && (qc_pack > min_qc);
 
-                auto need_adj = need_condense || need_evaporate;
+                auto need_adj = (need_condense || need_evaporate) && !is_too_cold;
 
                 if (need_adj.any()) {
                     Spack denominator = 1.0 + (Lv * Lv * qvs_pack) / (Cp * Rv * T_pack * T_pack);
