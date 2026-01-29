@@ -403,9 +403,9 @@ void VVM_P3_Interface::pack_3d_to_2d_packed(const VVMViewType& vvm_view, const P
                             const int k_phys = k_offset + k_vec;
                             if (k_phys < nz_phys) {
                                 int k_vvm = (nz_phys - 1) - k_phys + halo_offset;
-                                pack[k_vec] = vvm_view(k_vvm + halo_offset, 
-                                                           iy_phys + halo_offset, 
-                                                           ix_phys + halo_offset);
+                                pack[k_vec] = vvm_view(k_vvm, 
+                                                       iy_phys + halo_offset, 
+                                                       ix_phys + halo_offset);
                             } else {
                                 pack[k_vec] = 0.0; 
                             }
@@ -440,7 +440,7 @@ void VVM_P3_Interface::unpack_2d_packed_to_3d(const P3ViewType& p3_view, VVMView
                             const int k_phys = k_offset + k_vec;
                             if (k_phys < nz_phys) {
                                 int k_vvm = (nz_phys - 1) - k_phys + halo_offset;
-                                vvm_view(k_vvm  + halo_offset, 
+                                vvm_view(k_vvm, 
                                          iy_phys + halo_offset, 
                                          ix_phys + halo_offset) = pack[k_vec];
                             }
