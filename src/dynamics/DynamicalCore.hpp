@@ -62,6 +62,8 @@ private:
     std::unique_ptr<WindSolver> wind_solver_;
 
     Core::HaloExchanger& halo_exchanger_;
+
+    bool enable_coriolis_ = false;
 };
 
 } // namespace Dynamics
