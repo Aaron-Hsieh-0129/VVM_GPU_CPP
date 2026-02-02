@@ -29,7 +29,7 @@ struct GridDimension {
 class Grid {
 public:
     // Constructor: Initialize grid dimensions based on configuration
-    Grid(const VVM::Utils::ConfigurationManager& config);
+    Grid(const VVM::Utils::ConfigurationManager& config, MPI_Comm comm = MPI_COMM_WORLD);
     ~Grid();
 
     // Explicitly delete copy constructor and copy assignment operator
@@ -72,6 +72,7 @@ public:
     int get_mpi_size() const { return mpi_size_; }
     KOKKOS_INLINE_FUNCTION
     MPI_Comm get_cart_comm() const { return cart_comm_; }
+    MPI_Comm get_comm() const { return comm_; }
 
 private:
     // Changed from std::vector to Kokkos::View to store grid dimensions.
@@ -82,6 +83,7 @@ private:
     int mpi_rank_;                      // Rank of the current MPI process
     int mpi_size_;                      // Total number of processes in MPI communicator
     MPI_Comm cart_comm_;                // MPI Cartesian communicator for halo exchange
+    MPI_Comm comm_;
 
     // Private helper function: Calculate local grid distribution based on global grid size and MPI process count
     void calculate_local_grid_distribution();

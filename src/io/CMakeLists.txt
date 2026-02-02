@@ -2,6 +2,7 @@ set(VVM_IO_SOURCES
     TxtReader.cpp
     OutputManager.cpp
     PnetcdfReader.cpp
+    IOServer.cpp
 )
 
 set(VVM_IO_HEADERS
@@ -9,6 +10,7 @@ set(VVM_IO_HEADERS
     TxtReader.hpp
     OutputManager.hpp
     PnetcdfReader.hpp
+    IOServer.hpp
 )
 
 add_library(vvm_io STATIC

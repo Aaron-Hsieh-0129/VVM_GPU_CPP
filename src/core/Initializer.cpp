@@ -144,7 +144,7 @@ void Initializer::initialize_topo() const {
         1,
         MPI_DOUBLE,
         MPI_MAX,
-        MPI_COMM_WORLD
+        grid_.get_comm()
     );
     maxtopo_h += h;
     parameters_.max_topo_idx = maxtopo_h;

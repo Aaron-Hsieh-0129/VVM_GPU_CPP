@@ -77,6 +77,54 @@
         "ENABLE_NCCL": "ON",
         "Kokkos_ENABLE_CUDA": "ON"
       }
+    },
+    {
+      "name": "twnia3",
+      "displayName": "NVHPC 24.9 on twnia3",
+      "description": "Custom environment NVHPC on twnia3",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+
+        "NVHPC_DIR": "/work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9",
+
+        "CMAKE_CXX_COMPILER": "/work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/comm_libs/12.6/hpcx/hpcx-2.20/ompi/bin/mpic++",
+        "CMAKE_C_COMPILER":   "/work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/comm_libs/12.6/hpcx/hpcx-2.20/ompi/bin/mpicc",
+        "CMAKE_Fortran_COMPILER": "/work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/comm_libs/12.6/hpcx/hpcx-2.20/ompi/bin/mpifort",
+
+        "HDF5_DIR": "/work/aaron900129/hdf5_install",
+        "NETCDF_C_DIR": "/work/aaron900129/netcdf-c_install",
+        "NETCDF_Fortran_DIR": "/work/aaron900129/netcdf-fortran_install",
+        "PNETCDF_DIR": "/work/aaron900129/pnetcdf_install",
+
+        "ENABLE_NCCL": "ON",
+        "Kokkos_ENABLE_CUDA": "ON"
+      }
+    },
+    {
+      "name": "twnia2",
+      "displayName": "NVHPC 24.9 on twnia2",
+      "description": "Custom environment NVHPC on twnia2",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+
+        "NVHPC_DIR": "/work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9",
+
+        "CMAKE_CXX_COMPILER": "/work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/comm_libs/12.6/hpcx/hpcx-2.20/ompi/bin/mpic++",
+        "CMAKE_C_COMPILER":   "/work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/comm_libs/12.6/hpcx/hpcx-2.20/ompi/bin/mpicc",
+        "CMAKE_Fortran_COMPILER": "/work/aaron900129/nvhpc_24_9/Linux_x86_64/24.9/comm_libs/12.6/hpcx/hpcx-2.20/ompi/bin/mpifort",
+
+        "HDF5_DIR": "/work/aaron900129/hdf5_install",
+        "NETCDF_C_DIR": "/work/aaron900129/netcdf-c_install",
+        "NETCDF_Fortran_DIR": "/work/aaron900129/netcdf-fortran_install",
+        "PNETCDF_DIR": "/work/aaron900129/pnetcdf_install",
+
+        "ENABLE_NCCL": "ON",
+        "Kokkos_ENABLE_CUDA": "ON"
+      }
     }
   ]
 }

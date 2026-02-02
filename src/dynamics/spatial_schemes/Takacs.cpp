@@ -766,9 +766,6 @@ void Takacs::calculate_buoyancy_tendency_y(
             if (ITYPEU(k,j,i) == 0) tendency(k,j,i) = 0.;
         }
     );
-    // int rank;
-    // MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    // if (rank == 0) out_tendency.print_slice_z_at_k(grid, 0, h+15);
 }
 
 void Takacs::calculate_coriolis_tendency_x(

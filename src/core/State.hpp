@@ -198,7 +198,7 @@ public:
         if constexpr (Dim == 3) {
             if (k_level < h || k_level >= grid_.get_local_total_points_z() - h) {
                 int rank;
-                MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+                MPI_Comm_rank(grid_.get_comm(), &rank);
                 if (rank == 0) {
                     std::cerr << "Warning: k_level " << k_level << " is in the halo region for the 3D field '" << field.get_name() << "'. Returning 0." << std::endl;
                 }
@@ -221,7 +221,7 @@ public:
         } 
         else {
             int rank;
-            MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+            MPI_Comm_rank(grid_.get_comm(), &rank);
             if (rank == 0) {
                 std::cerr << "Warning: calculate_horizontal_mean does not support " << Dim << "D fields. Returning 0." << std::endl;
             }
@@ -229,7 +229,7 @@ public:
         }
 
         double global_sum = 0.0;
-        MPI_Allreduce(&local_sum, &global_sum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        MPI_Allreduce(&local_sum, &global_sum, 1, MPI_DOUBLE, MPI_SUM, grid_.get_comm());
 
         Kokkos::deep_copy(ans, global_sum / total_points_horizontal);
 

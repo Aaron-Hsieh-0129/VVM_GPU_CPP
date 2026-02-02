@@ -112,7 +112,7 @@ inline HaloExchanger::HaloExchanger(const Utils::ConfigurationManager& config, c
 
         MPI_Group cart_group, world_group;
         MPI_Comm_group(cart_comm_, &cart_group);
-        MPI_Comm_group(MPI_COMM_WORLD, &world_group);
+        MPI_Comm_group(grid_ref_.get_comm(), &world_group);
 
         int cart_ranks[4] = {cart_left, cart_right, cart_bottom, cart_top};
         int world_ranks[4] = {MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL};
@@ -688,11 +688,11 @@ private:
 inline HaloExchanger::HaloExchanger(const Grid& grid)
     : grid_ref_(grid), cart_comm_(grid.get_cart_comm()) {
     int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_rank(grid_ref_.get_comm(), &rank);
 
     if (cart_comm_ == MPI_COMM_NULL) {
         std::cerr << "Rank " << rank << ": HaloExchanger initialized with NULL communicator!" << std::endl;
-        MPI_Abort(MPI_COMM_WORLD, -1);
+        MPI_Abort(grid_ref_.get_comm(), -1);
     }
     // Dim 1 is X (left-right), Dim 0 is y (up-down)
     MPI_Cart_shift(cart_comm_, 1, 1, &neighbor_left_, &neighbor_right_);

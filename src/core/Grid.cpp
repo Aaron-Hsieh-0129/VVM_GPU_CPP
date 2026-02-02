@@ -3,14 +3,15 @@
 namespace VVM {
 namespace Core {
 
-Grid::Grid(const VVM::Utils::ConfigurationManager& config)
+Grid::Grid(const VVM::Utils::ConfigurationManager& config, MPI_Comm comm)
     : dims_device_view_("GridDimensions", 3), // Initialize Kokkos::View for 3 dimensions (Z, Y, X)
       dims_host_mirror_("GridDimensions_Host", 3),   // Initialize host mirror
+      comm_(comm),
       cart_comm_(MPI_COMM_NULL)        // Initialize MPI_Comm to NULL for safety
 {
     // Get MPI rank and size
-    MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank_);
-    MPI_Comm_size(MPI_COMM_WORLD, &mpi_size_);
+    MPI_Comm_rank(comm_, &mpi_rank_); 
+    MPI_Comm_size(comm_, &mpi_size_);
 
     // Read grid parameters from ConfigurationManager and populate the host mirror
     try {
@@ -134,7 +135,7 @@ void Grid::calculate_local_grid_distribution() {
     }
 
     // 3. Create MPI Cartesian Communicator
-    MPI_Cart_create(MPI_COMM_WORLD, ndims_cart, p_dims, periods, reorder, &cart_comm_);
+    MPI_Cart_create(comm_, ndims_cart, p_dims, periods, reorder, &cart_comm_);
 
     // 4. Get current process coordinates in 2D topology
     int coords[2]; // coords[0] for Y-coordinate, coords[1] for X-coordinate
