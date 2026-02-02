@@ -3,7 +3,7 @@ import netCDF4
 import os
 
 FILENAME = '../rundata/init.nc'
-NZ, NY, NX = 33, 128, 128
+NZ, NY, NX = 33, 512, 512
 DX, DY = 500.0, 500.0
 
 os.makedirs(os.path.dirname(FILENAME), exist_ok=True)

@@ -12,7 +12,7 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     : config_ref_(config), parameters_(params), grid_(grid) {
 #endif
     int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_rank(grid.get_comm(), &rank);
 
     // Get local points including halo cells
     int nx_total = grid.get_local_total_points_x();

@@ -58,7 +58,7 @@ OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VV
 
 
     MPI_Comm nodeComm;
-    MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &nodeComm);
+    MPI_Comm_split_type(comm_, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &nodeComm);
 
     int node_rank;
     MPI_Comm_rank(nodeComm, &node_rank);
@@ -66,7 +66,7 @@ OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VV
     int is_node_head = (node_rank == 0) ? 1 : 0;
     int total_nodes = 0;
 
-    MPI_Allreduce(&is_node_head, &total_nodes, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&is_node_head, &total_nodes, 1, MPI_INT, MPI_SUM, comm_);
 
     MPI_Comm_free(&nodeComm);
 
@@ -223,7 +223,7 @@ void OutputManager::write(int step, double time) {
 
     if (rank_ == 0) std::cout << "  [OutputManager::write] Opening file for time " << time << " s" << std::endl;
     std::string filename = output_dir_ + "/" + filename_prefix_ + "_" + format_to_six_digits((int) (time/output_interval_s_)) + ".h5";
-    writer_ = io_.Open(filename, adios2::Mode::Write, MPI_COMM_WORLD);
+    writer_ = io_.Open(filename, adios2::Mode::Write, comm_);
 
     if (rank_ == 0) std::cout << "  [OutputManager::write] File opened. Defining vars if needed..." << std::endl;
 
@@ -477,7 +477,7 @@ void OutputManager::write_static_topo_file() {
     topo_io.SetParameter("H5CollectiveMPIO", "no");
 
     std::string filename = output_dir_ + "/topo.h5";
-    adios2::Engine topo_writer = topo_io.Open(filename, adios2::Mode::Write, MPI_COMM_WORLD);
+    adios2::Engine topo_writer = topo_io.Open(filename, adios2::Mode::Write, comm_);
 
     const size_t gnx = grid_.get_global_points_x();
     const size_t gny = grid_.get_global_points_y();

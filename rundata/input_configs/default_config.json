@@ -1,7 +1,7 @@
 {
     "grid": {
-        "nx": 128,
-        "ny": 128,
+        "nx": 512,
+        "ny": 512,
         "nz": 33,
         "n_halo_cells": 2,
         "dx": 2000.0,
@@ -16,17 +16,17 @@
     },
     "initial_conditions": {
         "format": "txt",
-        "source_file": "/home/mog/Aaron/VVM_GPU_CPP_dev/rundata/initial_conditions/profile_p3.txt",
+        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/initial_conditions/profile_p3.txt",
         "perturbation": "bubble"
     },
     "netcdf_reader": {
-        "source_file": "/home/mog/Aaron/VVM_GPU_CPP_dev/rundata/init.nc",
+        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/init.nc",
         "variables_to_read": {
             "2d": ["topo", "Tg"]
         }
     },
     "output": {
-        "output_dir": "/home/mog/Aaron/VVM_GPU_CPP_dev/output/bubble",
+        "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/bubble",
         "enable_netcdf": true,
         "output_filename_prefix": "vvm_output",
         "fields_to_output": [

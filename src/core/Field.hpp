@@ -89,7 +89,7 @@ private:
 template<size_t Dim>
 inline void Field<Dim>::print_slice_z_at_k(const Grid& grid, int N_idx, int k_local_idx, int halo) const {
     int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_rank(grid.get_comm(), &rank);
 
     auto host_data = get_host_data();
 
@@ -159,7 +159,7 @@ inline void Field<Dim>::print_slice_z_at_k(const Grid& grid, int N_idx, int k_lo
 template<size_t Dim>
 inline void Field<Dim>::print_profile(const Grid& grid, int N_idx, int j_local_idx, int i_local_idx) const {
     int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_rank(grid.get_comm(), &rank);
 
     auto host_data = get_host_data();
 
@@ -200,7 +200,7 @@ inline void Field<Dim>::print_profile(const Grid& grid, int N_idx, int j_local_i
 template<size_t Dim>
 inline void Field<Dim>::print_xz_cross_at_j(const Grid& grid, int N_idx, int j_local_idx, int halo) const {
     int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_rank(grid.get_comm(), &rank);
 
     auto host_data = get_host_data();
 
