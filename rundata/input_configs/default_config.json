@@ -28,6 +28,9 @@
     "output": {
         "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/bubble",
         "engine": "SST",
+        "queue_limit": 20,
+        "data_transport": "WAN",
+        "__data_transport": "RDMA or WAN",
         "enable_netcdf": true,
         "output_filename_prefix": "vvm_output",
         "fields_to_output": [
