@@ -7,6 +7,7 @@
 #include <memory>
 #include <nccl.h>
 #include <cuda_runtime.h>
+#include <unistd.h>
 
 #include "core/Field.hpp"
 #include "core/Grid.hpp"
@@ -48,9 +49,22 @@ int main(int argc, char *argv[]) {
 
     MPI_Comm node_comm;
     MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, world_rank, MPI_INFO_NULL, &node_comm);
-    int node_rank;
+
+    int node_rank, node_size;
     MPI_Comm_rank(node_comm, &node_rank);
+    MPI_Comm_size(node_comm, &node_size);
     MPI_Comm_free(&node_comm);
+
+    long total_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    int threads_per_rank = total_cores / node_size;
+    if (threads_per_rank < 1) threads_per_rank = 1;
+    omp_set_num_threads(threads_per_rank);
+    if (world_rank == 0) {
+        std::cout << "[System] Node Cores: " << total_cores 
+                  << " | Ranks per Node: " << node_size 
+                  << " | OpenMP Threads per Rank: " << threads_per_rank << std::endl;
+    }
+
     int num_gpus = 0;
     cudaError_t err = cudaGetDeviceCount(&num_gpus);
     if (err != cudaSuccess || num_gpus == 0) {
@@ -70,6 +84,19 @@ int main(int argc, char *argv[]) {
         if(arg[0] != '-') config_file_path = arg;
     }
     VVM::Utils::ConfigurationManager config(config_file_path);
+
+    if (world_rank == 0) {
+        std::string engine = config.get_value<std::string>("output.engine", "HDF5");
+        if (engine == "SST") {
+            std::string prefix = config.get_value<std::string>("output.output_filename_prefix");
+            std::string sst_path = prefix + ".sst";
+            
+            std::cout << "[Main] Global Rank 0 cleaning stale SST: " << sst_path << std::endl;
+            std::string cmd = "rm -rf " + sst_path;
+            system(cmd.c_str());
+        }
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
 
     int num_io_tasks = get_io_tasks(argc, argv);
     int num_sim_tasks = world_size - num_io_tasks;
@@ -95,14 +122,6 @@ int main(int argc, char *argv[]) {
         MPI_Finalize();
         return 0;
     }
-
-    // omp_set_num_threads(72 / size);
-    //
-    // if (rank == 0) {
-    //     std::cout << "OpenMP Threads: " << omp_get_max_threads() << std::endl;
-    //     std::cout << "OpenMP Proc Bind: " << omp_get_proc_bind() << std::endl;
-    // }
-
 
 #if defined(ENABLE_NCCL)
     ncclComm_t nccl_comm;

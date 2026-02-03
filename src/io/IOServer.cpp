@@ -35,7 +35,7 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
     std::string output_dir = config.get_value<std::string>("output.output_dir");
     std::string filename_prefix = config.get_value<std::string>("output.output_filename_prefix");
     
-    std::string input_stream_name = filename_prefix + ".sst";
+    std::string input_stream_name = filename_prefix;
 
     if (rank == 0) {
         std::cout << "  [IO-Server] Listening on stream: " << input_stream_name << std::endl;
