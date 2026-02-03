@@ -650,7 +650,6 @@ void OutputManager::define_variables() {
                     size_t loc_nz = (actual_out_z_end >= actual_out_z_start) ? (actual_out_z_end - actual_out_z_start + 1) : 0;
                     
                     if constexpr (T::DimValue == 3) {
-                        // Defined as (NZ, NY, NX)
                         field_variables_[field_name] = io_.DefineVariable<double>(field_name, 
                             {gnz, gny, gnx}, 
                             {actual_out_z_start, actual_out_y_start, actual_out_x_start}, 
@@ -661,6 +660,13 @@ void OutputManager::define_variables() {
                             {gny, gnx}, 
                             {actual_out_y_start, actual_out_x_start}, 
                             {loc_ny, loc_nx});
+                    }
+                    else if constexpr (T::DimValue == 1) {
+                        size_t count = (rank_ == 0) ? loc_nz : 0;
+                        field_variables_[field_name] = io_.DefineVariable<double>(field_name, 
+                            {gnz}, 
+                            {actual_out_z_start}, 
+                            {count});
                     }
                 }
             }, it->second);
@@ -725,19 +731,16 @@ void OutputManager::write(int step, double time) {
                                     std::make_pair(j_start, j_start + local_ny),
                                     std::make_pair(i_start, i_start + local_nx));
 
-                                // 1. Allocate Persistent Host Buffer
                                 if (host_buffers_3d_.find(field_name) == host_buffers_3d_.end()) {
                                     host_buffers_3d_[field_name] = Kokkos::View<double***, Kokkos::LayoutRight, Kokkos::HostSpace>(
                                         field_name + "_host", local_nz, local_ny, local_nx);
                                 }
                                 auto& host_view = host_buffers_3d_[field_name];
                                 
-                                // 2. Copy via Temp Device Buffer (Handles Strides + MemSpace)
                                 Kokkos::View<double***, Kokkos::LayoutRight, DevMemSpace> temp_dev("temp_dev", local_nz, local_ny, local_nx);
                                 Kokkos::deep_copy(temp_dev, subview);
                                 Kokkos::deep_copy(host_view, temp_dev);
 
-                                // 3. Put Data
                                 writer_.Put(adios_var, host_view.data());
                             }
                         }
@@ -763,6 +766,26 @@ void OutputManager::write(int step, double time) {
                                 Kokkos::deep_copy(host_view, temp_dev);
 
                                 writer_.Put(adios_var, host_view.data());
+                            }
+                        }
+                        else if constexpr (T::DimValue == 1) {
+                            if (rank_ == 0) {
+                                size_t local_nz = adios_var.Count()[0];
+                                if (local_nz > 0) {
+                                    size_t k_start = (out_z_start - rank_off_z) + h;
+                                    auto subview = Kokkos::subview(dev_view, 
+                                        std::make_pair(k_start, k_start + local_nz));
+
+                                    if (host_buffers_1d_.find(field_name) == host_buffers_1d_.end()) {
+                                        host_buffers_1d_[field_name] = Kokkos::View<double*, Kokkos::HostSpace>(
+                                            field_name + "_host", local_nz);
+                                    }
+                                    auto& host_view = host_buffers_1d_[field_name];
+
+                                    Kokkos::deep_copy(host_view, subview);
+                                    
+                                    writer_.Put(adios_var, host_view.data());
+                                }
                             }
                         }
                     }
@@ -811,8 +834,14 @@ void OutputManager::grads_ctl_file() {
                         ss << "/Step0/" << field_name << "=>" << field_name << " " << nz_phy << " z,y,x " << field_name << "\n";
                         valid_vars_count++;
                         lines_to_write.push_back(ss.str());
-                    } else if constexpr (T::DimValue == 2) {
+                    } 
+                    else if constexpr (T::DimValue == 2) {
                         ss << "/Step0/" << field_name << "=>" << field_name << " 0 y,x " << field_name << "\n";
+                        valid_vars_count++;
+                        lines_to_write.push_back(ss.str());
+                    } 
+                    else if constexpr (T::DimValue == 1) {
+                        ss << "/Step0/" << field_name << "=>" << field_name << " " << nz_phy << " z " << field_name << "\n";
                         valid_vars_count++;
                         lines_to_write.push_back(ss.str());
                     }
@@ -825,7 +854,6 @@ void OutputManager::grads_ctl_file() {
     outFile << "ENDVARS\n";
     outFile.close();
 }
-
 
 void OutputManager::write_static_topo_file() {
     if (rank_ == 0) {
