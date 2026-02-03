@@ -6,6 +6,7 @@
 #include <map>
 #include <adios2.h>
 #include <Kokkos_Core.hpp>
+#include <adios2/cxx/KokkosView.h>
 
 #include "core/Grid.hpp"
 #include "core/State.hpp"
@@ -35,11 +36,14 @@ private:
     const VVM::Core::Grid& grid_;
     const VVM::Core::Parameters& params_;
     VVM::Core::State& state_;
+
     std::string output_dir_;
     std::string filename_prefix_;
     std::vector<std::string> fields_to_output_;
+
     double output_interval_s_;
     double total_time_;
+    std::string engine_type_;
 
     int rank_;
     int mpi_size_;
@@ -51,13 +55,21 @@ private:
 
     size_t output_x_start_, output_y_start_, output_z_start_;
     size_t output_x_end_, output_y_end_, output_z_end_;
-    size_t output_x_stride_, output_y_stride_, output_z_stride_;
+    // size_t output_x_stride_, output_y_stride_, output_z_stride_;
 
     bool variables_defined_ = false;
     adios2::Variable<double> var_time_;
 
     void define_variables();
     void grads_ctl_file();
+
+    std::string format_to_six_digits(int number);
+
+
+    std::map<std::string, Kokkos::View<double*, Kokkos::HostSpace>> host_buffers_1d_;
+    std::map<std::string, Kokkos::View<double**, Kokkos::LayoutRight, Kokkos::HostSpace>> host_buffers_2d_;
+    std::map<std::string, Kokkos::View<double***, Kokkos::LayoutRight, Kokkos::HostSpace>> host_buffers_3d_;
+    std::map<std::string, Kokkos::View<double****, Kokkos::LayoutRight, Kokkos::HostSpace>> host_buffers_4d_;
 };
 
 } // namespace IO

@@ -12,7 +12,7 @@
     "simulation": {
         "total_time_s": 1500.0,
         "dt_s": 5.0,
-        "output_interval_s": 50.0
+        "output_interval_s": 5.0
     },
     "initial_conditions": {
         "format": "txt",
@@ -27,6 +27,7 @@
     },
     "output": {
         "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/bubble",
+        "engine": "SST",
         "enable_netcdf": true,
         "output_filename_prefix": "vvm_output",
         "fields_to_output": [

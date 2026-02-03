@@ -46,6 +46,31 @@ int main(int argc, char *argv[]) {
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
+    MPI_Comm node_comm;
+    MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, world_rank, MPI_INFO_NULL, &node_comm);
+    int node_rank;
+    MPI_Comm_rank(node_comm, &node_rank);
+    MPI_Comm_free(&node_comm);
+    int num_gpus = 0;
+    cudaError_t err = cudaGetDeviceCount(&num_gpus);
+    if (err != cudaSuccess || num_gpus == 0) {
+        num_gpus = 1; 
+    }
+    int gpu_id = node_rank % num_gpus;
+    Kokkos::InitializationSettings args;
+    args.set_device_id(gpu_id);
+
+    Kokkos::initialize(args);
+
+    // Load configuration file
+    std::string config_file_path = "../rundata/input_configs/default_config.json";
+    for(int i=1; i<argc; ++i) {
+        std::string arg = argv[i];
+        if(arg == "--io-tasks") { i++; continue; } 
+        if(arg[0] != '-') config_file_path = arg;
+    }
+    VVM::Utils::ConfigurationManager config(config_file_path);
+
     int num_io_tasks = get_io_tasks(argc, argv);
     int num_sim_tasks = world_size - num_io_tasks;
 
@@ -64,7 +89,7 @@ int main(int argc, char *argv[]) {
     MPI_Comm_size(split_comm, &split_size);
 
     if (color == 1) {
-        VVM::IO::run_io_server(split_comm);
+        VVM::IO::run_io_server(split_comm, config);
 
         MPI_Comm_free(&split_comm);
         MPI_Finalize();
@@ -78,7 +103,6 @@ int main(int argc, char *argv[]) {
     //     std::cout << "OpenMP Proc Bind: " << omp_get_proc_bind() << std::endl;
     // }
 
-    Kokkos::initialize(argc, argv);
 
 #if defined(ENABLE_NCCL)
     ncclComm_t nccl_comm;
@@ -94,15 +118,6 @@ int main(int argc, char *argv[]) {
 
         if (split_rank == 0) std::cout << "VVM Model Simulation Started." << std::endl;
 
-        // Load configuration file
-        std::string config_file_path = "../rundata/input_configs/default_config.json";
-        for(int i=1; i<argc; ++i) {
-            std::string arg = argv[i];
-            if(arg == "--io-tasks") { i++; continue; } 
-            if(arg[0] != '-') config_file_path = arg;
-        }
-
-        VVM::Utils::ConfigurationManager config(config_file_path);
         // if (rank == 0) config.print_config(); // Print loaded configuration
 
 
@@ -130,7 +145,7 @@ int main(int argc, char *argv[]) {
         );
 
         output_manager->write(0, 0.0);
-        output_manager->write_static_topo_file();
+        // output_manager->write_static_topo_file();
 
         // Simulation loop parameters
         double total_time = config.get_value<double>("simulation.total_time_s");

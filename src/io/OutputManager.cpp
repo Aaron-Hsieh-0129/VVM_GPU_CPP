@@ -1,24 +1,32 @@
 #include "OutputManager.hpp"
 #include <sys/stat.h>
 #include <cerrno>
-#include <adios2/cxx/KokkosView.h>
-#include <Kokkos_Core.hpp> 
 #include <algorithm>
 #include <unordered_set>
 
 namespace VVM {
 namespace IO {
 
+/*
+std::string OutputManager::format_to_six_digits(int number) {
+    std::stringstream ss;
+    ss << std::setfill('0') << std::setw(6) << number;
+    return ss.str();
+}
+
 OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params, VVM::Core::State& state, MPI_Comm comm)
     : grid_(grid), params_(params), state_(state), comm_(comm), adios_(comm) {
-    rank_ = grid_.get_mpi_rank();
-    mpi_size_ = grid_.get_mpi_size();
+
+    MPI_Comm_rank(comm_, &rank_);
+    MPI_Comm_size(comm_, &mpi_size_);
 
     output_dir_ = config.get_value<std::string>("output.output_dir");
     filename_prefix_ = config.get_value<std::string>("output.output_filename_prefix");
     fields_to_output_ = config.get_value<std::vector<std::string>>("output.fields_to_output");
     output_interval_s_ = config.get_value<double>("simulation.output_interval_s");
     total_time_ = config.get_value<double>("simulation.total_time_s");
+
+    engine_type_ = config.get_value<std::string>("output.engine", "HDF5");
 
     output_x_start_  = config.get_value<size_t>("output.output_grid.x_start");
     output_y_start_  = config.get_value<size_t>("output.output_grid.y_start");
@@ -56,40 +64,40 @@ OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VV
     if (rank_ == 0) std::cout << "  [OutputManager] ctl file written. Initializing ADIOS2..." << std::endl;
 
 
+    io_ = adios_.DeclareIO("VVM_IO");
+    io_.SetEngine(engine_type_);
 
-    MPI_Comm nodeComm;
-    MPI_Comm_split_type(comm_, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &nodeComm);
+    if (engine_type_ == "SST") {
+        // SST Optimization: Use BP5 marshaling
+        io_.SetParameter("Marshalkethod", "BP5");
 
-    int node_rank;
-    MPI_Comm_rank(nodeComm, &node_rank);
+        io_.SetParameter("DataTransport", "WAN");
 
-    int is_node_head = (node_rank == 0) ? 1 : 0;
-    int total_nodes = 0;
-
-    MPI_Allreduce(&is_node_head, &total_nodes, 1, MPI_INT, MPI_SUM, comm_);
-
-    MPI_Comm_free(&nodeComm);
-
-    std::string use_collective = "false";
-
-    if (total_nodes > 1) {
-        use_collective = "true"; 
-        if (rank_ == 0) std::cout << "[Info] Multi-node detected (" << total_nodes << " nodes). Enabling H5CollectiveMPIO." << std::endl;
+        io_.SetParameter("QueueLimit", "20");
+        
+        // Open the stream ONCE here
+        std::string streamName = filename_prefix_ + ".sst";
+        if (rank_ == 0) std::cout << "  [OutputManager] SST Mode: Opening stream '" << streamName << "'..." << std::endl;
+        
+        writer_ = io_.Open(streamName, adios2::Mode::Write, comm_);
     } 
     else {
-        use_collective = "false";
-        if (rank_ == 0) std::cout << "[Info] Single-node detected. Disabling H5CollectiveMPIO." << std::endl;
+        MPI_Comm nodeComm;
+        MPI_Comm_split_type(comm_, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &nodeComm);
+        int node_rank;
+        MPI_Comm_rank(nodeComm, &node_rank);
+        int is_node_head = (node_rank == 0) ? 1 : 0;
+        int total_nodes = 0;
+        MPI_Allreduce(&is_node_head, &total_nodes, 1, MPI_INT, MPI_SUM, comm_);
+        MPI_Comm_free(&nodeComm);
+
+        std::string use_collective = (total_nodes > 1) ? "true" : "false";
+        
+        io_.SetParameter("IdleH5Writer", "true");
+        io_.SetParameter("H5CollectiveMPIO", use_collective);
+        
+        if (rank_ == 0) std::cout << "  [OutputManager] HDF5 Mode: Ready (File-per-step)." << std::endl;
     }
-
-
-    io_ = adios_.DeclareIO("VVM_IO");
-    io_.SetEngine("HDF5");
-    io_.SetParameter("IdleH5Writer",
-                     "true"); // set this if not all ranks are writting
-    io_.SetParameter("H5CollectiveMPIO", use_collective);
-    // io_.SetParameters({{"Threads", "4"}});
-
-    if (rank_ == 0) std::cout << "  [OutputManager] ADIOS2 Initialized." << std::endl;
 }
 
 OutputManager::~OutputManager() {
@@ -212,140 +220,195 @@ void OutputManager::write_static_data() {
     writer_.Put<double>(var_z_mid, z_mid_physical.data(), adios2::Mode::Sync);
 }
 
-std::string format_to_six_digits(int number) {
-    std::stringstream ss;
-    ss << std::setfill('0') << std::setw(6) << number;
-    return ss.str();
-}
-
 void OutputManager::write(int step, double time) {
     VVM::Utils::Timer advection_x_timer("OUTPUT");
 
-    if (rank_ == 0) std::cout << "  [OutputManager::write] Opening file for time " << time << " s" << std::endl;
-    std::string filename = output_dir_ + "/" + filename_prefix_ + "_" + format_to_six_digits((int) (time/output_interval_s_)) + ".h5";
-    writer_ = io_.Open(filename, adios2::Mode::Write, comm_);
-
-    if (rank_ == 0) std::cout << "  [OutputManager::write] File opened. Defining vars if needed..." << std::endl;
 
     if (!variables_defined_) {
         define_variables();
         variables_defined_ = true;
     }
+    if (engine_type_ != "SST") {
+        if (rank_ == 0) std::cout << "  [OutputManager::write] Opening file for time " << time << " s" << std::endl;
+        std::string filename = output_dir_ + "/" + filename_prefix_ + "_" + format_to_six_digits((int) (time/output_interval_s_)) + ".h5";
+        writer_ = io_.Open(filename, adios2::Mode::Write, comm_);
 
-    if (rank_ == 0) std::cout << "  [OutputManager::write] BeginStep..." << std::endl;
+        if (rank_ == 0) std::cout << "  [OutputManager::write] File opened. Defining vars if needed..." << std::endl;
+
+
+        if (rank_ == 0) std::cout << "  [OutputManager::write] BeginStep..." << std::endl;
+        writer_.BeginStep();
+        
+        adios2::Variable<double> var_time = io_.InquireVariable<double>("time");
+        writer_.Put<double>(var_time, &time, adios2::Mode::Sync);
+        write_static_data();
+
+        const size_t h = grid_.get_halo_cells();
+
+        // Local physical points and offsets for current rank
+        const size_t rank_lnx = grid_.get_local_physical_points_x();
+        const size_t rank_lny = grid_.get_local_physical_points_y();
+        const size_t rank_lnz = grid_.get_local_physical_points_z();
+
+        const size_t rank_offset_x = grid_.get_local_physical_start_x();
+        const size_t rank_offset_y = grid_.get_local_physical_start_y();
+        const size_t rank_offset_z = grid_.get_local_physical_start_z();
+
+        // Determine actual output region for current rank based on configuration
+        size_t actual_output_x_start = std::max(rank_offset_x, output_x_start_);
+        size_t actual_output_x_end = std::min(rank_offset_x + rank_lnx - 1, output_x_end_);
+        size_t local_output_nx = (actual_output_x_end >= actual_output_x_start) ? (actual_output_x_end - actual_output_x_start + 1) : 0;
+
+        size_t actual_output_y_start = std::max(rank_offset_y, output_y_start_);
+        size_t actual_output_y_end = std::min(rank_offset_y + rank_lny - 1, output_y_end_);
+        size_t local_output_ny = (actual_output_y_end >= actual_output_y_start) ? (actual_output_y_end - actual_output_y_start + 1) : 0;
+
+        size_t actual_output_z_start = std::max(rank_offset_z, output_z_start_);
+        size_t actual_output_z_end = std::min(rank_offset_z + rank_lnz - 1, output_z_end_);
+        size_t local_output_nz = (actual_output_z_end >= actual_output_z_start) ? (actual_output_z_end - actual_output_z_start + 1) : 0;
+
+
+        for (const auto& field_name : fields_to_output_) {
+            if (field_variables_.count(field_name)) {
+                auto it = state_.begin();
+                while (it != state_.end() && it->first != field_name) {
+                    ++it;
+                }
+
+                if (it != state_.end()) {
+                    auto& adios_var = field_variables_.at(field_name);
+
+                    std::visit([&](const auto& field) {
+                        using T = std::decay_t<decltype(field)>;
+                        if constexpr (!std::is_same_v<T, std::monostate>) {
+                            auto full_data_view = field.get_device_data();
+                            
+                            // Calculate local indices for Kokkos subview (relative to current rank's total view including halos)
+                            // These are the starting indices within the current rank's Kokkos View where the output region begins.
+                            size_t kokkos_subview_start_z = (actual_output_z_start - rank_offset_z) + h;
+                            size_t kokkos_subview_start_y = (actual_output_y_start - rank_offset_y) + h;
+                            size_t kokkos_subview_start_x = (actual_output_x_start - rank_offset_x) + h;
+
+                            if constexpr (T::DimValue == 1) {
+                                // Only rank 0 outputs 1D global variables
+                                const double* data_ptr = nullptr;
+                                Kokkos::View<double*, Kokkos::HostSpace> host_view;
+                                if (rank_ == 0) {
+                                    // Create a host mirror for the subview data
+                                    auto subview_from_full = Kokkos::subview(full_data_view, 
+                                                                             std::make_pair(kokkos_subview_start_z, kokkos_subview_start_z + local_output_nz));
+                                    host_view = Kokkos::create_mirror_view(subview_from_full);
+                                    Kokkos::deep_copy(host_view, subview_from_full);
+                                    data_ptr = host_view.data();
+                                    // auto phys_data_subview_cpu = Kokkos::create_mirror_view(subview_from_full);
+                                    // Kokkos::deep_copy(phys_data_subview_cpu, subview_from_full);
+                                    // writer_.Put<double>(adios_var, phys_data_subview_cpu.data());
+                                }
+                                writer_.Put<double>(adios_var, data_ptr, adios2::Mode::Sync);
+                            }
+                            else if constexpr (T::DimValue == 2) {
+                                Kokkos::View<double**, Kokkos::LayoutRight> phys_data_subview("phys_data_2d_sub", local_output_ny, local_output_nx);
+                                auto subview_from_full = Kokkos::subview(full_data_view, 
+                                                               std::make_pair(kokkos_subview_start_y, kokkos_subview_start_y + local_output_ny), 
+                                                               std::make_pair(kokkos_subview_start_x, kokkos_subview_start_x + local_output_nx));
+                                Kokkos::deep_copy(phys_data_subview, subview_from_full);
+                                auto phys_data_subview_host = Kokkos::create_mirror_view(phys_data_subview);
+                                Kokkos::deep_copy(phys_data_subview_host, phys_data_subview);
+                                writer_.Put<double>(adios_var, phys_data_subview_host.data());
+                            } 
+                            else if constexpr (T::DimValue == 3) {
+                                Kokkos::View<double***, Kokkos::LayoutRight> phys_data_subview("phys_data_3d_sub", local_output_nz, local_output_ny, local_output_nx);
+                                auto subview_from_full = Kokkos::subview(full_data_view,
+                                                               std::make_pair(kokkos_subview_start_z, kokkos_subview_start_z + local_output_nz),
+                                                               std::make_pair(kokkos_subview_start_y, kokkos_subview_start_y + local_output_ny),
+                                                               std::make_pair(kokkos_subview_start_x, kokkos_subview_start_x + local_output_nx));
+                                Kokkos::deep_copy(phys_data_subview, subview_from_full);
+                                auto phys_data_subview_host = Kokkos::create_mirror_view(phys_data_subview);
+                                Kokkos::deep_copy(phys_data_subview_host, phys_data_subview);
+                                writer_.Put<double>(adios_var, phys_data_subview_host.data());
+                            }
+                            else if constexpr (T::DimValue == 4) {
+                                const size_t dim4 = full_data_view.extent(0); // This dimension is not affected by spatial decomposition
+                                Kokkos::View<double****, Kokkos::LayoutRight> phys_data_subview("phys_data_4d_sub", dim4, local_output_nz, local_output_ny, local_output_nx);
+                                auto subview_from_full = Kokkos::subview(full_data_view,
+                                                               Kokkos::ALL(), // All of the first dimension
+                                                               std::make_pair(kokkos_subview_start_z, kokkos_subview_start_z + local_output_nz),
+                                                               std::make_pair(kokkos_subview_start_y, kokkos_subview_start_y + local_output_ny),
+                                                               std::make_pair(kokkos_subview_start_x, kokkos_subview_start_x + local_output_nx));
+                                Kokkos::deep_copy(phys_data_subview, subview_from_full);
+                                auto phys_data_subview_host = Kokkos::create_mirror_view(phys_data_subview);
+                                Kokkos::deep_copy(phys_data_subview_host, phys_data_subview);
+                                writer_.Put<double>(adios_var, phys_data_subview_host.data());
+                            }
+                        }
+                    }, it->second);
+                }
+            }
+        }
+
+        if (rank_ == 0) std::cout << "  [OutputManager::write] Puts done. EndStep (Wait for I/O)..." << std::endl;
+        writer_.EndStep();
+        writer_.Close();
+        return;
+    }
+
     writer_.BeginStep();
-    
-    adios2::Variable<double> var_time = io_.InquireVariable<double>("time");
-    writer_.Put<double>(var_time, &time, adios2::Mode::Sync);
-    write_static_data();
+
+    auto var_time = io_.InquireVariable<double>("time");
+    writer_.Put(var_time, &time);
 
     const size_t h = grid_.get_halo_cells();
-
-    // Local physical points and offsets for current rank
-    const size_t rank_lnx = grid_.get_local_physical_points_x();
-    const size_t rank_lny = grid_.get_local_physical_points_y();
-    const size_t rank_lnz = grid_.get_local_physical_points_z();
-
     const size_t rank_offset_x = grid_.get_local_physical_start_x();
     const size_t rank_offset_y = grid_.get_local_physical_start_y();
     const size_t rank_offset_z = grid_.get_local_physical_start_z();
 
-    // Determine actual output region for current rank based on configuration
-    size_t actual_output_x_start = std::max(rank_offset_x, output_x_start_);
-    size_t actual_output_x_end = std::min(rank_offset_x + rank_lnx - 1, output_x_end_);
-    size_t local_output_nx = (actual_output_x_end >= actual_output_x_start) ? (actual_output_x_end - actual_output_x_start + 1) : 0;
-
-    size_t actual_output_y_start = std::max(rank_offset_y, output_y_start_);
-    size_t actual_output_y_end = std::min(rank_offset_y + rank_lny - 1, output_y_end_);
-    size_t local_output_ny = (actual_output_y_end >= actual_output_y_start) ? (actual_output_y_end - actual_output_y_start + 1) : 0;
-
-    size_t actual_output_z_start = std::max(rank_offset_z, output_z_start_);
-    size_t actual_output_z_end = std::min(rank_offset_z + rank_lnz - 1, output_z_end_);
-    size_t local_output_nz = (actual_output_z_end >= actual_output_z_start) ? (actual_output_z_end - actual_output_z_start + 1) : 0;
-
+    // Re-calc bounds for subview (same as define_variables)
+    size_t actual_out_x_start = std::max(rank_offset_x, output_x_start_);
+    size_t actual_out_y_start = std::max(rank_offset_y, output_y_start_);
+    size_t actual_out_z_start = std::max(rank_offset_z, output_z_start_);
 
     for (const auto& field_name : fields_to_output_) {
         if (field_variables_.count(field_name)) {
-            auto it = state_.begin();
-            while (it != state_.end() && it->first != field_name) {
-                ++it;
-            }
+             auto& adios_var = field_variables_.at(field_name);
+             
+             // Lookup field
+             auto it = state_.begin();
+             while (it != state_.end() && it->first != field_name) ++it;
 
-            if (it != state_.end()) {
-                auto& adios_var = field_variables_.at(field_name);
-
+             if (it != state_.end()) {
                 std::visit([&](const auto& field) {
                     using T = std::decay_t<decltype(field)>;
+                    
+                    // Direct GPU Write Logic
                     if constexpr (!std::is_same_v<T, std::monostate>) {
-                        auto full_data_view = field.get_device_data();
-                        
-                        // Calculate local indices for Kokkos subview (relative to current rank's total view including halos)
-                        // These are the starting indices within the current rank's Kokkos View where the output region begins.
-                        size_t kokkos_subview_start_z = (actual_output_z_start - rank_offset_z) + h;
-                        size_t kokkos_subview_start_y = (actual_output_y_start - rank_offset_y) + h;
-                        size_t kokkos_subview_start_x = (actual_output_x_start - rank_offset_x) + h;
+                        if constexpr (T::DimValue == 3) {
+                            auto device_view = field.get_device_data();
+                            
+                            // Map Output Region to Local View Indices (accounting for halos)
+                            size_t k_start = (actual_out_z_start - rank_offset_z) + h;
+                            size_t j_start = (actual_out_y_start - rank_offset_y) + h;
+                            size_t i_start = (actual_out_x_start - rank_offset_x) + h;
+                            
+                            size_t local_nz = adios_var.Count()[0];
+                            size_t local_ny = adios_var.Count()[1];
+                            size_t local_nx = adios_var.Count()[2];
 
-                        if constexpr (T::DimValue == 1) {
-                            // Only rank 0 outputs 1D global variables
-                            const double* data_ptr = nullptr;
-                            Kokkos::View<double*, Kokkos::HostSpace> host_view;
-                            if (rank_ == 0) {
-                                // Create a host mirror for the subview data
-                                auto subview_from_full = Kokkos::subview(full_data_view, 
-                                                                         std::make_pair(kokkos_subview_start_z, kokkos_subview_start_z + local_output_nz));
-                                host_view = Kokkos::create_mirror_view(subview_from_full);
-                                Kokkos::deep_copy(host_view, subview_from_full);
-                                data_ptr = host_view.data();
-                                // auto phys_data_subview_cpu = Kokkos::create_mirror_view(subview_from_full);
-                                // Kokkos::deep_copy(phys_data_subview_cpu, subview_from_full);
-                                // writer_.Put<double>(adios_var, phys_data_subview_cpu.data());
-                            }
-                            writer_.Put<double>(adios_var, data_ptr, adios2::Mode::Sync);
-                        }
-                        else if constexpr (T::DimValue == 2) {
-                            Kokkos::View<double**, Kokkos::LayoutRight> phys_data_subview("phys_data_2d_sub", local_output_ny, local_output_nx);
-                            auto subview_from_full = Kokkos::subview(full_data_view, 
-                                                           std::make_pair(kokkos_subview_start_y, kokkos_subview_start_y + local_output_ny), 
-                                                           std::make_pair(kokkos_subview_start_x, kokkos_subview_start_x + local_output_nx));
-                            Kokkos::deep_copy(phys_data_subview, subview_from_full);
-                            auto phys_data_subview_host = Kokkos::create_mirror_view(phys_data_subview);
-                            Kokkos::deep_copy(phys_data_subview_host, phys_data_subview);
-                            writer_.Put<double>(adios_var, phys_data_subview_host.data());
-                        } 
-                        else if constexpr (T::DimValue == 3) {
-                            Kokkos::View<double***, Kokkos::LayoutRight> phys_data_subview("phys_data_3d_sub", local_output_nz, local_output_ny, local_output_nx);
-                            auto subview_from_full = Kokkos::subview(full_data_view,
-                                                           std::make_pair(kokkos_subview_start_z, kokkos_subview_start_z + local_output_nz),
-                                                           std::make_pair(kokkos_subview_start_y, kokkos_subview_start_y + local_output_ny),
-                                                           std::make_pair(kokkos_subview_start_x, kokkos_subview_start_x + local_output_nx));
-                            Kokkos::deep_copy(phys_data_subview, subview_from_full);
-                            auto phys_data_subview_host = Kokkos::create_mirror_view(phys_data_subview);
-                            Kokkos::deep_copy(phys_data_subview_host, phys_data_subview);
-                            writer_.Put<double>(adios_var, phys_data_subview_host.data());
-                        }
-                        else if constexpr (T::DimValue == 4) {
-                            const size_t dim4 = full_data_view.extent(0); // This dimension is not affected by spatial decomposition
-                            Kokkos::View<double****, Kokkos::LayoutRight> phys_data_subview("phys_data_4d_sub", dim4, local_output_nz, local_output_ny, local_output_nx);
-                            auto subview_from_full = Kokkos::subview(full_data_view,
-                                                           Kokkos::ALL(), // All of the first dimension
-                                                           std::make_pair(kokkos_subview_start_z, kokkos_subview_start_z + local_output_nz),
-                                                           std::make_pair(kokkos_subview_start_y, kokkos_subview_start_y + local_output_ny),
-                                                           std::make_pair(kokkos_subview_start_x, kokkos_subview_start_x + local_output_nx));
-                            Kokkos::deep_copy(phys_data_subview, subview_from_full);
-                            auto phys_data_subview_host = Kokkos::create_mirror_view(phys_data_subview);
-                            Kokkos::deep_copy(phys_data_subview_host, phys_data_subview);
-                            writer_.Put<double>(adios_var, phys_data_subview_host.data());
+                            auto subview = Kokkos::subview(device_view, 
+                                std::make_pair(k_start, k_start + local_nz),
+                                std::make_pair(j_start, j_start + local_ny),
+                                std::make_pair(i_start, i_start + local_nx));
+                            
+                            // ZERO-COPY PUT
+                            writer_.Put(adios_var, subview);
                         }
                     }
+                    // Handle DimValue 2 / 4 similarly...
                 }, it->second);
-            }
+             }
         }
     }
 
-    if (rank_ == 0) std::cout << "  [OutputManager::write] Puts done. EndStep (Wait for I/O)..." << std::endl;
     writer_.EndStep();
-    writer_.Close();
-    return;
 }
 
 void OutputManager::grads_ctl_file() {
@@ -465,14 +528,309 @@ void OutputManager::grads_ctl_file() {
     outtopoFile.close();
     return;
 }
+*/
+
+std::string OutputManager::format_to_six_digits(int number) {
+    std::stringstream ss;
+    ss << std::setfill('0') << std::setw(6) << number;
+    return ss.str();
+}
+
+OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params, VVM::Core::State& state, MPI_Comm comm)
+    : grid_(grid), params_(params), state_(state), comm_(comm), adios_(comm) {
+
+    MPI_Comm_rank(comm_, &rank_);
+    MPI_Comm_size(comm_, &mpi_size_);
+
+    output_dir_ = config.get_value<std::string>("output.output_dir");
+    filename_prefix_ = config.get_value<std::string>("output.output_filename_prefix");
+    fields_to_output_ = config.get_value<std::vector<std::string>>("output.fields_to_output");
+    output_interval_s_ = config.get_value<double>("simulation.output_interval_s");
+    total_time_ = config.get_value<double>("simulation.total_time_s");
+
+    engine_type_ = config.get_value<std::string>("output.engine", "SST");
+
+    output_x_start_  = config.get_value<size_t>("output.output_grid.x_start");
+    output_y_start_  = config.get_value<size_t>("output.output_grid.y_start");
+    output_z_start_  = config.get_value<size_t>("output.output_grid.z_start");
+
+    output_x_end_    = config.get_value<size_t>("output.output_grid.x_end");
+    output_y_end_    = config.get_value<size_t>("output.output_grid.y_end");
+    output_z_end_    = config.get_value<size_t>("output.output_grid.z_end");
+
+    if (rank_ == 0) {
+        if (!output_dir_.empty()) {
+            std::string cmd = "mkdir -p " + output_dir_;
+            system(cmd.c_str());
+        }
+    }
+
+    MPI_Barrier(comm_);
+    if (rank_ == 0) grads_ctl_file();
+
+    io_ = adios_.DeclareIO("VVM_IO");
+    io_.SetEngine(engine_type_);
+    
+    if (engine_type_ == "SST") {
+        io_.SetParameter("MarshalMethod", "BP5");
+        io_.SetParameter("DataTransport", "WAN");
+        io_.SetParameter("QueueLimit", "20");
+    }
+}
+
+OutputManager::~OutputManager() {
+    if (writer_) writer_.Close();
+}
+
+void OutputManager::write_static_data() {
+    const size_t gnx = grid_.get_global_points_x();
+    const size_t gny = grid_.get_global_points_y();
+    const size_t gnz = grid_.get_global_points_z();
+    const size_t h = grid_.get_halo_cells();
+    
+    auto var_x = io_.InquireVariable<double>("coordinates/x");
+    if (rank_ == 0) {
+        std::vector<double> x_coords(gnx);
+        for(size_t i = 0; i < gnx; ++i) x_coords[i] = i * grid_.get_dx();
+        writer_.Put<double>(var_x, x_coords.data(), adios2::Mode::Sync);
+    } 
+
+    auto var_y = io_.InquireVariable<double>("coordinates/y");
+    if (rank_ == 0) {
+        std::vector<double> y_coords(gny);
+        for(size_t i = 0; i < gny; ++i) y_coords[i] = i * grid_.get_dy();
+        writer_.Put<double>(var_y, y_coords.data(), adios2::Mode::Sync);
+    }
+
+    auto var_z_mid = io_.InquireVariable<double>("coordinates/z_mid");
+    if (rank_ == 0) {
+        auto z_mid_host = params_.z_mid.get_host_data();
+        std::vector<double> z_mid_physical(gnz);
+        for (size_t i = 0; i < gnz; ++i) z_mid_physical[i] = z_mid_host(i + h);
+        writer_.Put<double>(var_z_mid, z_mid_physical.data(), adios2::Mode::Sync);
+    }
+}
+
+void OutputManager::define_variables() {
+    const size_t gnx = grid_.get_global_points_x();
+    const size_t gny = grid_.get_global_points_y();
+    const size_t gnz = grid_.get_global_points_z();
+
+    io_.DefineVariable<double>("time");
+    io_.DefineVariable<double>("coordinates/x", {gnx}, {0}, {rank_ == 0 ? gnx : 0});
+    io_.DefineVariable<double>("coordinates/y", {gny}, {0}, {rank_ == 0 ? gny : 0});
+    io_.DefineVariable<double>("coordinates/z_mid", {gnz}, {0}, {rank_ == 0 ? gnz : 0});
+
+    const size_t rank_lnx = grid_.get_local_physical_points_x();
+    const size_t rank_lny = grid_.get_local_physical_points_y();
+    const size_t rank_lnz = grid_.get_local_physical_points_z();
+
+    const size_t rank_offset_x = grid_.get_local_physical_start_x();
+    const size_t rank_offset_y = grid_.get_local_physical_start_y();
+    const size_t rank_offset_z = grid_.get_local_physical_start_z();
+
+    for (const auto& field_name : fields_to_output_) {
+        auto it = state_.begin();
+        while (it != state_.end() && it->first != field_name) ++it;
+
+        if (it != state_.end()) {
+            std::visit([&](const auto& field) {
+                using T = std::decay_t<decltype(field)>;
+                if constexpr (!std::is_same_v<T, std::monostate>) {
+                    size_t actual_out_x_start = std::max(rank_offset_x, output_x_start_);
+                    size_t actual_out_x_end = std::min(rank_offset_x + rank_lnx - 1, output_x_end_);
+                    size_t loc_nx = (actual_out_x_end >= actual_out_x_start) ? (actual_out_x_end - actual_out_x_start + 1) : 0;
+
+                    size_t actual_out_y_start = std::max(rank_offset_y, output_y_start_);
+                    size_t actual_out_y_end = std::min(rank_offset_y + rank_lny - 1, output_y_end_);
+                    size_t loc_ny = (actual_out_y_end >= actual_out_y_start) ? (actual_out_y_end - actual_out_y_start + 1) : 0;
+
+                    size_t actual_out_z_start = std::max(rank_offset_z, output_z_start_);
+                    size_t actual_out_z_end = std::min(rank_offset_z + rank_lnz - 1, output_z_end_);
+                    size_t loc_nz = (actual_out_z_end >= actual_out_z_start) ? (actual_out_z_end - actual_out_z_start + 1) : 0;
+                    
+                    if constexpr (T::DimValue == 3) {
+                        // Defined as (NZ, NY, NX)
+                        field_variables_[field_name] = io_.DefineVariable<double>(field_name, 
+                            {gnz, gny, gnx}, 
+                            {actual_out_z_start, actual_out_y_start, actual_out_x_start}, 
+                            {loc_nz, loc_ny, loc_nx});
+                    }
+                    else if constexpr (T::DimValue == 2) {
+                        field_variables_[field_name] = io_.DefineVariable<double>(field_name, 
+                            {gny, gnx}, 
+                            {actual_out_y_start, actual_out_x_start}, 
+                            {loc_ny, loc_nx});
+                    }
+                }
+            }, it->second);
+        }
+    }
+}
+
+void OutputManager::write(int step, double time) {
+    if (!variables_defined_) {
+        define_variables();
+        variables_defined_ = true;
+    }
+
+    if (!writer_) {
+        std::string filename = filename_prefix_ + ".sst"; 
+        writer_ = io_.Open(filename, adios2::Mode::Write, comm_);
+    }
+
+    writer_.BeginStep();
+
+    auto var_time = io_.InquireVariable<double>("time");
+    writer_.Put(var_time, &time);
+    write_static_data();
+
+    const size_t h = grid_.get_halo_cells();
+    const size_t rank_lnx = grid_.get_local_physical_points_x();
+    const size_t rank_lny = grid_.get_local_physical_points_y();
+    const size_t rank_lnz = grid_.get_local_physical_points_z();
+    const size_t rank_off_x = grid_.get_local_physical_start_x();
+    const size_t rank_off_y = grid_.get_local_physical_start_y();
+    const size_t rank_off_z = grid_.get_local_physical_start_z();
+
+    size_t out_x_start = std::max(rank_off_x, output_x_start_);
+    size_t out_z_start = std::max(rank_off_z, output_z_start_);
+    size_t out_y_start = std::max(rank_off_y, output_y_start_);
+
+    for (const auto& field_name : fields_to_output_) {
+        if (field_variables_.count(field_name)) {
+             auto& adios_var = field_variables_.at(field_name);
+             auto it = state_.begin();
+             while (it != state_.end() && it->first != field_name) ++it;
+             
+             if (it != state_.end()) {
+                std::visit([&](const auto& field) {
+                    using T = std::decay_t<decltype(field)>;
+                    if constexpr (!std::is_same_v<T, std::monostate>) {
+                        auto dev_view = field.get_device_data();
+                        using DevMemSpace = typename decltype(dev_view)::memory_space;
+
+                        if constexpr (T::DimValue == 3) {
+                            size_t local_nz = adios_var.Count()[0]; 
+                            size_t local_ny = adios_var.Count()[1];
+                            size_t local_nx = adios_var.Count()[2];
+
+                            if (local_nz > 0 && local_ny > 0 && local_nx > 0) {
+                                size_t k_start = (out_z_start - rank_off_z) + h;
+                                size_t j_start = (out_y_start - rank_off_y) + h;
+                                size_t i_start = (out_x_start - rank_off_x) + h;
+
+                                auto subview = Kokkos::subview(dev_view,
+                                    std::make_pair(k_start, k_start + local_nz),
+                                    std::make_pair(j_start, j_start + local_ny),
+                                    std::make_pair(i_start, i_start + local_nx));
+
+                                // 1. Allocate Persistent Host Buffer
+                                if (host_buffers_3d_.find(field_name) == host_buffers_3d_.end()) {
+                                    host_buffers_3d_[field_name] = Kokkos::View<double***, Kokkos::LayoutRight, Kokkos::HostSpace>(
+                                        field_name + "_host", local_nz, local_ny, local_nx);
+                                }
+                                auto& host_view = host_buffers_3d_[field_name];
+                                
+                                // 2. Copy via Temp Device Buffer (Handles Strides + MemSpace)
+                                Kokkos::View<double***, Kokkos::LayoutRight, DevMemSpace> temp_dev("temp_dev", local_nz, local_ny, local_nx);
+                                Kokkos::deep_copy(temp_dev, subview);
+                                Kokkos::deep_copy(host_view, temp_dev);
+
+                                // 3. Put Data
+                                writer_.Put(adios_var, host_view.data());
+                            }
+                        }
+                        else if constexpr (T::DimValue == 2) {
+                            size_t local_ny = adios_var.Count()[0];
+                            size_t local_nx = adios_var.Count()[1];
+
+                            if (local_ny > 0 && local_nx > 0) {
+                                size_t j_start = (out_y_start - rank_off_y) + h;
+                                size_t i_start = (out_x_start - rank_off_x) + h;
+                                auto subview = Kokkos::subview(dev_view,
+                                    std::make_pair(j_start, j_start + local_ny),
+                                    std::make_pair(i_start, i_start + local_nx));
+
+                                if (host_buffers_2d_.find(field_name) == host_buffers_2d_.end()) {
+                                    host_buffers_2d_[field_name] = Kokkos::View<double**, Kokkos::LayoutRight, Kokkos::HostSpace>(
+                                        field_name + "_host", local_ny, local_nx);
+                                }
+                                auto& host_view = host_buffers_2d_[field_name];
+                                
+                                Kokkos::View<double**, Kokkos::LayoutRight, DevMemSpace> temp_dev("temp_dev_2d", local_ny, local_nx);
+                                Kokkos::deep_copy(temp_dev, subview);
+                                Kokkos::deep_copy(host_view, temp_dev);
+
+                                writer_.Put(adios_var, host_view.data());
+                            }
+                        }
+                    }
+                }, it->second);
+             }
+        }
+    }
+    writer_.EndStep();
+}
+
+void OutputManager::grads_ctl_file() {
+    std::ofstream outFile(output_dir_ + "/vvm.ctl");
+    if (!outFile.is_open()) return;
+
+    auto z_mid_host = params_.z_mid.get_host_data();
+    auto h = grid_.get_halo_cells();
+    auto nz_phy = grid_.get_global_points_z();
+    
+    outFile << "DSET ^" << filename_prefix_ << "_%tm6.h5\n";
+    outFile << "DTYPE hdf5_grid\n";
+    outFile << "OPTIONS template\n";
+    outFile << "TITLE VVM_GPU_CPP\n";
+    outFile << "UNDEF -9999.0\n";
+    outFile << "XDEF " << grid_.get_global_points_x() << " LINEAR 0 1\n";
+    outFile << "YDEF " << grid_.get_global_points_y() << " LINEAR 0 1\n";
+    outFile << "ZDEF " << grid_.get_global_points_z() << " LEVELS ";
+    for (int k = h; k < h+nz_phy; k++) {
+        outFile << static_cast<int> (z_mid_host(k));
+        if (k < nz_phy+h-1) outFile << ", ";
+    }
+    outFile << "\n";
+    outFile << "TDEF " << (int) (total_time_ / (output_interval_s_)+1) << " LINEAR 00:00Z01JAN2000 " << "1hr\n";
+    outFile << "\n";
+
+    int valid_vars_count = 0;
+    std::vector<std::string> lines_to_write;
+    for (const auto& field_name : fields_to_output_) {
+        auto it = state_.begin();
+        while (it != state_.end() && it->first != field_name) ++it;
+        if (it != state_.end()) {
+            std::visit([&](const auto& field) {
+                using T = std::decay_t<decltype(field)>;
+                if constexpr (!std::is_same_v<T, std::monostate>) {
+                    std::stringstream ss;
+                    if constexpr (T::DimValue == 3) {
+                        ss << "/Step0/" << field_name << "=>" << field_name << " " << nz_phy << " z,y,x " << field_name << "\n";
+                        valid_vars_count++;
+                        lines_to_write.push_back(ss.str());
+                    } else if constexpr (T::DimValue == 2) {
+                        ss << "/Step0/" << field_name << "=>" << field_name << " 0 y,x " << field_name << "\n";
+                        valid_vars_count++;
+                        lines_to_write.push_back(ss.str());
+                    }
+                }
+            }, it->second);
+        }
+    }
+    outFile << "VARS " << valid_vars_count << "\n";
+    for(const auto& line : lines_to_write) outFile << line;
+    outFile << "ENDVARS\n";
+    outFile.close();
+}
+
 
 void OutputManager::write_static_topo_file() {
     if (rank_ == 0) {
         std::cout << "Writing static topography file..." << std::endl;
-    }
-
-    adios2::IO topo_io = adios_.DeclareIO("TOPO_IO");
-    topo_io.SetEngine("HDF5");
+    } adios2::IO topo_io = adios_.DeclareIO("TOPO_IO"); topo_io.SetEngine("HDF5");
     topo_io.SetParameter("IdleH5Writer", "true");
     topo_io.SetParameter("H5CollectiveMPIO", "no");
 
