@@ -115,14 +115,14 @@ void Model::run_step(double dt) {
         }
     }
     if (surface_) {
-        surface_->compute_coefficients(state_);
+        if ((state_.get_step()-1) % surface_freq_in_steps_ == 0) {
+            surface_->compute_coefficients(state_);
+        }
         for (const auto& var_name : sfc_vars_) {
-            if ((state_.get_step()-1) % surface_freq_in_steps_ == 0) {
-                std::string fe_name = "fe_tendency_" + var_name;
-                auto& fe_tend_field = state_.get_field<3>(fe_name);
-                if (!turbulence_) fe_tend_field.set_to_zero(); 
-                surface_->calculate_tendencies(state_, var_name, fe_tend_field);
-            }
+            std::string fe_name = "fe_tendency_" + var_name;
+            auto& fe_tend_field = state_.get_field<3>(fe_name);
+            if (!turbulence_) fe_tend_field.set_to_zero(); 
+            surface_->calculate_tendencies(state_, var_name, fe_tend_field);
         }
     }
     if (turbulence_ || surface_) {
