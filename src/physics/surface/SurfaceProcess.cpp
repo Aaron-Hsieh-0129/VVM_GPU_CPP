@@ -33,8 +33,8 @@ void SurfaceProcess::initialize(Core::State& state) {
     if (!state.has_field("gwet")) state.add_field<2>("gwet", {ny, nx}); // Surface Wetness
     if (!state.has_field("zrough")) state.add_field<2>("zrough", {ny, nx}); // Roughness Length
     if (!state.has_field("VEN2D")) state.add_field<2>("VEN2D", {ny, nx}); // Roughness Length
-    Kokkos::deep_copy(state.get_field<2>("Tg").get_mutable_device_data(), 305.);
-    Kokkos::deep_copy(state.get_field<2>("gwet").get_mutable_device_data(), 0.8);
+    // Kokkos::deep_copy(state.get_field<2>("Tg").get_mutable_device_data(), 305.);
+    Kokkos::deep_copy(state.get_field<2>("gwet").get_mutable_device_data(), -1.);
     Kokkos::deep_copy(state.get_field<2>("zrough").get_mutable_device_data(), 2e-4);
     
     if (!state.has_field("ustar")) state.add_field<2>("ustar", {ny, nx});
