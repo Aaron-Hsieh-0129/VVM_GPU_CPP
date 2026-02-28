@@ -73,10 +73,10 @@ OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VV
     } 
     else if (engine_type_ == "SST") {
         int queue_limit = config.get_value<int>("output.queue_limit", 20);
-        std::string data_transport = config.get_value<std::string>("output.data_transport", "RDMA");
+        std::string data_transport = config.get_value<std::string>("output.data_transport", "");
         if (rank_ == 0) std::cout << "  [OutputManager] Engine: SST (BP5)." << std::endl;
         io_.SetParameter("MarshalMethod", "BP5"); 
-        io_.SetParameter("DataTransport", data_transport);
+        if (data_transport != "") io_.SetParameter("DataTransport", data_transport);
         io_.SetParameter("QueueLimit", std::to_string(queue_limit)); 
     }
 }

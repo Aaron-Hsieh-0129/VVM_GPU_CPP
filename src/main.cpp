@@ -118,6 +118,7 @@ int main(int argc, char *argv[]) {
     if (color == 1) {
         VVM::IO::run_io_server(split_comm, config);
 
+        Kokkos::finalize();
         MPI_Comm_free(&split_comm);
         MPI_Finalize();
         return 0;
