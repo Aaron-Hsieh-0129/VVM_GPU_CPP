@@ -1,32 +1,32 @@
 {
     "grid": {
-        "nx": 2048,
-        "ny": 2048,
+        "nx": 32,
+        "ny": 32,
         "nz": 33,
         "n_halo_cells": 2,
-        "dx": 2000.0,
-        "dy": 2000.0,
+        "dx": 500.0,
+        "dy": 500.0,
         "dz": 500.0,
         "dz1": 100.0
     },
     "simulation": {
-        "total_time_s": 200.0,
-        "dt_s": 5.0,
+        "total_time_s": 1500.0,
+        "dt_s": 1.0,
         "output_interval_s": 50.0
     },
     "initial_conditions": {
         "format": "txt",
-        "source_file": "/home/mog/VVM_GPU_CPP/rundata/initial_conditions/profile_p3.txt",
-        "perturbation": "none"
+        "source_file": "/home/mog/Aaron/VVM_GPU_CPP/rundata/initial_conditions/profile_dry.txt",
+        "perturbation": "bubble"
     },
     "netcdf_reader": {
-        "source_file": "/home/mog/VVM_GPU_CPP/rundata/init.nc",
+        "source_file": "/home/mog/Aaron/VVM_GPU_CPP/rundata/init.nc",
         "variables_to_read": {
             "2d": ["topo", "Tg"]
         }
     },
     "output": {
-        "output_dir": "/raid/mog/surface_flux_5000_seed1129",
+        "output_dir": "/home/mog/Aaron/VVM_GPU_CPP/output/VVM_comparison/standard/GPU",
         "engine": "SST",
         "queue_limit": 20,
         "data_transport": "",
@@ -55,17 +55,17 @@
         "solver": {
             "w_solver_method": "tridiagonal",
             "_w_solver_method_options": "Choose 'tridiagonal' (original) or 'jacobi' (3D parallel)",
-            "iteration": 50,
+            "iteration": 200,
             "WRXMU": 2.5e-7
         },
         "forcings": {
             "sponge_layer": {
-                "enable": true,
+                "enable": false,
                 "sponge_layer_base": 13000.0,
                 "inv_CRAD": 3600.0
             },
             "random_perturbation": {
-                "enable": true,
+                "enable": false,
                 "time_s": 200,
                 "amplitude": 1,
                 "z_start_m": 0,
@@ -250,14 +250,14 @@
     },
     "physics": {
         "p3": {
-            "enable_p3": true,
+            "enable_p3": false,
             "make_lookup_table": false,
             "do_predict_nc": true,
             "do_prescribed_ccn": false,
             "max_total_ni": 740.0e3
         },
         "rrtmgp": {
-            "enable_rrtmgp": true,
+            "enable_rrtmgp": false,
             "column_chunk_size": 512,
             "rad_frequency_step": 120,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
@@ -269,7 +269,7 @@
             "enable_turbulence": true
         },
         "surface": {
-            "enable_surface": true,
+            "enable_surface": false,
             "frequency_step": 1
         }
     },

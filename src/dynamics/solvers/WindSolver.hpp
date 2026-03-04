@@ -10,6 +10,8 @@
 #include "utils/TimingManager.hpp"
 #include "core/HaloExchanger.hpp"
 #include <memory>
+#include <map>
+#include <cuda_runtime.h>
 
 namespace VVM {
 namespace Dynamics {
@@ -22,6 +24,10 @@ enum class WSolverMethod {
 class WindSolver {
 public:
     WindSolver(const Core::Grid& grid, const Utils::ConfigurationManager& config, const Core::Parameters& params, VVM::Core::HaloExchanger& halo_exchanger);
+    ~WindSolver();
+
+    WindSolver(const WindSolver&) = delete;
+    WindSolver& operator=(const WindSolver&) = delete;
 
     void solve_w(Core::State& state);
     void solve_uv(Core::State& state);
@@ -47,6 +53,13 @@ private:
     mutable Core::Field<2> ATEMP_field_;
 
     Core::HaloExchanger& halo_exchanger_;
+
+#if defined(ENABLE_NCCL)
+    bool solve_w_graph_created_ = false;
+    cudaGraphExec_t solve_w_graph_exec_ = nullptr;
+    
+    std::map<std::string, cudaGraphExec_t> relax_2d_graphs_;
+#endif
 };
 
 } // namespace Dynamics

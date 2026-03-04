@@ -4,6 +4,24 @@
 namespace VVM {
 namespace Dynamics {
 
+WindSolver::~WindSolver() {
+#if defined(ENABLE_NCCL)
+    int device = -1;
+    if (cudaGetDevice(&device) == cudaSuccess) {
+        cudaDeviceSynchronize(); 
+
+        if (solve_w_graph_exec_) {
+            cudaGraphExecDestroy(solve_w_graph_exec_);
+        }
+        for (auto& pair : relax_2d_graphs_) {
+            if (pair.second) {
+                cudaGraphExecDestroy(pair.second);
+            }
+        }
+    }
+#endif
+}
+
 WindSolver::WindSolver(const Core::Grid& grid, const Utils::ConfigurationManager& config, const Core::Parameters& params, VVM::Core::HaloExchanger& halo_exchanger)
     : grid_(grid), config_(config), halo_exchanger_(halo_exchanger), params_(params),
       YTEM_field_("YTEM", {grid.get_local_total_points_z(), grid.get_local_total_points_y(), grid.get_local_total_points_x()}),
@@ -82,19 +100,24 @@ void WindSolver::solve_w(Core::State& state) {
         }
     );
 
-    // Store w to previous step
-    Kokkos::deep_copy(W3DNM1, w);
-
-    // Assign interpolated w to w
-    Kokkos::deep_copy(w, W3DNP1);
+    Kokkos::parallel_for("copy_W3DNM1", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz,ny,nx}), KOKKOS_LAMBDA(int k, int j, int i) { W3DNM1(k,j,i) = w(k,j,i); });
+    Kokkos::parallel_for("copy_w", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz,ny,nx}), KOKKOS_LAMBDA(int k, int j, int i) { w(k,j,i) = W3DNP1(k,j,i); });
 
     const auto& bn_new = params_.bn_new.get_device_data();
     const auto& cn_new = params_.cn_new.get_device_data();
 
+#if defined(ENABLE_NCCL)
+    cudaStream_t stream = Kokkos::Cuda().cuda_stream();
+    if (solve_w_graph_created_) {
+        cudaGraphLaunch(solve_w_graph_exec_, stream);
+        return; 
+    }
+    cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal);
+#endif
     if (w_solver_method_ == WSolverMethod::TRIDIAGONAL) {
         for (int iter = 0; iter < iter_num; iter++) {
             // Copy w to w3dn
-            Kokkos::deep_copy(W3DN, w);
+            Kokkos::parallel_for("copy_W3DN", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz,ny,nx}), KOKKOS_LAMBDA(int k, int j, int i) { W3DN(k,j,i) = w(k,j,i); });
 
             Kokkos::parallel_for("calculate_RHSV", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1,ny-h,nx-h}),
                 KOKKOS_LAMBDA(int k, int j, int i) {
@@ -141,7 +164,7 @@ void WindSolver::solve_w(Core::State& state) {
     }
     else {
         for (int iter = 0; iter < iter_num; iter++) {
-            Kokkos::deep_copy(W3DN, w);
+            Kokkos::parallel_for("copy_W3DN", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz,ny,nx}), KOKKOS_LAMBDA(int k, int j, int i) { W3DN(k,j,i) = w(k,j,i); });
 
             Kokkos::parallel_for("jacobi_w_solver", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1,ny-h,nx-h}),
                 KOKKOS_LAMBDA(int k, int j, int i) {
@@ -162,6 +185,19 @@ void WindSolver::solve_w(Core::State& state) {
         }
     }
     halo_exchanger_.exchange_halos(state.get_field<3>("w"));
+
+#if defined(ENABLE_NCCL)
+    cudaGraph_t graph = nullptr;
+    cudaStreamEndCapture(stream, &graph);
+    
+    if (graph != nullptr) {
+        cudaGraphInstantiate(&solve_w_graph_exec_, graph, nullptr, nullptr, 0);
+        cudaGraphDestroy(graph);
+        solve_w_graph_created_ = true;
+        
+        cudaGraphLaunch(solve_w_graph_exec_, stream);
+    }
+#endif
     return;
 }
 
@@ -287,6 +323,18 @@ void WindSolver::solve_uv(Core::State& state) {
 }
 
 void WindSolver::relax_2d(Core::Field<2>& A_field, Core::Field<2>& ANM1_field, Core::Field<2>& RHSV_field, Core::Field<2>& AOUT_field) {
+
+#if defined(ENABLE_NCCL)
+    std::string var_name = A_field.get_name();
+    cudaStream_t stream = Kokkos::Cuda().cuda_stream();
+
+    if (relax_2d_graphs_.count(var_name)) {
+        cudaGraphLaunch(relax_2d_graphs_[var_name], stream);
+        return;
+    }
+    cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal);
+#endif
+
     const auto& WRXMU = params_.WRXMU;
     const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
@@ -310,7 +358,7 @@ void WindSolver::relax_2d(Core::Field<2>& A_field, Core::Field<2>& ANM1_field, C
     );
 
     for (int iter = 0; iter < iter_num; iter++) {
-        Kokkos::deep_copy(ATEMP, AOUT);
+        Kokkos::parallel_for("copy_ATEMP", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {ny,nx}), KOKKOS_LAMBDA(int j, int i) { ATEMP(j,i) = AOUT(j,i); });
 
         Kokkos::parallel_for("AOUT", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
             KOKKOS_LAMBDA(int j, int i) {
@@ -321,6 +369,17 @@ void WindSolver::relax_2d(Core::Field<2>& A_field, Core::Field<2>& ANM1_field, C
 
         halo_exchanger_.exchange_halos(AOUT_field, 1);
     }
+#if defined(ENABLE_NCCL)
+    cudaGraph_t graph = nullptr;
+    cudaStreamEndCapture(stream, &graph);
+    
+    if (graph != nullptr) {
+        cudaGraphInstantiate(&relax_2d_graphs_[var_name], graph, nullptr, nullptr, 0);
+        cudaGraphDestroy(graph);
+
+        cudaGraphLaunch(relax_2d_graphs_[var_name], stream);
+    }
+#endif
     return;
 }
 
