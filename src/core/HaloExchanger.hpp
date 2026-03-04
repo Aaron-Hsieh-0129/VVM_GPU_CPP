@@ -35,6 +35,7 @@ public:
 
     void exchange_halos(State& state);
 
+    /*
     template<size_t Dim>
     void exchange_halos(Field<Dim>& field, int depth = -1) const {
         VVM::Utils::Timer exchange_halos_timer("Exchnage_halos");
@@ -42,10 +43,56 @@ public:
         
         cudaStreamCaptureStatus capture_status;
         cudaStreamIsCapturing(stream_, &capture_status);
-        if (depth == -1 && capture_status == cudaStreamCaptureStatusNone && grid_ref_.get_mpi_size() > 1) {
+        if (capture_status == cudaStreamCaptureStatusNone && grid_ref_.get_mpi_size() > 1) {
              cudaStreamSynchronize(stream_);
         }
     }
+    */
+
+    template<size_t Dim>
+    void exchange_halos(Field<Dim>& field, int depth = -1) const {
+        VVM::Utils::Timer exchange_halos_timer("Exchnage_halos");
+        
+        const std::string name = field.get_name();
+        const std::string graph_key = name + "_" + std::to_string(depth);
+
+        cudaStreamCaptureStatus capture_status;
+        cudaStreamIsCapturing(stream_, &capture_status);
+
+        if (capture_status == cudaStreamCaptureStatusActive) {
+            this->exchange_halos_impl(field, depth);
+            return; 
+        }
+
+        auto it = graph_map_.find(graph_key);
+        
+        if (it == graph_map_.end()) {
+            cudaStreamBeginCapture(stream_, cudaStreamCaptureModeGlobal);
+            
+            this->exchange_halos_impl(field, depth);
+            
+            cudaGraph_t graph = nullptr;
+            cudaStreamEndCapture(stream_, &graph);
+            
+            // 確保錄製成功才存入 Map
+            if (graph != nullptr) {
+                cudaGraphExec_t instance;
+                cudaGraphInstantiate(&instance, graph, nullptr, nullptr, 0);
+                cudaGraphDestroy(graph);
+                graph_map_[graph_key] = instance;
+                it = graph_map_.find(graph_key);
+            } 
+            else {
+                this->exchange_halos_impl(field, depth);
+                return;
+            }
+        }
+        cudaGraphLaunch(it->second, stream_);
+        if (capture_status == cudaStreamCaptureStatusNone && grid_ref_.get_mpi_size() > 1) {
+             cudaStreamSynchronize(stream_);
+        }
+    }
+    
 
     template<size_t Dim>
     void exchange_halos_impl(Field<Dim>& field, int depth = -1) const;
@@ -72,7 +119,7 @@ private:
 
     std::set<std::string> enabled_graph_vars_;
 
-    std::map<std::string, cudaGraphExec_t> graph_map_;
+    mutable std::map<std::string, cudaGraphExec_t> graph_map_;
 
     mutable Kokkos::View<double*, ExecSpace> send_x_left_, recv_x_left_;
     mutable Kokkos::View<double*, ExecSpace> send_x_right_, recv_x_right_;
@@ -640,7 +687,7 @@ public:
             auto reqs_x = post_exchange_halo_x(field, depth);
             wait_exchange_halo_x(field, reqs_x, depth);
         }
-    }
+    } 
 
     // --- Asynchronous Halo Exchange Functions ---
     template<size_t Dim>
