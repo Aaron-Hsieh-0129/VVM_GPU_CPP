@@ -64,6 +64,13 @@ private:
     Core::HaloExchanger& halo_exchanger_;
 
     bool enable_coriolis_ = false;
+
+    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> tempumn_{"tempumn"};
+    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> tempvmn_{"tempvmn"};
+    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> mean_u_turb_{"mean_u_turb"};
+    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> mean_v_turb_{"mean_v_turb"};
+    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> mean_u_coriolis_{"mean_u_coriolis"};
+    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> mean_v_coriolis_{"mean_v_coriolis"};
 };
 
 } // namespace Dynamics
