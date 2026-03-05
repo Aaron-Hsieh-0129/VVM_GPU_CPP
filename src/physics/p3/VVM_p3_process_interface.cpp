@@ -787,20 +787,11 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
         }
     );
 
-
-    halo_exchanger_.exchange_halos(state.get_field<3>("qc"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("nc"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("qr"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("nr"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("qi"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("qm"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("ni"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("bm"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("th"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("qv"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("qp"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("T"));
-    halo_exchanger_.exchange_halos(state.get_field<3>("qv_m"));
+    std::vector<std::string> p3_update_vars = {
+        "qc", "nc", "qr", "nr", "qi", "qm", "ni", "bm", 
+        "th", "qv", "qp", "T", "qv_m"
+    };
+    halo_exchanger_.exchange_multiple_halos(p3_update_vars, state);
 }
 
 

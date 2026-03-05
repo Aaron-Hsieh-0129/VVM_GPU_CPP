@@ -58,6 +58,8 @@ public:
         exchange_halos_slice(field, nz - h - 1);
     }
 
+    void exchange_multiple_halos(const std::vector<std::string>& field_names, State& state) const;
+
 private:
     const Grid& grid_ref_;
     MPI_Comm cart_comm_;
@@ -176,6 +178,125 @@ inline HaloExchanger::~HaloExchanger() {
             cudaGraphExecDestroy(pair.second);
         }
     }
+}
+
+inline void HaloExchanger::exchange_multiple_halos(const std::vector<std::string>& field_names, State& state) const {
+    if (field_names.empty()) return;
+    const int h = grid_ref_.get_halo_cells();
+    if (h == 0) return;
+
+    size_t num_fields = field_names.size();
+    size_t count_x_total = num_fields * buffer_size_x_3d_;
+    size_t count_y_total = num_fields * buffer_size_y_3d_;
+
+    if (send_x_left_.extent(0) < count_x_total) {
+        Kokkos::resize(send_x_left_, count_x_total); Kokkos::resize(recv_x_left_, count_x_total);
+        Kokkos::resize(send_x_right_, count_x_total); Kokkos::resize(recv_x_right_, count_x_total);
+    }
+    if (send_y_bottom_.extent(0) < count_y_total) {
+        Kokkos::resize(send_y_bottom_, count_y_total); Kokkos::resize(recv_y_bottom_, count_y_total);
+        Kokkos::resize(send_y_top_, count_y_total); Kokkos::resize(recv_y_top_, count_y_total);
+    }
+
+    const int nx_phys = grid_ref_.get_local_physical_points_x();
+    const int ny_phys = grid_ref_.get_local_physical_points_y();
+    const int nz = grid_ref_.get_local_total_points_z();
+    const int ny = grid_ref_.get_local_total_points_y();
+    const int nx = grid_ref_.get_local_total_points_x();
+    const int halo_start_offset = h;
+    const int my_rank = grid_ref_.get_mpi_rank();
+
+    const int neighbor_left = neighbor_left_;
+    const int neighbor_right = neighbor_right_;
+    const int neighbor_bottom = neighbor_bottom_;
+    const int neighbor_top = neighbor_top_;
+    const bool is_single = is_single_rank_;
+
+    if (count_x_total > 0) {
+        for (size_t f = 0; f < num_fields; ++f) {
+            auto data = state.get_field<3>(field_names[f]).get_mutable_device_data();
+            size_t offset = f * buffer_size_x_3d_;
+            auto send_l = Kokkos::subview(send_x_left_, std::make_pair(offset, offset + buffer_size_x_3d_));
+            auto send_r = Kokkos::subview(send_x_right_, std::make_pair(offset, offset + buffer_size_x_3d_));
+
+            Kokkos::parallel_for("pack_multi_x", Kokkos::MDRangePolicy<Kokkos::Rank<3>, ExecSpace>(exec_space_, {0,0,0}, {nz, ny, h}),
+                KOKKOS_LAMBDA(int k, int j, int i_h) {
+                    const size_t idx = k * (ny * h) + j * h + i_h;
+                    send_l(idx) = data(k, j, halo_start_offset + i_h);
+                    send_r(idx) = data(k, j, halo_start_offset + nx_phys - h + i_h);
+            });
+        }
+
+        if (is_single || (neighbor_left == my_rank && neighbor_right == my_rank)) {
+            Kokkos::deep_copy(exec_space_, Kokkos::subview(recv_x_left_, std::make_pair((size_t)0, count_x_total)), Kokkos::subview(send_x_right_, std::make_pair((size_t)0, count_x_total)));
+            Kokkos::deep_copy(exec_space_, Kokkos::subview(recv_x_right_, std::make_pair((size_t)0, count_x_total)), Kokkos::subview(send_x_left_, std::make_pair((size_t)0, count_x_total)));
+        } else {
+            ncclGroupStart();
+            if(neighbor_right != MPI_PROC_NULL) ncclSend(send_x_right_.data(), count_x_total, ncclDouble, neighbor_right, nccl_comm_, stream_);
+            if(neighbor_left != MPI_PROC_NULL) ncclRecv(recv_x_left_.data(), count_x_total, ncclDouble, neighbor_left, nccl_comm_, stream_);
+            if(neighbor_left != MPI_PROC_NULL) ncclSend(send_x_left_.data(), count_x_total, ncclDouble, neighbor_left, nccl_comm_, stream_);
+            if(neighbor_right != MPI_PROC_NULL) ncclRecv(recv_x_right_.data(), count_x_total, ncclDouble, neighbor_right, nccl_comm_, stream_);
+            ncclGroupEnd();
+        }
+
+        for (size_t f = 0; f < num_fields; ++f) {
+            auto data = state.get_field<3>(field_names[f]).get_mutable_device_data();
+            size_t offset = f * buffer_size_x_3d_;
+            auto recv_l = Kokkos::subview(recv_x_left_, std::make_pair(offset, offset + buffer_size_x_3d_));
+            auto recv_r = Kokkos::subview(recv_x_right_, std::make_pair(offset, offset + buffer_size_x_3d_));
+
+            Kokkos::parallel_for("unpack_multi_x", Kokkos::MDRangePolicy<Kokkos::Rank<3>, ExecSpace>(exec_space_, {0,0,0}, {nz, ny, h}),
+                KOKKOS_LAMBDA(int k, int j, int i_h) {
+                    const size_t idx = k * (ny * h) + j * h + i_h;
+                    if (neighbor_left != MPI_PROC_NULL || is_single) data(k, j, halo_start_offset - h + i_h) = recv_l(idx);
+                    if (neighbor_right != MPI_PROC_NULL || is_single) data(k, j, halo_start_offset + nx_phys + i_h) = recv_r(idx);
+            });
+        }
+    }
+
+    if (count_y_total > 0) {
+        for (size_t f = 0; f < num_fields; ++f) {
+            auto data = state.get_field<3>(field_names[f]).get_mutable_device_data();
+            size_t offset = f * buffer_size_y_3d_;
+            auto send_b = Kokkos::subview(send_y_bottom_, std::make_pair(offset, offset + buffer_size_y_3d_));
+            auto send_t = Kokkos::subview(send_y_top_, std::make_pair(offset, offset + buffer_size_y_3d_));
+
+            Kokkos::parallel_for("pack_multi_y", Kokkos::MDRangePolicy<Kokkos::Rank<3>, ExecSpace>(exec_space_, {0,0,0}, {nz, nx, h}),
+                KOKKOS_LAMBDA(int k, int i, int j_h) {
+                    const size_t idx = k * (h * nx) + j_h * nx + i;
+                    send_b(idx) = data(k, halo_start_offset + j_h, i);
+                    send_t(idx) = data(k, halo_start_offset + ny_phys - h + j_h, i);
+            });
+        }
+
+        if (is_single || (neighbor_bottom == my_rank && neighbor_top == my_rank)) {
+            Kokkos::deep_copy(exec_space_, Kokkos::subview(recv_y_bottom_, std::make_pair((size_t)0, count_y_total)), Kokkos::subview(send_y_top_, std::make_pair((size_t)0, count_y_total)));
+            Kokkos::deep_copy(exec_space_, Kokkos::subview(recv_y_top_, std::make_pair((size_t)0, count_y_total)), Kokkos::subview(send_y_bottom_, std::make_pair((size_t)0, count_y_total)));
+        } else {
+            ncclGroupStart();
+            if(neighbor_top != MPI_PROC_NULL) ncclSend(send_y_top_.data(), count_y_total, ncclDouble, neighbor_top, nccl_comm_, stream_);
+            if(neighbor_bottom != MPI_PROC_NULL) ncclRecv(recv_y_bottom_.data(), count_y_total, ncclDouble, neighbor_bottom, nccl_comm_, stream_);
+            if(neighbor_bottom != MPI_PROC_NULL) ncclSend(send_y_bottom_.data(), count_y_total, ncclDouble, neighbor_bottom, nccl_comm_, stream_);
+            if(neighbor_top != MPI_PROC_NULL) ncclRecv(recv_y_top_.data(), count_y_total, ncclDouble, neighbor_top, nccl_comm_, stream_);
+            ncclGroupEnd();
+        }
+
+        for (size_t f = 0; f < num_fields; ++f) {
+            auto data = state.get_field<3>(field_names[f]).get_mutable_device_data();
+            size_t offset = f * buffer_size_y_3d_;
+            auto recv_b = Kokkos::subview(recv_y_bottom_, std::make_pair(offset, offset + buffer_size_y_3d_));
+            auto recv_t = Kokkos::subview(recv_y_top_, std::make_pair(offset, offset + buffer_size_y_3d_));
+
+            Kokkos::parallel_for("unpack_multi_y", Kokkos::MDRangePolicy<Kokkos::Rank<3>, ExecSpace>(exec_space_, {0,0,0}, {nz, nx, h}),
+                KOKKOS_LAMBDA(int k, int i, int j_h) {
+                    const size_t idx = k * (h * nx) + j_h * nx + i;
+                    if (neighbor_bottom != MPI_PROC_NULL || is_single) data(k, halo_start_offset - h + j_h, i) = recv_b(idx);
+                    if (neighbor_top != MPI_PROC_NULL || is_single) data(k, halo_start_offset + ny_phys + j_h, i) = recv_t(idx);
+            });
+        }
+    }
+    
+    cudaStreamSynchronize(stream_);
 }
 
 inline void HaloExchanger::exchange_halos(State& state) {
@@ -1044,6 +1165,134 @@ void HaloExchanger::wait_exchange_halo_y(Field<Dim>& field, HaloExchangeRequests
     }
 }
 
+inline void HaloExchanger::exchange_multiple_halos(const std::vector<std::string>& field_names, State& state) const {
+    if (field_names.empty()) return;
+    const int h = grid_ref_.get_halo_cells();
+    if (h == 0) return;
+
+    size_t num_fields = field_names.size();
+    size_t count_x_total = num_fields * buffer_size_x_3d_;
+    size_t count_y_total = num_fields * buffer_size_y_3d_;
+
+    if (send_x_left_.extent(0) < count_x_total) {
+        Kokkos::resize(send_x_left_, count_x_total); Kokkos::resize(recv_x_left_, count_x_total);
+        Kokkos::resize(send_x_right_, count_x_total); Kokkos::resize(recv_x_right_, count_x_total);
+    }
+    if (send_y_bottom_.extent(0) < count_y_total) {
+        Kokkos::resize(send_y_bottom_, count_y_total); Kokkos::resize(recv_y_bottom_, count_y_total);
+        Kokkos::resize(send_y_top_, count_y_total); Kokkos::resize(recv_y_top_, count_y_total);
+    }
+
+    const int nx_phys = grid_ref_.get_local_physical_points_x();
+    const int ny_phys = grid_ref_.get_local_physical_points_y();
+    const int nz = grid_ref_.get_local_total_points_z();
+    const int ny = grid_ref_.get_local_total_points_y();
+    const int nx = grid_ref_.get_local_total_points_x();
+    const int halo_start_offset = h;
+
+    const int neighbor_left = neighbor_left_;
+    const int neighbor_right = neighbor_right_;
+    const int neighbor_bottom = neighbor_bottom_;
+    const int neighbor_top = neighbor_top_;
+
+    // --- X Direction ---
+    if (count_x_total > 0) {
+        for (size_t f = 0; f < num_fields; ++f) {
+            auto data = state.get_field<3>(field_names[f]).get_mutable_device_data();
+            size_t offset = f * buffer_size_x_3d_;
+            auto send_l = Kokkos::subview(send_x_left_, std::make_pair(offset, offset + buffer_size_x_3d_));
+            auto send_r = Kokkos::subview(send_x_right_, std::make_pair(offset, offset + buffer_size_x_3d_));
+
+            Kokkos::parallel_for("pack_multi_x", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, ny, h}),
+                KOKKOS_LAMBDA(int k, int j, int i_h) {
+                    const size_t idx = k * (ny * h) + j * h + i_h;
+                    send_l(idx) = data(k, j, halo_start_offset + i_h);
+                    send_r(idx) = data(k, j, halo_start_offset + nx_phys - h + i_h);
+            });
+        }
+        Kokkos::fence();
+
+        HaloExchangeRequests req_obj;
+        req_obj.requests.resize(4);
+        auto recv_l = Kokkos::subview(recv_x_left_, std::make_pair((size_t)0, count_x_total));
+        auto recv_r = Kokkos::subview(recv_x_right_, std::make_pair((size_t)0, count_x_total));
+        auto send_l = Kokkos::subview(send_x_left_, std::make_pair((size_t)0, count_x_total));
+        auto send_r = Kokkos::subview(send_x_right_, std::make_pair((size_t)0, count_x_total));
+
+        if(neighbor_right != MPI_PROC_NULL) MPI_Irecv(recv_r.data(), count_x_total, MPI_DOUBLE, neighbor_right, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT), cart_comm_, &req_obj.requests[req_obj.count++]);
+        if(neighbor_left  != MPI_PROC_NULL) MPI_Irecv(recv_l.data(), count_x_total, MPI_DOUBLE, neighbor_left, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT), cart_comm_, &req_obj.requests[req_obj.count++]);
+        if(neighbor_left  != MPI_PROC_NULL) MPI_Isend(send_l.data(), count_x_total, MPI_DOUBLE, neighbor_left, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT), cart_comm_, &req_obj.requests[req_obj.count++]);
+        if(neighbor_right != MPI_PROC_NULL) MPI_Isend(send_r.data(), count_x_total, MPI_DOUBLE, neighbor_right, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT), cart_comm_, &req_obj.requests[req_obj.count++]);
+
+        if (req_obj.count > 0) {
+            MPI_Waitall(req_obj.count, req_obj.requests.data(), MPI_STATUSES_IGNORE);
+            Kokkos::fence();
+        }
+
+        for (size_t f = 0; f < num_fields; ++f) {
+            auto data = state.get_field<3>(field_names[f]).get_mutable_device_data();
+            size_t offset = f * buffer_size_x_3d_;
+            auto recv_l_f = Kokkos::subview(recv_x_left_, std::make_pair(offset, offset + buffer_size_x_3d_));
+            auto recv_r_f = Kokkos::subview(recv_x_right_, std::make_pair(offset, offset + buffer_size_x_3d_));
+
+            Kokkos::parallel_for("unpack_multi_x", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, ny, h}),
+                KOKKOS_LAMBDA(int k, int j, int i_h) {
+                    const size_t idx = k * (ny * h) + j * h + i_h;
+                    if (neighbor_left != MPI_PROC_NULL) data(k, j, halo_start_offset - h + i_h) = recv_l_f(idx);
+                    if (neighbor_right != MPI_PROC_NULL) data(k, j, halo_start_offset + nx_phys + i_h) = recv_r_f(idx);
+            });
+        }
+    }
+
+    // --- Y Direction ---
+    if (count_y_total > 0) {
+        for (size_t f = 0; f < num_fields; ++f) {
+            auto data = state.get_field<3>(field_names[f]).get_mutable_device_data();
+            size_t offset = f * buffer_size_y_3d_;
+            auto send_b = Kokkos::subview(send_y_bottom_, std::make_pair(offset, offset + buffer_size_y_3d_));
+            auto send_t = Kokkos::subview(send_y_top_, std::make_pair(offset, offset + buffer_size_y_3d_));
+
+            Kokkos::parallel_for("pack_multi_y", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, nx, h}),
+                KOKKOS_LAMBDA(int k, int i, int j_h) {
+                    const size_t idx = k * (h * nx) + j_h * nx + i;
+                    send_b(idx) = data(k, halo_start_offset + j_h, i);
+                    send_t(idx) = data(k, halo_start_offset + ny_phys - h + j_h, i);
+            });
+        }
+        Kokkos::fence();
+
+        HaloExchangeRequests req_obj;
+        req_obj.requests.resize(4);
+        auto recv_b = Kokkos::subview(recv_y_bottom_, std::make_pair((size_t)0, count_y_total));
+        auto recv_t = Kokkos::subview(recv_y_top_, std::make_pair((size_t)0, count_y_total));
+        auto send_b = Kokkos::subview(send_y_bottom_, std::make_pair((size_t)0, count_y_total));
+        auto send_t = Kokkos::subview(send_y_top_, std::make_pair((size_t)0, count_y_total));
+
+        if(neighbor_bottom != MPI_PROC_NULL) MPI_Irecv(recv_b.data(), count_y_total, MPI_DOUBLE, neighbor_bottom, static_cast<int>(HaloExchangeTags::SEND_TO_TOP), cart_comm_, &req_obj.requests[req_obj.count++]);
+        if(neighbor_top    != MPI_PROC_NULL) MPI_Irecv(recv_t.data(), count_y_total, MPI_DOUBLE, neighbor_top, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM), cart_comm_, &req_obj.requests[req_obj.count++]);
+        if(neighbor_top    != MPI_PROC_NULL) MPI_Isend(send_t.data(), count_y_total, MPI_DOUBLE, neighbor_top, static_cast<int>(HaloExchangeTags::SEND_TO_TOP), cart_comm_, &req_obj.requests[req_obj.count++]);
+        if(neighbor_bottom != MPI_PROC_NULL) MPI_Isend(send_b.data(), count_y_total, MPI_DOUBLE, neighbor_bottom, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM), cart_comm_, &req_obj.requests[req_obj.count++]);
+
+        if (req_obj.count > 0) {
+            MPI_Waitall(req_obj.count, req_obj.requests.data(), MPI_STATUSES_IGNORE);
+            Kokkos::fence();
+        }
+
+        for (size_t f = 0; f < num_fields; ++f) {
+            auto data = state.get_field<3>(field_names[f]).get_mutable_device_data();
+            size_t offset = f * buffer_size_y_3d_;
+            auto recv_b_f = Kokkos::subview(recv_y_bottom_, std::make_pair(offset, offset + buffer_size_y_3d_));
+            auto recv_t_f = Kokkos::subview(recv_y_top_, std::make_pair(offset, offset + buffer_size_y_3d_));
+
+            Kokkos::parallel_for("unpack_multi_y", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, nx, h}),
+                KOKKOS_LAMBDA(int k, int i, int j_h) {
+                    const size_t idx = k * (h * nx) + j_h * nx + i;
+                    if (neighbor_bottom != MPI_PROC_NULL) data(k, halo_start_offset - h + j_h, i) = recv_b_f(idx);
+                    if (neighbor_top != MPI_PROC_NULL) data(k, halo_start_offset + ny_phys + j_h, i) = recv_t_f(idx);
+            });
+        }
+    }
+}
 
 inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) const {
     const int h = grid_ref_.get_halo_cells();
