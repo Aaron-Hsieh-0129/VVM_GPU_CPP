@@ -45,7 +45,7 @@ void TendencyCalculator::calculate_tendencies(Core::State& state, const Core::Gr
         for (const auto& term : ab2_tendency_terms_) {
             term->compute_tendency(state, grid, params, current_tendency_field);
         }
-        Kokkos::deep_copy(total_current_tendency_view, current_tendency_field.get_device_data());
+        Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), total_current_tendency_view, current_tendency_field.get_device_data());
     }
 
     // Calculate Forward Euler tendencies
