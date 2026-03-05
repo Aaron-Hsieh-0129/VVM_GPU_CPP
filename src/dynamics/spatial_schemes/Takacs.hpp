@@ -77,6 +77,10 @@ public:
         const Core::Parameters& params, Core::Field<3>& out_tendency) const override;
 private:
     Core::HaloExchanger& halo_exchanger_;
+
+    mutable std::unique_ptr<Core::Field<3>> flux_field_;
+    mutable std::unique_ptr<Core::Field<3>> plus_field_;
+    mutable std::unique_ptr<Core::Field<3>> minus_field_;
 };
 
 } // namespace Dynamics
