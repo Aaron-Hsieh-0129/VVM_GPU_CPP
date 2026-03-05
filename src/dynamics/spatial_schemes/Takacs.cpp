@@ -21,12 +21,19 @@ void Takacs::calculate_flux_convergence_x(
 
     const auto& u = u_field.get_device_data();
     const auto& q = scalar.get_device_data();
-    Core::Field<3> flux_field("flux", {nz, ny, nx});
+
+    if (!flux_field_) {
+        flux_field_ = std::make_unique<Core::Field<3>>("flux", std::array<int,3>{nz, ny, nx});
+        plus_field_ = std::make_unique<Core::Field<3>>("plus", std::array<int,3>{nz, ny, nx});
+        minus_field_ = std::make_unique<Core::Field<3>>("minus", std::array<int,3>{nz, ny, nx});
+    }
+    
+    auto& flux_field = *flux_field_;
+    auto& uplus_field = *plus_field_;
+    auto& uminus_field = *minus_field_;
+    
     auto& flux = flux_field.get_mutable_device_data();
     auto& tendency = out_tendency.get_mutable_device_data();
-
-    Core::Field<3> uplus_field("uplus", {nz, ny, nx});
-    Core::Field<3> uminus_field("uminus", {nz, ny, nx});
     auto& uplus = uplus_field.get_mutable_device_data();
     auto& uminus = uminus_field.get_mutable_device_data();
 
@@ -88,15 +95,21 @@ void Takacs::calculate_flux_convergence_y(
 
     const auto& v = v_field.get_device_data();
     const auto& q = scalar.get_device_data();
-    Core::Field<3> flux_field("flux", {nz, ny, nx});
+
+    if (!flux_field_) {
+        flux_field_ = std::make_unique<Core::Field<3>>("flux", std::array<int,3>{nz, ny, nx});
+        plus_field_ = std::make_unique<Core::Field<3>>("plus", std::array<int,3>{nz, ny, nx});
+        minus_field_ = std::make_unique<Core::Field<3>>("minus", std::array<int,3>{nz, ny, nx});
+    }
+    
+    auto& flux_field = *flux_field_;
+    auto& vplus_field = *plus_field_;
+    auto& vminus_field = *minus_field_;
+    
     auto& flux = flux_field.get_mutable_device_data();
     auto& tendency = out_tendency.get_mutable_device_data();
-
-    Core::Field<3> vplus_field("vplus", {nz, ny, nx});
-    Core::Field<3> vminus_field("vminus", {nz, ny, nx});
-    auto& vplus  = vplus_field.get_mutable_device_data();
+    auto& vplus = vplus_field.get_mutable_device_data();
     auto& vminus = vminus_field.get_mutable_device_data();
-    // DEBUG print
 
     int k_start = h;
     int k_end = nz-h;
@@ -156,13 +169,20 @@ void Takacs::calculate_flux_convergence_z(
 
     const auto& w = w_field.get_device_data();
     const auto& q = scalar.get_device_data();
-    Core::Field<3> flux_field("flux", {nz, ny, nx});
+
+    if (!flux_field_) {
+        flux_field_ = std::make_unique<Core::Field<3>>("flux", std::array<int,3>{nz, ny, nx});
+        plus_field_ = std::make_unique<Core::Field<3>>("plus", std::array<int,3>{nz, ny, nx});
+        minus_field_ = std::make_unique<Core::Field<3>>("minus", std::array<int,3>{nz, ny, nx});
+    }
+    
+    auto& flux_field = *flux_field_;
+    auto& wplus_field = *plus_field_;
+    auto& wminus_field = *minus_field_;
+    
     auto& flux = flux_field.get_mutable_device_data();
     auto& tendency = out_tendency.get_mutable_device_data();
-
-    Core::Field<3> wplus_field("wplus", {nz, ny, nx});
-    Core::Field<3> wminus_field("wminus", {nz, ny, nx});
-    auto& wplus  = wplus_field.get_mutable_device_data();
+    auto& wplus = wplus_field.get_mutable_device_data();
     auto& wminus = wminus_field.get_mutable_device_data();
 
     Kokkos::parallel_for("wplus_minus_cal", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,h,h}, {nz,ny-h,nx-h}),
