@@ -35,7 +35,6 @@ public:
 
     void exchange_halos(State& state);
 
-    /*
     template<size_t Dim>
     void exchange_halos(Field<Dim>& field, int depth = -1) const {
         VVM::Utils::Timer exchange_halos_timer("Exchnage_halos");
@@ -43,56 +42,10 @@ public:
         
         cudaStreamCaptureStatus capture_status;
         cudaStreamIsCapturing(stream_, &capture_status);
-        if (capture_status == cudaStreamCaptureStatusNone && grid_ref_.get_mpi_size() > 1) {
+        if (depth == -1 && capture_status == cudaStreamCaptureStatusNone && grid_ref_.get_mpi_size() > 1) {
              cudaStreamSynchronize(stream_);
         }
     }
-    */
-
-    template<size_t Dim>
-    void exchange_halos(Field<Dim>& field, int depth = -1) const {
-        VVM::Utils::Timer exchange_halos_timer("Exchnage_halos");
-        
-        const std::string name = field.get_name();
-        const std::string graph_key = name + "_" + std::to_string(depth);
-
-        cudaStreamCaptureStatus capture_status;
-        cudaStreamIsCapturing(stream_, &capture_status);
-
-        if (capture_status == cudaStreamCaptureStatusActive) {
-            this->exchange_halos_impl(field, depth);
-            return; 
-        }
-
-        auto it = graph_map_.find(graph_key);
-        
-        if (it == graph_map_.end()) {
-            cudaStreamBeginCapture(stream_, cudaStreamCaptureModeGlobal);
-            
-            this->exchange_halos_impl(field, depth);
-            
-            cudaGraph_t graph = nullptr;
-            cudaStreamEndCapture(stream_, &graph);
-            
-            // 確保錄製成功才存入 Map
-            if (graph != nullptr) {
-                cudaGraphExec_t instance;
-                cudaGraphInstantiate(&instance, graph, nullptr, nullptr, 0);
-                cudaGraphDestroy(graph);
-                graph_map_[graph_key] = instance;
-                it = graph_map_.find(graph_key);
-            } 
-            else {
-                this->exchange_halos_impl(field, depth);
-                return;
-            }
-        }
-        cudaGraphLaunch(it->second, stream_);
-        if (capture_status == cudaStreamCaptureStatusNone && grid_ref_.get_mpi_size() > 1) {
-             cudaStreamSynchronize(stream_);
-        }
-    }
-    
 
     template<size_t Dim>
     void exchange_halos_impl(Field<Dim>& field, int depth = -1) const;
@@ -119,7 +72,7 @@ private:
 
     std::set<std::string> enabled_graph_vars_;
 
-    mutable std::map<std::string, cudaGraphExec_t> graph_map_;
+    std::map<std::string, cudaGraphExec_t> graph_map_;
 
     mutable Kokkos::View<double*, ExecSpace> send_x_left_, recv_x_left_;
     mutable Kokkos::View<double*, ExecSpace> send_x_right_, recv_x_right_;
@@ -226,7 +179,7 @@ inline HaloExchanger::~HaloExchanger() {
 }
 
 inline void HaloExchanger::exchange_halos(State& state) {
-    Kokkos::fence(); 
+    // Kokkos::fence(); 
 
     for (auto& field_pair : state) {
         std::visit([this](auto& field) {
@@ -687,7 +640,7 @@ public:
             auto reqs_x = post_exchange_halo_x(field, depth);
             wait_exchange_halo_x(field, reqs_x, depth);
         }
-    } 
+    }
 
     // --- Asynchronous Halo Exchange Functions ---
     template<size_t Dim>
@@ -861,7 +814,7 @@ HaloExchangeRequests HaloExchanger::post_exchange_halo_x(Field<Dim>& field, int 
                 send_r(idx) = data(w, k, j, halo_start_offset + nx_phys - h + i_h);
         });
     }
-    Kokkos::fence();
+    // Kokkos::fence();
 
     // Kokkos::deep_copy(send_l_h, send_l);
     // Kokkos::deep_copy(send_r_h, send_r);
@@ -887,7 +840,7 @@ void HaloExchanger::wait_exchange_halo_x(Field<Dim>& field, HaloExchangeRequests
     if (reqs.count == 0) return;
 
     MPI_Waitall(reqs.count, reqs.requests.data(), MPI_STATUSES_IGNORE);
-    Kokkos::fence();
+    // Kokkos::fence();
 
     const int halo_start_offset = grid_ref_.get_halo_cells();
     int h = grid_ref_.get_halo_cells();
@@ -1005,7 +958,7 @@ HaloExchangeRequests HaloExchanger::post_exchange_halo_y(Field<Dim>& field, int 
                 send_t(idx) = data(w, k, halo_start_offset + ny_phys - h + j_h, i);
         });
     }
-    Kokkos::fence();
+    // Kokkos::fence();
 
     // Kokkos::deep_copy(send_b_h, send_b);
     // Kokkos::deep_copy(send_t_h, send_t);
@@ -1031,7 +984,7 @@ void HaloExchanger::wait_exchange_halo_y(Field<Dim>& field, HaloExchangeRequests
     if (reqs.count == 0) return;
 
     MPI_Waitall(reqs.count, reqs.requests.data(), MPI_STATUSES_IGNORE);
-    Kokkos::fence();
+    // Kokkos::fence();
 
     const int halo_start_offset = grid_ref_.get_halo_cells();
     int h = grid_ref_.get_halo_cells();
@@ -1122,7 +1075,7 @@ inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) co
                     send_b(idx) = data(k_layer, h + j_h, i);
                     send_t(idx) = data(k_layer, h + ny_phys - h + j_h, i);
             });
-            Kokkos::fence();
+            // Kokkos::fence();
 
             // Kokkos::deep_copy(send_b_h, send_b);
             // Kokkos::deep_copy(send_t_h, send_t);
@@ -1140,7 +1093,7 @@ inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) co
             // if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Isend(send_b_h.data(), count, MPI_DOUBLE, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_BOTTOM), cart_comm_, &reqs[req_count++]);
             
             if(req_count > 0) MPI_Waitall(req_count, reqs, MPI_STATUSES_IGNORE);
-            Kokkos::fence();
+            // Kokkos::fence();
 
             // Kokkos::deep_copy(recv_b, recv_b_h);
             // Kokkos::deep_copy(recv_t, recv_t_h);
@@ -1154,7 +1107,7 @@ inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) co
                     if (neighbor_bottom != MPI_PROC_NULL) data(k_layer, j_h, i) = recv_b(idx);
                     if (neighbor_top != MPI_PROC_NULL) data(k_layer, h + ny_phys + j_h, i) = recv_t(idx);
             });
-            Kokkos::fence();
+            // Kokkos::fence();
         }
     }
 
@@ -1178,7 +1131,7 @@ inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) co
                     send_l(idx) = data(k_layer, j, h + i_h);
                     send_r(idx) = data(k_layer, j, h + nx_phys - h + i_h);
             });
-            Kokkos::fence();
+            // Kokkos::fence();
 
             // Kokkos::deep_copy(send_l_h, send_l);
             // Kokkos::deep_copy(send_r_h, send_r);
@@ -1196,7 +1149,7 @@ inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) co
             // if(neighbor_right_ != MPI_PROC_NULL) MPI_Isend(send_r_h.data(), count, MPI_DOUBLE, neighbor_right_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_RIGHT), cart_comm_, &reqs[req_count++]);
             
             if(req_count > 0) MPI_Waitall(req_count, reqs, MPI_STATUSES_IGNORE);
-            Kokkos::fence();
+            // Kokkos::fence();
 
             // Kokkos::deep_copy(recv_l, recv_l_h);
             // Kokkos::deep_copy(recv_r, recv_r_h);
@@ -1210,7 +1163,7 @@ inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) co
                     if (neighbor_left != MPI_PROC_NULL) data(k_layer, j, i_h) = recv_l(idx);
                     if (neighbor_right != MPI_PROC_NULL) data(k_layer, j, h + nx_phys + i_h) = recv_r(idx);
             });
-            Kokkos::fence();
+            // Kokkos::fence();
         }
     }
 }
