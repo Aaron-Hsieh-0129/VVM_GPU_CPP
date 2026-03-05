@@ -39,12 +39,6 @@ public:
     void exchange_halos(Field<Dim>& field, int depth = -1) const {
         VVM::Utils::Timer exchange_halos_timer("Exchnage_halos");
         exchange_halos_impl(field, depth);
-        
-        cudaStreamCaptureStatus capture_status;
-        cudaStreamIsCapturing(stream_, &capture_status);
-        if (depth == -1 && capture_status == cudaStreamCaptureStatusNone && grid_ref_.get_mpi_size() > 1) {
-             cudaStreamSynchronize(stream_);
-        }
     }
 
     template<size_t Dim>
@@ -643,12 +637,6 @@ void HaloExchanger::exchange_halos_impl(Field<Dim>& field, int depth) const {
             });
         }
     }
-    
-    cudaStreamCaptureStatus capture_status;
-    cudaStreamIsCapturing(stream_, &capture_status);
-    if (depth == -1 && capture_status == cudaStreamCaptureStatusNone && grid_ref_.get_mpi_size() > 1) {
-         cudaStreamSynchronize(stream_);
-    }
 }
 
 inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) const {
@@ -732,8 +720,6 @@ inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) co
             });
         }
     }
-    
-    cudaStreamSynchronize(stream_);
 }
 
 } // namespace Core
