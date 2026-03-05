@@ -147,8 +147,8 @@ void Model::run_step(double dt) {
     }
 
     if (turbulence_ || sponge_layer_ || surface_) {
+        halo_exchanger_.exchange_multiple_halos(thermodynamics_vars_, state_);
         for (const auto& var_name : thermodynamics_vars_) {
-            halo_exchanger_.exchange_halos(state_.get_field<3>(var_name));
             if (var_name == "th" || var_name == "qv") {
                  bc_manager_.apply_zero_gradient(state_.get_field<3>(var_name));
             }
@@ -207,8 +207,8 @@ void Model::run_step(double dt) {
     }
 
     if (turbulence_ || sponge_layer_) {
+        halo_exchanger_.exchange_multiple_halos(dynamics_vars_, state_);
         for (const auto& var_name : dynamics_vars_) {
-            halo_exchanger_.exchange_halos(state_.get_field<3>(var_name));
             bc_manager_.apply_vorticity_bc(state_.get_field<3>(var_name));
         }
         dycore_->compute_zeta_vertical_structure(state_);
