@@ -88,8 +88,9 @@ int main(int argc, char *argv[]) {
     if (world_rank == 0) {
         std::string engine = config.get_value<std::string>("output.engine", "HDF5");
         if (engine == "SST") {
+            std::string output_dir = config.get_value<std::string>("output.output_dir");
             std::string prefix = config.get_value<std::string>("output.output_filename_prefix");
-            std::string sst_path = prefix + ".sst";
+            std::string sst_path = output_dir + "/" + prefix + ".sst";
             
             std::cout << "[Main] Global Rank 0 cleaning stale SST: " << sst_path << std::endl;
             std::string cmd = "rm -rf " + sst_path;

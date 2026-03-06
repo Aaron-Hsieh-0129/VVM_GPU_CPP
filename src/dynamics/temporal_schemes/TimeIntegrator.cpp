@@ -31,7 +31,7 @@ TimeIntegrator::~TimeIntegrator() = default; void TimeIntegrator::step(
     if (has_ab2_terms_) {
         // Variable uses Adams-Bashforth (and possibly also Forward Euler)
         auto& field_prev_step = state.get_field<3>(variable_name_ + "_m");
-        Kokkos::deep_copy(field_prev_step.get_mutable_device_data(), field_to_update.get_device_data());
+        Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), field_prev_step.get_mutable_device_data(), field_to_update.get_device_data());
         auto& field_old_view = field_prev_step.get_device_data();
         
         size_t now_idx = state.get_step() % 2;
