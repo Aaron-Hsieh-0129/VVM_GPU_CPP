@@ -58,8 +58,7 @@ public:
 
     // Initialize all field values to zero
     void set_to_zero() {
-        Kokkos::deep_copy(data_, 0.0);
-        Kokkos::fence();
+        Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), data_, 0.0);
     }
 
     // Get a const reference to the Kokkos::View (for device computations)
