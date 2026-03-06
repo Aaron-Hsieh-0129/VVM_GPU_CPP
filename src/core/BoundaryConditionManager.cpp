@@ -128,7 +128,7 @@ void BoundaryConditionManager::apply_zero_gradient(Field<Dim>& field) const {
             }
         );
     }
-    Kokkos::fence();
+    // Kokkos::fence();
 }
 
 template<size_t Dim>
@@ -154,7 +154,7 @@ void BoundaryConditionManager::apply_fixed_profile_z(Field<Dim>& field, const Fi
             }
         );
     }
-    Kokkos::fence();
+    // Kokkos::fence();
 }
 
 template<size_t Dim>
@@ -204,7 +204,7 @@ void BoundaryConditionManager::apply_periodic(Field<Dim>& field) const {
             }
         );
     }
-    Kokkos::fence();
+    // Kokkos::fence();
 }
 
 template<size_t Dim>
@@ -252,7 +252,7 @@ void BoundaryConditionManager::apply_zero_gradient_bottom_zero_top(Field<Dim>& f
             }
         );
     }
-    Kokkos::fence();
+    // Kokkos::fence();
 }
 
 // Explicit Instantiation
