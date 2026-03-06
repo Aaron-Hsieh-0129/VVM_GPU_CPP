@@ -380,7 +380,7 @@ void Initializer::assign_vars() const {
     Kokkos::deep_copy(lon, 121.);
 
     auto& lat = state_.get_field<1>("lat").get_mutable_device_data();
-    Kokkos::deep_copy(lat, 23.5);
+    Kokkos::deep_copy(lat, 23.458);
 
     double OMEGA = config_.get_value<double>("constants.OMEGA", 7.292e-5);
     double PI = config_.get_value<double>("constants.PI", 3.14159265);
