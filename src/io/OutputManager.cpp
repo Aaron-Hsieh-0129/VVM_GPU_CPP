@@ -161,8 +161,9 @@ void OutputManager::write(int step, double time) {
     } 
     else if (engine_type_ == "SST") {
         if (!writer_) {
-            if (rank_ == 0) std::cout << "  [OutputManager] SST Streaming: " << filename_prefix_ << std::endl;
-            writer_ = io_.Open(filename_prefix_, adios2::Mode::Write, comm_);
+            std::string filename = output_dir_ + "/" + filename_prefix_;
+            if (rank_ == 0) std::cout << "  [OutputManager] SST Streaming: " << filename << std::endl;
+            writer_ = io_.Open(filename, adios2::Mode::Write, comm_);
         }
     }
 
