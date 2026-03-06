@@ -114,7 +114,7 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
         gas_names_offset[igas] = gas_name;
         gas_mol_w_host[igas]   = PC::get_gas_mol_weight(gas_name);
     }
-    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), m_gas_mol_weights, gas_mol_w_host);
+    Kokkos::deep_copy(m_gas_mol_weights, gas_mol_w_host);
 
     std::string coefficients_file_sw = m_config.get_value<std::string>("physics.rrtmgp.coefficients_file_sw", "../rundata/rrtmgp/rrtmgp-data-sw-g112-210809.nc");
     std::string coefficients_file_lw = m_config.get_value<std::string>("physics.rrtmgp.coefficients_file_lw", "../rundata/rrtmgp/rrtmgp-data-lw-g128-210809.nc");
@@ -350,24 +350,9 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
 
     const auto gas_mol_weights = m_gas_mol_weights;
     auto h_lat = Kokkos::create_mirror_view(m_lat); // Need to sync lat/lon if they change
-    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), h_lat, m_lat);
+    Kokkos::deep_copy(h_lat, m_lat);
     auto h_lon = Kokkos::create_mirror_view(m_lon);
-    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), h_lon, m_lon);
-
-    Kokkos::View<Real*, Kokkos::HostSpace> h_mu0_all("h_mu0_all", m_ncol);
-    if (m_fixed_solar_zenith_angle > 0) {
-        for (int i = 0; i < m_ncol; ++i) h_mu0_all(i) = m_fixed_solar_zenith_angle;
-    } 
-    else {
-        for (int i = 0; i < m_ncol; ++i) {
-            double lat_rad = h_lat(i) * PC::Pi / 180.0;
-            double lon_rad = h_lon(i) * PC::Pi / 180.0;
-            h_mu0_all(i) = shr_orb_cosz_c2f(calday, lat_rad, lon_rad, delta, dt);
-        }
-    }
-
-    Kokkos::View<Real*, DefaultDevice> d_mu0_all("d_mu0_all", m_ncol);
-    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), d_mu0_all, h_mu0_all);
+    Kokkos::deep_copy(h_lon, m_lon);
 
     // Loop over chunks
     for (int ic = 0; ic < m_num_col_chunks; ++ic) {
@@ -375,6 +360,26 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
         int ncol = m_col_chunk_beg[ic + 1] - beg;
 
         auto buffer = m_buffer;
+
+        // Calculate Zenith Angle (mu0) on Host
+        Kokkos::View<Real*, Kokkos::HostSpace> h_mu0("h_mu0", ncol);
+        
+        if (m_fixed_solar_zenith_angle > 0) {
+            for (int i = 0; i < ncol; ++i) h_mu0(i) = m_fixed_solar_zenith_angle;
+        } 
+        else {
+            for (int i = 0; i < ncol; ++i) {
+                // EAMxx uses physics::Constants::Pi, need to verify VVM namespace
+                double lat_rad = h_lat(beg + i) * PC::Pi / 180.0;
+                double lon_rad = h_lon(beg + i) * PC::Pi / 180.0;
+                // double lat_rad = 23.5 * PC::Pi / 180.0;
+                // double lon_rad = 121. * PC::Pi / 180.0;
+                h_mu0(i) = shr_orb_cosz_c2f(calday, lat_rad, lon_rad, delta, dt);
+            }
+        }
+        
+        Kokkos::View<Real*, DefaultDevice> mu0_k("mu0_k", ncol);
+        Kokkos::deep_copy(mu0_k, h_mu0);
 
         const int nswbands = m_nswbands;
         const int nlwbands = m_nlwbands;
@@ -480,7 +485,6 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
             buffer.sfc_alb_dir_k, buffer.sfc_alb_dif_k
         );
 
-        auto mu0_k = Kokkos::subview(d_mu0_all, std::make_pair(beg, beg + ncol));
 
         m_gas_concs_k.ncol = ncol;
         for (int igas = 0; igas < m_ngas; igas++) {
@@ -511,7 +515,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                  else if (name == "n2")  pres_val = m_n2vmr;
                  else if (name == "co")  pres_val = m_covmr;
                  else if (name == "o3")  pres_val = m_o3vmr;
-                 Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), vmr_view, pres_val);
+                 Kokkos::deep_copy(vmr_view, pres_val);
              }
              m_gas_concs_k.set_vmr(name, vmr_view);
         }

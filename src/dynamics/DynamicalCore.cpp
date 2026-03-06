@@ -145,8 +145,8 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
     state_.add_field<1>("d_vtopmn", {2});
     state_.add_field<0>("utopmn_m", {});
     state_.add_field<0>("vtopmn_m", {});
-    Kokkos::deep_copy(state_.get_field<0>("utopmn_m").get_mutable_device_data(), state_.get_field<0>("utopmn").get_mutable_device_data());
-    Kokkos::deep_copy(state_.get_field<0>("vtopmn_m").get_mutable_device_data(), state_.get_field<0>("vtopmn").get_mutable_device_data());
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), state_.get_field<0>("utopmn_m").get_mutable_device_data(), state_.get_field<0>("utopmn").get_mutable_device_data());
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), state_.get_field<0>("vtopmn_m").get_mutable_device_data(), state_.get_field<0>("vtopmn").get_mutable_device_data());
 }
 
 DynamicalCore::~DynamicalCore() = default;
@@ -227,9 +227,9 @@ void DynamicalCore::compute_wind_fields() {
     const auto& v = state_.get_field<3>("v").get_device_data();
     auto& w_topo = state_.get_field<3>("w_topo").get_mutable_device_data();
     const auto& w = state_.get_field<3>("w").get_device_data();
-    Kokkos::deep_copy(u_topo, u);
-    Kokkos::deep_copy(v_topo, v);
-    Kokkos::deep_copy(w_topo, w);
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), u_topo, u);
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), v_topo, v);
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), w_topo, w);
 
     const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
@@ -381,9 +381,9 @@ void DynamicalCore::compute_uvtopmn() {
     auto& vtopmn_prev_step = state_.get_field<0>("vtopmn_m");
 
     // update utopmn, vtopmn
-    Kokkos::deep_copy(utopmn_prev_step.get_mutable_device_data(), utopmn_to_update.get_device_data());
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), utopmn_prev_step.get_mutable_device_data(), utopmn_to_update.get_device_data());
     auto& utopmn_old_view = utopmn_prev_step.get_device_data();
-    Kokkos::deep_copy(vtopmn_prev_step.get_mutable_device_data(), vtopmn_to_update.get_device_data());
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), vtopmn_prev_step.get_mutable_device_data(), vtopmn_to_update.get_device_data());
     auto& vtopmn_old_view = vtopmn_prev_step.get_device_data();
 
     auto& d_utopmn = state_.get_field<1>("d_utopmn").get_mutable_device_data();
