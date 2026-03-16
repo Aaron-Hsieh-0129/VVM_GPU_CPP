@@ -423,6 +423,7 @@ void Initializer::initialize_perturbation() const {
                     zeta(nz-h-1,j,i) += 50;
                 }
         });
+        if (test_mode == "advection_u") Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), state_.get_field<3>("u").get_mutable_device_data(), 10.);
     } 
 
     if (perturbation == "none") return;
