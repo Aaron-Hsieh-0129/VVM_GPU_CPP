@@ -110,7 +110,7 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
 
                 std::unique_ptr<SpatialScheme> spatial_scheme;
                 if (spatial_scheme_name == "Takacs") {
-                    spatial_scheme = std::make_unique<Takacs>(grid_, halo_exchanger_, bc_manager_);
+                    spatial_scheme = std::make_unique<Takacs>(config_, grid_, halo_exchanger_, bc_manager_);
                 } 
                 else {
                     throw std::runtime_error("Unknown spatial scheme: " + spatial_scheme_name);
@@ -163,7 +163,7 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
 DynamicalCore::~DynamicalCore() = default;
 
 void DynamicalCore::compute_diagnostic_fields() const {
-    auto scheme = std::make_unique<Takacs>(grid_, halo_exchanger_, bc_manager_);
+    auto scheme = std::make_unique<Takacs>(config_, grid_, halo_exchanger_, bc_manager_);
 
     auto& R_xi_field = state_.get_field<3>("R_xi");
     auto& R_eta_field = state_.get_field<3>("R_eta");
@@ -175,7 +175,7 @@ void DynamicalCore::compute_diagnostic_fields() const {
 }
 
 void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
-    auto scheme = std::make_unique<Takacs>(grid_, halo_exchanger_, bc_manager_);
+    auto scheme = std::make_unique<Takacs>(config_, grid_, halo_exchanger_, bc_manager_);
     auto& zeta_field = state.get_field<3>("zeta");
     auto zeta_data = zeta_field.get_mutable_device_data();
     const auto& xi = state.get_field<3>("xi").get_device_data();
