@@ -5,8 +5,8 @@
 namespace VVM {
 namespace Dynamics {
 
-Takacs::Takacs(const Core::Grid& grid, Core::HaloExchanger& halo_exchanger, const Core::BoundaryConditionManager& bc_manager)
-    : halo_exchanger_(halo_exchanger), bc_manager_(bc_manager) {}
+Takacs::Takacs(const Utils::ConfigurationManager& config, const Core::Grid& grid, Core::HaloExchanger& halo_exchanger, const Core::BoundaryConditionManager& bc_manager)
+    : config_(config), halo_exchanger_(halo_exchanger), bc_manager_(bc_manager) {}
 
 void Takacs::calculate_flux_convergence_x(
     const Core::Field<3>& scalar, const Core::Field<3>& u_field,
@@ -263,16 +263,24 @@ void Takacs::calculate_flux_convergence_z(
                 }
             }
         );
-        // This is for vertical periodic boundary
-        Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
-            KOKKOS_LAMBDA(int j, int i) {
-                // flux(h-1,j,i) = flux(nz-h-2,j,i);
-                flux(h-1,j,i) = 0.;
-
-                // flux(nz-h-1,j,i) = flux(h,j,i);
-                flux(nz-h-1,j,i) = 0.;
-            }
-        );
+        if (config_.get_value<std::string>("simulation.idealized_test", "none") == "advection_w") {
+            // This is for vertical periodic boundary
+            Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
+                KOKKOS_LAMBDA(int j, int i) {
+                    flux(h-1,j,i) = flux(nz-h-2,j,i);
+                    flux(nz-h-1,j,i) = flux(h,j,i);
+                }
+            );
+        }
+        else {
+            // This is for vertical periodic boundary
+            Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
+                KOKKOS_LAMBDA(int j, int i) {
+                    flux(h-1,j,i) = 0.;
+                    flux(nz-h-1,j,i) = 0.;
+                }
+            );
+        }
     }
     // No need of x-y halo exchanges because this is z direction tendency
     // No need of vertical boundary process because it's supposed to be 0 in ghost points and it's been processed during initialization
@@ -287,7 +295,6 @@ void Takacs::calculate_flux_convergence_z(
             KOKKOS_LAMBDA(const int j, const int i) {
                 // w(nz-h-1) = 0, top b.c.
                 tendency(nz-h-1,j,i) += 0.5*flux(nz-h-2,j,i) * rdz_view() * flex_height_coef_mid(nz-h-1);
-                // tendency(nz-h-1,j,i) = 0.5*flux(nz-h-2,j,i) * rdz_view() * flex_height_coef_mid(nz-h-1);
             }
         );
     }

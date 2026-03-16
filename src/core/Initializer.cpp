@@ -408,11 +408,21 @@ void Initializer::initialize_perturbation() const {
     double PI = config_.get_value<double>("constants.PI");
 
     std::string test_mode = config_.get_value<std::string>("simulation.idealized_test", "none");
-    if (test_mode == "advection_u" || test_mode == "advection_v") {
+    if (test_mode == "advection_u" || test_mode == "advection_v" || test_mode == "advection_w") {
         auto& th = state_.get_field<3>("th").get_mutable_device_data();
         auto& xi = state_.get_field<3>("xi").get_mutable_device_data();
         auto& eta = state_.get_field<3>("eta").get_mutable_device_data();
         auto& zeta = state_.get_field<3>("zeta").get_mutable_device_data();
+
+        auto& rhobar = state_.get_field<1>("rhobar").get_mutable_device_data();
+        auto& rhobar_up = state_.get_field<1>("rhobar_up").get_mutable_device_data();
+
+        if (test_mode == "advection_w") {
+            Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), th, 300.);
+            Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), rhobar, 1.);
+            Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), rhobar_up, 1.);
+        }
+
         Kokkos::parallel_for("th_init_with_perturbation", 
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, ny, nx}),
             KOKKOS_LAMBDA(int k, int j, int i) {
@@ -425,6 +435,7 @@ void Initializer::initialize_perturbation() const {
         });
         if (test_mode == "advection_u") Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), state_.get_field<3>("u").get_mutable_device_data(), 10.);
         else if (test_mode == "advection_v") Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), state_.get_field<3>("v").get_mutable_device_data(), 10.);
+        else if (test_mode == "advection_w") Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), state_.get_field<3>("w").get_mutable_device_data(), 10.);
     } 
 
     if (perturbation == "none") return;

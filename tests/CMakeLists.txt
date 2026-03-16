@@ -23,3 +23,4 @@ endfunction()
 
 add_vvm_test(advection_u "u th xi eta zeta")
 add_vvm_test(advection_v "v th xi eta zeta")
+add_vvm_test(advection_w "w th xi eta")
