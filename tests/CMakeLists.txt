@@ -22,3 +22,4 @@ function(add_vvm_test TEST_NAME VARS_TO_TEST)
 endfunction()
 
 add_vvm_test(advection_u "u th xi eta zeta")
+add_vvm_test(advection_v "v th xi eta zeta")
