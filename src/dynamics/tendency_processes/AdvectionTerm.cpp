@@ -5,8 +5,8 @@
 namespace VVM {
 namespace Dynamics {
 
-AdvectionTerm::AdvectionTerm(std::unique_ptr<SpatialScheme> scheme, std::string var_name, VVM::Core::HaloExchanger& halo_exchanger)
-    : scheme_(std::move(scheme)), variable_name_(std::move(var_name)), halo_exchanger_(halo_exchanger) {
+AdvectionTerm::AdvectionTerm(std::unique_ptr<SpatialScheme> scheme, std::string var_name, VVM::Core::HaloExchanger& halo_exchanger, const Core::BoundaryConditionManager& bc_manager)
+    : scheme_(std::move(scheme)), variable_name_(std::move(var_name)), halo_exchanger_(halo_exchanger), bc_manager_(bc_manager) {
 
     thermodynamics_vars_ = {"th", "qv", "qc", "qr", "qi", "nc", "nr", "ni"};
     dynamics_vars_ = {"xi", "eta", "zeta"};
@@ -118,7 +118,6 @@ void AdvectionTerm::compute_tendency(
             }
         );
 
-        halo_exchanger_.exchange_halos(w_field);
         Kokkos::parallel_for("calculate_rhow_for_zeta",
             // The original code adopts Tackas 3rd order difference for boundary zeta, so it needs two w.
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({nz-h-3,h,h}, {nz-h, ny-h, nx-h}),
@@ -157,6 +156,9 @@ void AdvectionTerm::compute_tendency(
     halo_exchanger_.exchange_halos(u_mean_field);
     halo_exchanger_.exchange_halos(v_mean_field);
     halo_exchanger_.exchange_halos(w_mean_field);
+    bc_manager_.apply_horizontal_bcs(u_mean_field);
+    bc_manager_.apply_horizontal_bcs(v_mean_field);
+    bc_manager_.apply_horizontal_bcs(w_mean_field);
 
     scheme_->calculate_flux_convergence_x(advected_field, u_mean_field, grid, params, out_tendency, variable_name_);
     scheme_->calculate_flux_convergence_y(advected_field, v_mean_field, grid, params, out_tendency, variable_name_);

@@ -30,7 +30,8 @@ public:
                   const Core::Grid& grid, 
                   const Core::Parameters& params,
                   Core::State& state, 
-                  Core::HaloExchanger& halo_exchanger);
+                  Core::HaloExchanger& halo_exchanger,
+                  const Core::BoundaryConditionManager& bc_manager);
     ~DynamicalCore();
 
     void compute_diagnostic_fields() const;
@@ -51,7 +52,7 @@ private:
     Core::State& state_;
     const Core::Grid& grid_;
     const Core::Parameters& params_;
-    Core::BoundaryConditionManager bc_manager_;
+    const Core::BoundaryConditionManager& bc_manager_;
     std::vector<std::string> thermo_vars_;
     std::vector<std::string> vorticity_vars_;
     

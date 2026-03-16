@@ -14,7 +14,11 @@ Model::Model(const Utils::ConfigurationManager& config,
       state_(state),
       halo_exchanger_(halo_exchanger), bc_manager_(grid)
 {
-    dycore_ = std::make_unique<Dynamics::DynamicalCore>(config_, grid_, params_, state_, halo_exchanger_);
+    std::string x_bc = config.get_value<std::string>("grid.boundary_condition.x", "periodic");
+    std::string y_bc = config.get_value<std::string>("grid.boundary_condition.y", "periodic");
+    bc_manager_.initialize_bc_types(x_bc, y_bc);
+
+    dycore_ = std::make_unique<Dynamics::DynamicalCore>(config_, grid_, params_, state_, halo_exchanger_, bc_manager_);
     if (config_.get_value<bool>("physics.p3.enable_p3", false)) {
         microphysics_ = std::make_unique<Physics::VVM_P3_Interface>(config_, grid_, params_, halo_exchanger_);
     }
