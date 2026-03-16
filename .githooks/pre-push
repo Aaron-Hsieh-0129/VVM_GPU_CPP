@@ -1,0 +1,27 @@
+#!/bin/bash
+
+echo "================================================="
+echo "Preparing to push. Running VVM regression tests..."
+echo "================================================="
+
+# Get the absolute path of the Git project root
+PROJECT_DIR=$(git rev-parse --show-toplevel)
+
+# Check if the build directory exists
+if [ ! -d "$PROJECT_DIR/build" ]; then
+    echo "Build directory not found. Please run CMake configuration first!"
+    exit 1
+fi
+
+cd "$PROJECT_DIR/build"
+
+echo "Running CTest..."
+ctest --output-on-failure
+if [ $? -ne 0 ]; then
+    echo "Tests failed! Push aborted."
+    echo "Please check the error messages above, fix the issues, and try to push again."
+    exit 1
+fi
+
+echo "All regression tests passed! Push allowed."
+exit 0

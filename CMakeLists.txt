@@ -4,6 +4,27 @@ project(VVM LANGUAGES CXX C Fortran)
 
 cmake_policy(SET CMP0135 NEW)
 
+# ==========================================
+# Auto-setup Git Hooks
+# Automatically configures Git to use .githooks/ when a developer runs CMake
+# ==========================================
+find_package(Git QUIET)
+if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} config core.hooksPath .githooks
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        RESULT_VARIABLE GIT_HOOK_RESULT
+        OUTPUT_QUIET
+        ERROR_QUIET
+    )
+    if(GIT_HOOK_RESULT EQUAL 0)
+        message(STATUS "Successfully configured Git to use '.githooks/' directory")
+    else()
+        message(WARNING "Failed to configure Git hooks automatically")
+    endif()
+endif()
+
+
 # ------------------------------
 # Compiler-specific settings
 # ------------------------------
