@@ -1,49 +1,24 @@
-find_package(GTest REQUIRED)
+find_package(MPI REQUIRED)
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
-set(VVM_TEST_LIBS
-    PRIVATE
-        GTest::gtest_main
-        vvm_core
-        vvm_utils
-        Kokkos::kokkos
-        ${MPI_LIBRARIES}
-        ${OpenMP_LIBRARIES}
-        nvToolsExt
-    PUBLIC
-        MPI::MPI_CXX
-        ${NVCPUMATH_LIBRARY}
-)
+set(TEST_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
-# Halo Exchanger Tests
-add_executable(run_halo_tests
-    halo_exchanger_test.cpp
-)
-target_link_libraries(run_halo_tests ${VVM_TEST_LIBS})
+function(add_vvm_test TEST_NAME VARS_TO_TEST)
+    add_test(NAME Run_${TEST_NAME} 
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 
+                     $<TARGET_FILE:vvm> --io-tasks 1 ${TEST_DIR}/configs/${TEST_NAME}.json
+             WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
-# Field and State Tests
-add_executable(run_field_state_tests
-    field_state_test.cpp
-)
-target_link_libraries(run_field_state_tests ${VVM_TEST_LIBS})
+    separate_arguments(VARS_LIST UNIX_COMMAND "${VARS_TO_TEST}")
+    
+    add_test(NAME Verify_${TEST_NAME} 
+             COMMAND ${Python3_EXECUTABLE} ${TEST_DIR}/scripts/verify_output.py 
+             --baseline ${TEST_DIR}/baselines/${TEST_NAME}.h5 
+             --test_out ${CMAKE_BINARY_DIR}/testing_output_${TEST_NAME}/vvm_output_000001.h5
+             --vars ${VARS_LIST}
+             --tol 1e-6)
 
-# Halo Exchanger Tests
-add_test(
-    NAME HaloExchange.2DField
-    COMMAND mpirun -np 4 $<TARGET_FILE:run_halo_tests> --gtest_filter=HaloExchangerTest.Periodic2DField
-)
+    set_tests_properties(Verify_${TEST_NAME} PROPERTIES DEPENDS Run_${TEST_NAME})
+endfunction()
 
-add_test(
-    NAME HaloExchange.3DField
-    COMMAND mpirun -np 4 $<TARGET_FILE:run_halo_tests> --gtest_filter=HaloExchangerTest.Periodic3DField
-)
-
-add_test(
-    NAME HaloExchange.4DField
-    COMMAND mpirun -np 4 $<TARGET_FILE:run_halo_tests> --gtest_filter=HaloExchangerTest.Periodic4DField
-)
-
-# Field State Tests
-add_test(
-    NAME FieldAndState.UnitTests
-    COMMAND mpirun -np 1 $<TARGET_FILE:run_field_state_tests>
-)
+add_vvm_test(advection_u "u th xi eta zeta")
