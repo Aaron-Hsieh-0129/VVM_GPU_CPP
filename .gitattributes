@@ -3,3 +3,4 @@ rundata/input_configs/* linguist-vendored
 rundata/p3/* linguist-vendored
 rundata/rrtmgp/* linguist-vendored
 rundata/* linguist-vendored
+tests/baselines/*.h5 filter=lfs diff=lfs merge=lfs -text
