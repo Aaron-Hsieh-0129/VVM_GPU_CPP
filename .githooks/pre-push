@@ -1,5 +1,12 @@
 #!/bin/bash
 
+command -v git-lfs >/dev/null 2>&1 || { echo >&2 "\nThis repository is configured for Git LFS but 'git-lfs' was not found on your path.\n"; exit 2; }
+git lfs pre-push "$@"
+if [ $? -ne 0 ]; then
+    echo "Git LFS upload failed! Push aborted."
+    exit 1
+fi
+
 echo "================================================="
 echo "Preparing to push. Running VVM regression tests..."
 echo "================================================="
