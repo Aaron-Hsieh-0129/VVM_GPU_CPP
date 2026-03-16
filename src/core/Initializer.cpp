@@ -407,6 +407,24 @@ void Initializer::initialize_perturbation() const {
     const int nx = grid_.get_local_total_points_x();
     double PI = config_.get_value<double>("constants.PI");
 
+    std::string test_mode = config_.get_value<std::string>("simulation.idealized_test", "none");
+    if (test_mode == "advection_u" || test_mode == "advection_v") {
+        auto& th = state_.get_field<3>("th").get_mutable_device_data();
+        auto& xi = state_.get_field<3>("xi").get_mutable_device_data();
+        auto& eta = state_.get_field<3>("eta").get_mutable_device_data();
+        auto& zeta = state_.get_field<3>("zeta").get_mutable_device_data();
+        Kokkos::parallel_for("th_init_with_perturbation", 
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, ny, nx}),
+            KOKKOS_LAMBDA(int k, int j, int i) {
+                if (k == h+16 && (h+3 <= j && h+11 >= j) && (h+3 <= i && h+11 >= i)) {
+                    th(k,j,i) += 50;
+                    xi(k,j,i) += 50;
+                    eta(k,j,i) += 50;
+                    zeta(nz-h-1,j,i) += 50;
+                }
+        });
+    } 
+
     if (perturbation == "none") return;
     else if (perturbation == "bubble") {
         auto& th = state_.get_field<3>("th").get_mutable_device_data();

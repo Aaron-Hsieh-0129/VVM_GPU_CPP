@@ -30,6 +30,16 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
 
     int rank = grid_.get_mpi_rank();
     if (rank == 0) std::cout << "\n--- Initializing Dynamical Core ---" << std::endl;
+
+    int nz = grid_.get_local_total_points_z();
+    int ny = grid_.get_local_total_points_y();
+    int nx = grid_.get_local_total_points_x();
+    auto dims = std::array<int, 3>{
+          grid.get_local_total_points_z(),
+          grid.get_local_total_points_y(),
+          grid.get_local_total_points_x()
+    };
+
     std::vector<std::string> common_thermo = {"th", "qv"};
     
     auto prognostic_config = config_.get_value<nlohmann::json>("dynamics.prognostic_variables");
@@ -126,18 +136,14 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
         tendency_calculators_[var_name] = std::make_unique<TendencyCalculator>(var_name, std::move(ab2_terms), std::move(fe_terms));
         time_integrators_[var_name] = std::make_unique<TimeIntegrator>(var_name, has_ab2, has_fe);
         
-        int nz = grid_.get_local_total_points_z();
-        int ny = grid_.get_local_total_points_y();
-        int nx = grid_.get_local_total_points_x();
-
         if (has_ab2 || has_fe) {
-             state_.add_field<3>(var_name + "_m", {nz, ny, nx});
+             state_.add_field<3>(var_name + "_m", dims);
         }
         if (has_ab2) {
              state_.add_field<4>("d_" + var_name, {2, nz, ny, nx});
         }
         if (has_fe) {
-             state_.add_field<3>("fe_tendency_" + var_name, {nz, ny, nx});
+             state_.add_field<3>("fe_tendency_" + var_name, dims);
         }
     }
     // This is for predict utopmn and vtopmn
@@ -145,6 +151,10 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
     state_.add_field<1>("d_vtopmn", {2});
     state_.add_field<0>("utopmn_m", {});
     state_.add_field<0>("vtopmn_m", {});
+
+
+    if (!state.has_field("RKM")) state.add_field<3>("RKM", dims);
+    if (!state.has_field("RKH")) state.add_field<3>("RKH", dims);
     Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), state_.get_field<0>("utopmn_m").get_mutable_device_data(), state_.get_field<0>("utopmn").get_mutable_device_data());
     Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), state_.get_field<0>("vtopmn_m").get_mutable_device_data(), state_.get_field<0>("vtopmn").get_mutable_device_data());
 }

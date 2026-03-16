@@ -72,6 +72,8 @@ void Model::init() {
     int nx = grid_.get_local_total_points_x();
     int h = grid_.get_halo_cells();
     if (!state_.has_field("th_perturb")) state_.add_field<3>("th_perturb", {nz, ny, nx});
+
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), state_.get_field<3>("u").get_mutable_device_data(), 10.);
 }
 
 void Model::run_step(double dt) {
@@ -213,7 +215,7 @@ void Model::run_step(double dt) {
         }
         dycore_->compute_zeta_vertical_structure(state_);
     }
-    dycore_->diagnose_wind_fields(state_);
+    if ( config_.get_value<std::string>("simulation.idealized_test", "none") == "none" ) dycore_->diagnose_wind_fields(state_);
 }
 
 void Model::finalize() {
