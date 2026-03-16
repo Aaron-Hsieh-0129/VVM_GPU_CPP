@@ -5,8 +5,8 @@
 namespace VVM {
 namespace Dynamics {
 
-Takacs::Takacs(const Core::Grid& grid, Core::HaloExchanger& halo_exchanger)
-    : halo_exchanger_(halo_exchanger) {}
+Takacs::Takacs(const Core::Grid& grid, Core::HaloExchanger& halo_exchanger, const Core::BoundaryConditionManager& bc_manager)
+    : halo_exchanger_(halo_exchanger), bc_manager_(bc_manager) {}
 
 void Takacs::calculate_flux_convergence_x(
     const Core::Field<3>& scalar, const Core::Field<3>& u_field,
@@ -48,14 +48,13 @@ void Takacs::calculate_flux_convergence_x(
         k_end = nz-h-1;
     }
 
-    Kokkos::parallel_for("uplus_minus_cal", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end,ny-h,nx-h}),
+    // The boundary of u has been processed in advection so the loop contains all grids
+    Kokkos::parallel_for("uplus_minus_cal", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,0,0}, {k_end,ny,nx}),
         KOKKOS_LAMBDA(int k, int j, int i) {
             uplus(k,j,i)  = 0.5*(u(k,j,i)+Kokkos::abs(u(k,j,i)));
             uminus(k,j,i) = 0.5*(u(k,j,i)-Kokkos::abs(u(k,j,i)));
         }
     );
-    halo_exchanger_.exchange_halos(uplus_field);
-    halo_exchanger_.exchange_halos(uminus_field);
 
     Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end,ny-h,nx-h}),
         KOKKOS_LAMBDA(int k, int j, int i) {
@@ -71,6 +70,7 @@ void Takacs::calculate_flux_convergence_x(
     // if (var_name == "zeta") halo_exchanger_.exchange_halos_top_slice(flux_field);
     // else halo_exchanger_.exchange_halos(flux_field);
     halo_exchanger_.exchange_halos(flux_field);
+    bc_manager_.apply_horizontal_bcs(flux_field);
 
     auto rdx_view = params.rdx;
     Kokkos::parallel_for("flux_convergence_tendency", 
@@ -122,14 +122,13 @@ void Takacs::calculate_flux_convergence_y(
         k_end = nz-h-1;
     }
 
-    Kokkos::parallel_for("vplus_minus_cal", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end,ny-h,nx-h}),
+    // The boundary of v has been processed in advection so the loop contains all grids
+    Kokkos::parallel_for("vplus_minus_cal", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,0,0}, {k_end,ny,nx}),
         KOKKOS_LAMBDA(int k, int j, int i) {
             vplus(k,j,i)  = 0.5*(v(k,j,i)+Kokkos::abs(v(k,j,i)));
             vminus(k,j,i) = 0.5*(v(k,j,i)-Kokkos::abs(v(k,j,i)));
         }
     );
-    halo_exchanger_.exchange_halos(vplus_field);
-    halo_exchanger_.exchange_halos(vminus_field);
 
     Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end,ny-h,nx-h}),
         KOKKOS_LAMBDA(int k, int j, int i) {
@@ -145,6 +144,7 @@ void Takacs::calculate_flux_convergence_y(
     // if (var_name == "zeta") halo_exchanger_.exchange_halos_top_slice(flux_field);
     // else halo_exchanger_.exchange_halos(flux_field);
     halo_exchanger_.exchange_halos(flux_field);
+    bc_manager_.apply_horizontal_bcs(flux_field);
 
     auto rdy_view = params.rdy;
     Kokkos::parallel_for("flux_convergence_tendency", 
@@ -185,14 +185,13 @@ void Takacs::calculate_flux_convergence_z(
     auto& wplus = wplus_field.get_mutable_device_data();
     auto& wminus = wminus_field.get_mutable_device_data();
 
-    Kokkos::parallel_for("wplus_minus_cal", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,h,h}, {nz,ny-h,nx-h}),
+    // The boundary of w has been processed in advection so the loop contains all grids
+    Kokkos::parallel_for("wplus_minus_cal", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz,ny,nx}),
         KOKKOS_LAMBDA(int k, int j, int i) {
             wplus(k,j,i)  = 0.5*(w(k,j,i)+Kokkos::abs(w(k,j,i)));
             wminus(k,j,i) = 0.5*(w(k,j,i)-Kokkos::abs(w(k,j,i)));
         }
     );
-    halo_exchanger_.exchange_halos(wplus_field);
-    halo_exchanger_.exchange_halos(wminus_field);
 
     // zeta only needs to do the top prediction
     // It has two layer of w.
@@ -454,6 +453,7 @@ void Takacs::calculate_R_xi(
     );
 
     halo_exchanger_.exchange_halos(out_R_xi);
+    bc_manager_.apply_horizontal_bcs(out_R_xi);
     return;
 }
 
@@ -484,6 +484,7 @@ void Takacs::calculate_R_eta(
     );
 
     halo_exchanger_.exchange_halos(out_R_eta);
+    bc_manager_.apply_horizontal_bcs(out_R_eta);
     return;
 }
 
@@ -513,6 +514,7 @@ void Takacs::calculate_R_zeta(
     );
 
     halo_exchanger_.exchange_halos(out_R_zeta);
+    bc_manager_.apply_horizontal_bcs(out_R_zeta);
     return;
 }
 
@@ -688,6 +690,7 @@ void Takacs::calculate_vorticity_divergence(
         }
     );
     halo_exchanger_.exchange_halos(out_field);
+    bc_manager_.apply_horizontal_bcs(out_field);
 }
 
 void Takacs::calculate_buoyancy_tendency_x(

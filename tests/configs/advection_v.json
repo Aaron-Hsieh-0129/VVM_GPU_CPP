@@ -7,7 +7,12 @@
         "dx": 100.0,
         "dy": 100.0,
         "dz": 500.0,
-        "dz1": 100.0
+        "dz1": 100.0,
+        "boundary_condition": {
+            "x": "periodic",
+            "y": "periodic",
+            "__bc_option": "periodic, zero_gradient"
+        }
     },
     "simulation": {
         "total_time_s": 1500.0,

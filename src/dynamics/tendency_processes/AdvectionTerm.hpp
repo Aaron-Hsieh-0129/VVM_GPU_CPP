@@ -4,6 +4,7 @@
 #include "TendencyTerm.hpp"
 #include "dynamics/spatial_schemes/SpatialScheme.hpp"
 #include "core/HaloExchanger.hpp"
+#include "core/BoundaryConditionManager.hpp"
 #include <memory>
 #include <string>
 
@@ -12,7 +13,7 @@ namespace Dynamics {
 
 class AdvectionTerm : public TendencyTerm {
 public:
-    AdvectionTerm(std::unique_ptr<SpatialScheme> scheme, std::string var_name, VVM::Core::HaloExchanger& halo_exchanger);
+    AdvectionTerm(std::unique_ptr<SpatialScheme> scheme, std::string var_name, VVM::Core::HaloExchanger& halo_exchanger, const Core::BoundaryConditionManager& bc_manager);
     ~AdvectionTerm() override;
 
     void compute_tendency(
@@ -27,6 +28,7 @@ private:
     std::vector<std::string> thermodynamics_vars_;
 
     Core::HaloExchanger& halo_exchanger_;
+    const Core::BoundaryConditionManager& bc_manager_;
 };
 
 } // namespace Dynamics

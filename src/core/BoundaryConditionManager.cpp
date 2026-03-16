@@ -255,6 +255,96 @@ void BoundaryConditionManager::apply_zero_gradient_bottom_zero_top(Field<Dim>& f
     // Kokkos::fence();
 }
 
+void BoundaryConditionManager::initialize_bc_types(const std::string& x_bc, const std::string& y_bc) {
+    if (x_bc == "zero_gradient") x_bc_type_ = HorizontalBCType::ZeroGradient;
+    else x_bc_type_ = HorizontalBCType::Periodic;
+
+    if (y_bc == "zero_gradient") y_bc_type_ = HorizontalBCType::ZeroGradient;
+    else y_bc_type_ = HorizontalBCType::Periodic;
+}
+
+template<size_t Dim>
+void BoundaryConditionManager::apply_zero_gradient_x(Field<Dim>& field) const {
+    const int h = grid_.get_halo_cells();
+    if (h == 0) return;
+
+    const bool is_left_boundary = (grid_.get_local_physical_start_x() == 0);
+    const bool is_right_boundary = (grid_.get_local_physical_end_x() == grid_.get_global_points_x() - 1);
+
+    auto data = field.get_mutable_device_data();
+
+    if constexpr (Dim == 3) {
+        const int nz = data.extent(0);
+        const int ny = data.extent(1);
+        const int nx = data.extent(2);
+        
+        if (is_left_boundary) {
+            Kokkos::parallel_for("bc_zerograd_left_3d", 
+                Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, h}),
+                KOKKOS_LAMBDA(int k, int j, int i_h) {
+                    data(k, j, i_h) = data(k, j, h);
+                }
+            );
+        }
+
+        if (is_right_boundary) {
+            Kokkos::parallel_for("bc_zerograd_right_3d", 
+                Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, h}),
+                KOKKOS_LAMBDA(int k, int j, int i_h) {
+                    data(k, j, nx - h + i_h) = data(k, j, nx - h - 1);
+                }
+            );
+        }
+    }
+}
+
+template<size_t Dim>
+void BoundaryConditionManager::apply_zero_gradient_y(Field<Dim>& field) const {
+    const int h = grid_.get_halo_cells();
+    if (h == 0) return;
+
+    const bool is_bottom_boundary = (grid_.get_local_physical_start_y() == 0);
+    const bool is_top_boundary = (grid_.get_local_physical_end_y() == grid_.get_global_points_y() - 1);
+
+    auto data = field.get_mutable_device_data();
+
+    if constexpr (Dim == 3) {
+        const int nz = data.extent(0);
+        const int ny = data.extent(1);
+        const int nx = data.extent(2);
+        
+        if (is_bottom_boundary) {
+            Kokkos::parallel_for("bc_zerograd_bottom_3d", 
+                Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, h, nx}),
+                KOKKOS_LAMBDA(int k, int j_h, int i) {
+                    data(k, j_h, i) = data(k, h, i);
+                }
+            );
+        }
+
+        if (is_top_boundary) {
+            Kokkos::parallel_for("bc_zerograd_top_3d", 
+                Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, h, nx}),
+                KOKKOS_LAMBDA(int k, int j_h, int i) {
+                    data(k, ny - h + j_h, i) = data(k, ny - h - 1, i);
+                }
+            );
+        }
+    }
+}
+
+template<size_t Dim>
+void BoundaryConditionManager::apply_horizontal_bcs(Field<Dim>& field) const {
+    if (x_bc_type_ == HorizontalBCType::ZeroGradient) {
+        apply_zero_gradient_x(field);
+    }
+    if (y_bc_type_ == HorizontalBCType::ZeroGradient) {
+        apply_zero_gradient_y(field);
+    }
+}
+
+
+
 // Explicit Instantiation
 // Dim = 1
 template void BoundaryConditionManager::apply_dirichlet_zero<1>(Field<1>&) const;
@@ -270,6 +360,9 @@ template void BoundaryConditionManager::apply_zero_gradient<3>(Field<3>&) const;
 template void BoundaryConditionManager::apply_fixed_profile_z<3>(Field<3>&, const Field<1>&) const;
 template void BoundaryConditionManager::apply_periodic<3>(Field<3>&) const;
 template void BoundaryConditionManager::apply_zero_gradient_bottom_zero_top<3>(Field<3>&) const;
+template void BoundaryConditionManager::apply_horizontal_bcs<3>(Field<3>&) const;
+template void BoundaryConditionManager::apply_zero_gradient_x<3>(Field<3>&) const;
+template void BoundaryConditionManager::apply_zero_gradient_y<3>(Field<3>&) const;
 
 // Dim = 4
 template void BoundaryConditionManager::apply_dirichlet_zero<4>(Field<4>&) const;
