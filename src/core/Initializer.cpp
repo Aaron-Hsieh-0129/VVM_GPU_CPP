@@ -424,6 +424,7 @@ void Initializer::initialize_perturbation() const {
                 }
         });
         if (test_mode == "advection_u") Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), state_.get_field<3>("u").get_mutable_device_data(), 10.);
+        else if (test_mode == "advection_v") Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), state_.get_field<3>("v").get_mutable_device_data(), 10.);
     } 
 
     if (perturbation == "none") return;

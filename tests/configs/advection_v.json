@@ -18,17 +18,17 @@
     },
     "initial_conditions": {
         "format": "txt",
-        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/initial_conditions/profile_dry.txt",
+        "source_file": "../rundata/initial_conditions/profile_dry.txt",
         "perturbation": "none"
     },
     "netcdf_reader": {
-        "source_file": "/work/aaron900129/VVM_GPU_CPP/rundata/init.nc",
+        "source_file": "../rundata/init.nc",
         "variables_to_read": {
             "2d": ["topo", "Tg"]
         }
     },
     "output": {
-        "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/VVM_comparison/advection_v/GPU",
+        "output_dir": "./testing_output_advection_v/",
         "engine": "SST",
         "queue_limit": 20,
         "data_transport": "",
