@@ -408,11 +408,15 @@ void Initializer::initialize_perturbation() const {
     double PI = config_.get_value<double>("constants.PI");
 
     std::string test_mode = config_.get_value<std::string>("simulation.idealized_test", "none");
-    if (test_mode == "advection_u" || test_mode == "advection_v" || test_mode == "advection_w") {
+    if (test_mode == "advection_u" || test_mode == "advection_v" || test_mode == "advection_w" || 
+        test_mode == "stretching") {
         auto& th = state_.get_field<3>("th").get_mutable_device_data();
         auto& xi = state_.get_field<3>("xi").get_mutable_device_data();
         auto& eta = state_.get_field<3>("eta").get_mutable_device_data();
         auto& zeta = state_.get_field<3>("zeta").get_mutable_device_data();
+        auto& u = state_.get_field<3>("u").get_mutable_device_data();
+        auto& v = state_.get_field<3>("v").get_mutable_device_data();
+        auto& w = state_.get_field<3>("w").get_mutable_device_data();
 
         auto& rhobar = state_.get_field<1>("rhobar").get_mutable_device_data();
         auto& rhobar_up = state_.get_field<1>("rhobar_up").get_mutable_device_data();
@@ -423,7 +427,7 @@ void Initializer::initialize_perturbation() const {
             Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), rhobar_up, 1.);
         }
 
-        Kokkos::parallel_for("th_init_with_perturbation", 
+        Kokkos::parallel_for("test_init", 
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, ny, nx}),
             KOKKOS_LAMBDA(int k, int j, int i) {
                 if (k == h+16 && (h+3 <= j && h+11 >= j) && (h+3 <= i && h+11 >= i)) {
@@ -433,9 +437,23 @@ void Initializer::initialize_perturbation() const {
                     zeta(nz-h-1,j,i) += 50;
                 }
         });
-        if (test_mode == "advection_u") Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), state_.get_field<3>("u").get_mutable_device_data(), 10.);
-        else if (test_mode == "advection_v") Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), state_.get_field<3>("v").get_mutable_device_data(), 10.);
-        else if (test_mode == "advection_w") Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), state_.get_field<3>("w").get_mutable_device_data(), 10.);
+        if (test_mode == "advection_u") Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), u, 10.);
+        else if (test_mode == "advection_v") Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), v, 10.);
+        else if (test_mode == "advection_w") Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), w, 10.);
+        else if (test_mode == "stretching") {
+            Kokkos::parallel_for("test_wind_init", 
+                Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, ny, nx}),
+                KOKKOS_LAMBDA(int k, int j, int i) {
+                    const int local_j = j;
+                    const int local_i = i;
+                    const int global_j = global_start_j + local_j;
+                    const int global_i = global_start_i + local_i;
+
+                    u(k,j,i) = 32./2. - global_i - 1;
+                    v(k,j,i) = 32./2. - global_j - 1;
+                    w(k,j,i) = -(32./2. - k - 1);
+            });
+        }
     } 
 
     if (perturbation == "none") return;
