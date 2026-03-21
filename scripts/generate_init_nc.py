@@ -2,7 +2,7 @@ import numpy as np
 import netCDF4
 import os
 
-FILENAME = '../rundata/init.nc'
+FILENAME = '../rundata/initial_conditions/spatial/init.nc'
 NZ, NY, NX = 33, 32, 32
 DX, DY = 500.0, 500.0
 
