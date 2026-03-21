@@ -48,6 +48,7 @@ void Initializer::initialize_state() const {
     // init poisson should be placed after assign variables 
     // because the density would affect height factors.
     initialize_poisson();
+    initialize_zeta_factor_for_twisting();
 }
 
 void Initializer::initialize_grid() const {
@@ -256,6 +257,24 @@ void Initializer::initialize_poisson() const {
     return;
 }
 
+
+void Initializer::initialize_zeta_factor_for_twisting() const {
+    const int h = grid_.get_halo_cells();
+    const int nz = grid_.get_local_total_points_z();
+
+    const auto& rhobar = state_.get_field<1>("rhobar").get_device_data();
+    const auto& rhobar_up = state_.get_field<1>("rhobar_up").get_device_data();
+    const auto& flex_height_coef_mid = parameters_.flex_height_coef_mid.get_device_data();
+    const auto& flex_height_coef_up = parameters_.flex_height_coef_up.get_device_data();
+
+    auto& fact1_zeta_mutable = parameters_.fact1_zeta.get_mutable_device_data();
+    auto& fact2_zeta_mutable = parameters_.fact2_zeta.get_mutable_device_data();
+    Kokkos::parallel_for("AssignFactor", 1, KOKKOS_LAMBDA(const int) {
+        fact1_zeta_mutable() = flex_height_coef_mid(nz-h-1) * rhobar_up(nz-h-1) / flex_height_coef_up(nz-h-1);
+        fact2_zeta_mutable() = flex_height_coef_mid(nz-h-1) * rhobar_up(nz-h-2) / flex_height_coef_up(nz-h-2);
+    });
+}
+
 void Initializer::assign_vars() const {
     const int h = grid_.get_halo_cells();
     const int nz = grid_.get_local_total_points_z();
@@ -407,17 +426,17 @@ void Initializer::initialize_perturbation() const {
     const int nx = grid_.get_local_total_points_x();
     double PI = config_.get_value<double>("constants.PI");
 
+    auto& th = state_.get_field<3>("th").get_mutable_device_data();
+    auto& xi = state_.get_field<3>("xi").get_mutable_device_data();
+    auto& eta = state_.get_field<3>("eta").get_mutable_device_data();
+    auto& zeta = state_.get_field<3>("zeta").get_mutable_device_data();
+    auto& u = state_.get_field<3>("u").get_mutable_device_data();
+    auto& v = state_.get_field<3>("v").get_mutable_device_data();
+    auto& w = state_.get_field<3>("w").get_mutable_device_data();
+
     std::string test_mode = config_.get_value<std::string>("simulation.idealized_test", "none");
     if (test_mode == "advection_u" || test_mode == "advection_v" || test_mode == "advection_w" || 
-        test_mode == "stretching") {
-        auto& th = state_.get_field<3>("th").get_mutable_device_data();
-        auto& xi = state_.get_field<3>("xi").get_mutable_device_data();
-        auto& eta = state_.get_field<3>("eta").get_mutable_device_data();
-        auto& zeta = state_.get_field<3>("zeta").get_mutable_device_data();
-        auto& u = state_.get_field<3>("u").get_mutable_device_data();
-        auto& v = state_.get_field<3>("v").get_mutable_device_data();
-        auto& w = state_.get_field<3>("w").get_mutable_device_data();
-
+        test_mode == "stretching"  || test_mode == "twisting") {
         auto& rhobar = state_.get_field<1>("rhobar").get_mutable_device_data();
         auto& rhobar_up = state_.get_field<1>("rhobar_up").get_mutable_device_data();
 
@@ -444,15 +463,31 @@ void Initializer::initialize_perturbation() const {
             Kokkos::parallel_for("test_wind_init", 
                 Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, ny, nx}),
                 KOKKOS_LAMBDA(int k, int j, int i) {
-                    const int local_j = j;
-                    const int local_i = i;
-                    const int global_j = global_start_j + local_j;
-                    const int global_i = global_start_i + local_i;
+                    const int global_j = global_start_j + j;
+                    const int global_i = global_start_i + i;
 
                     u(k,j,i) = 32./2. - global_i - 1;
                     v(k,j,i) = 32./2. - global_j - 1;
                     w(k,j,i) = -(32./2. - k - 1);
             });
+        }
+        else if (test_mode == "twisting") {
+            Kokkos::parallel_for("test_wind_init_cross_derivatives", 
+                Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, ny, nx}), 
+                KOKKOS_LAMBDA(int k, int j, int i) { 
+                    const int global_j = global_start_j + j; 
+                    const int global_i = global_start_i + i; 
+
+                    if (k == nz-h-1 && (h+3 <= j && h+11 >= j) && (h+3 <= i && h+11 >= i)) {
+                        xi(k,j,i) += 50.;
+                        eta(k,j,i) += 50.;
+                    }
+
+                    u(k,j,i) = -0.2*(32./2. - global_j - 1.);
+                    v(k,j,i) = -0.2*(32./2. - global_i - 1.);
+                    w(k,j,i) = 0.2*(32./2. - global_i - 1.);
+                }
+            );
         }
     } 
 
@@ -478,6 +513,8 @@ void Initializer::initialize_perturbation() const {
             }
         );
     }
+
+    halo_exchanger_.exchange_multiple_halos({"th", "xi", "eta", "zeta"}, state_);
     return;
 }
 

@@ -25,6 +25,7 @@ public:
     void initialize_poisson() const;
     void assign_vars() const;
     void initialize_perturbation() const;
+    void initialize_zeta_factor_for_twisting() const;
 
 private:
     std::unique_ptr<VVM::IO::Reader> reader_;

@@ -620,12 +620,8 @@ void Takacs::calculate_twisting_tendency_z(
     const Core::State& state, const Core::Grid& grid,
     const Core::Parameters& params, Core::Field<3>& out_tendency, const std::string& var_name) const {
 
-    const auto& R_xi_field = state.get_field<3>("R_xi");
-    const auto& R_eta_field = state.get_field<3>("R_eta");
-    auto& R_xi = R_xi_field.get_device_data();
-    auto& R_eta = R_eta_field.get_device_data();
-    const auto& rhobar = state.get_field<1>("rhobar").get_device_data();
-    const auto& rhobar_up = state.get_field<1>("rhobar_up").get_device_data();
+    const auto& R_xi = state.get_field<3>("R_xi").get_device_data();
+    const auto& R_eta = state.get_field<3>("R_eta").get_device_data();
     const auto& xi = state.get_field<3>("xi").get_device_data();
     const auto& eta = state.get_field<3>("eta").get_device_data();
     auto& tendency = out_tendency.get_mutable_device_data();
@@ -635,19 +631,11 @@ void Takacs::calculate_twisting_tendency_z(
     const int nx = grid.get_local_total_points_x();
     const int h = grid.get_halo_cells();
 
-    const auto& flex_height_coef_mid = params.flex_height_coef_mid.get_device_data();
-    const auto& flex_height_coef_up = params.flex_height_coef_up.get_device_data();
-
-    Kokkos::View<double> fact1("fact1");
-    Kokkos::View<double> fact2("fact2");
-    Kokkos::parallel_for("AssignFactor", 1, KOKKOS_LAMBDA(const int) {
-        fact1() = flex_height_coef_mid(nz-h-1) * rhobar_up(nz-h-1) / flex_height_coef_up(nz-h-1);
-        fact2() = flex_height_coef_mid(nz-h-1) * rhobar_up(nz-h-2) / flex_height_coef_up(nz-h-2);
-    });
-
+    const auto& fact1 = params.fact1_zeta.get_device_data();
+    const auto& fact2 = params.fact2_zeta.get_device_data();
 
     // Implements Eq. (3.30) for [0.5ρ₀(xi*Reta+eta*Rxi)]
-    Kokkos::parallel_for("twisting_term_eta",
+    Kokkos::parallel_for("twisting_term_zeta",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({nz-h-1, h, h}, {nz-h, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             // WARNING: The documentation has rho weighted but the VVM code doesn't have. This code follows the VVM code.

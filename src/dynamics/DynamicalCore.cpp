@@ -591,8 +591,10 @@ void DynamicalCore::update_vorticity(double dt) {
     }
     bc_manager_.apply_vorticity_bc(state_.get_field<3>("xi"));
     bc_manager_.apply_vorticity_bc(state_.get_field<3>("eta"));
-
-    compute_zeta_vertical_structure(state_);
+ 
+    if (config_.get_value<std::string>("simulation.idealized_test", "none") != "twisting") {
+        compute_zeta_vertical_structure(state_);
+    }
 }
 
 void DynamicalCore::diagnose_wind_fields(Core::State& state) {
