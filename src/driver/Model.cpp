@@ -67,7 +67,7 @@ void Model::init() {
     if (surface_) surface_->initialize(state_);
     if (random_forcing_) random_forcing_->initialize(state_);
     
-    halo_exchanger_.exchange_halos(state_);
+    // halo_exchanger_.exchange_halos(state_);
     
     if (rank == 0) std::cout << "=== Model Initialization Complete ===\n" << std::endl;
 

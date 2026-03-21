@@ -38,6 +38,9 @@ public:
     Kokkos::View<double> WRXMU;
     int max_topo_idx;
 
+    Field<0> fact1_zeta;
+    Field<0> fact2_zeta;
+
     // 1D Kokkos Views
     Field<1> z_mid;
     Field<1> z_up;

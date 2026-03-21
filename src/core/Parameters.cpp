@@ -22,6 +22,8 @@ Parameters::Parameters(const Utils::ConfigurationManager& config, const Grid& gr
     rdy2("rdy2"),
     rdz2("rdz2"),
     WRXMU("WRXMU"),
+    fact1_zeta("fact1_zeta", {}),
+    fact2_zeta("fact2_zeta", {}),
     z_mid("z_mid", {grid.get_local_total_points_z()}),
     z_up("z_up", {grid.get_local_total_points_z()}),
     flex_height_coef_mid("flex_height_coef_mid", {grid.get_local_total_points_z()}),
