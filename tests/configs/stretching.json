@@ -23,11 +23,11 @@
     },
     "initial_conditions": {
         "format": "txt",
-        "source_file": "../rundata/initial_conditions/profile_dry.txt",
+        "source_file": "../rundata/initial_conditions/profiles/profile_dry.txt",
         "perturbation": "none"
     },
     "netcdf_reader": {
-        "source_file": "../rundata/init.nc",
+        "source_file": "../rundata/initial_conditions/spatial/init_regression_test.nc",
         "variables_to_read": {
             "2d": ["topo", "Tg"]
         }
