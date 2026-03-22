@@ -18,6 +18,13 @@ Model::Model(const Utils::ConfigurationManager& config,
     std::string y_bc = config.get_value<std::string>("grid.boundary_condition.y", "periodic");
     bc_manager_.initialize_bc_types(x_bc, y_bc);
 
+    std::string mode = config_.get_value<std::string>("simulation.idealized_test", "none");
+    std::vector<std::string> no_solver_mode = {"advection_u", "advection_v", "advection_w", "stretching", "twisting"};
+    auto it = std::find(no_solver_mode.begin(), no_solver_mode.end(), mode);
+    if (it != no_solver_mode.end()) {
+        wind_solver_ = false;
+    }
+
     dycore_ = std::make_unique<Dynamics::DynamicalCore>(config_, grid_, params_, state_, halo_exchanger_, bc_manager_);
     if (config_.get_value<bool>("physics.p3.enable_p3", false)) {
         microphysics_ = std::make_unique<Physics::VVM_P3_Interface>(config_, grid_, params_, halo_exchanger_);
@@ -217,7 +224,7 @@ void Model::run_step(double dt) {
         }
         dycore_->compute_zeta_vertical_structure(state_);
     }
-    if ( config_.get_value<std::string>("simulation.idealized_test", "none") == "none" ) dycore_->diagnose_wind_fields(state_);
+    if (wind_solver_) dycore_->diagnose_wind_fields(state_);
 }
 
 void Model::finalize() {

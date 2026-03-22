@@ -48,6 +48,8 @@ private:
 
     int rad_freq_in_steps_;
     int surface_freq_in_steps_;
+
+    bool wind_solver_ = true;
 };
 
 }

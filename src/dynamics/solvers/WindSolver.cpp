@@ -1,5 +1,6 @@
 #include "WindSolver.hpp"
 #include "core/HaloExchanger.hpp"
+#include <nvtx3/nvToolsExt.h>
 
 namespace VVM {
 namespace Dynamics {
@@ -218,13 +219,10 @@ void WindSolver::solve_uv(Core::State& state) {
     auto& psi_field = state.get_field<2>("psi");
     auto& psinm1_field = state.get_field<2>("psinm1");
     auto& psi = psi_field.get_mutable_device_data();
-    halo_exchanger_.exchange_halos(state.get_field<3>("zeta"));
     const auto& zeta = state.get_field<3>("zeta").get_device_data();
     const auto& zeta_slice = Kokkos::subview(zeta, nz-h-1, Kokkos::ALL(), Kokkos::ALL());
-    // const auto& zeta_slice = Kokkos::subview(state.get_field<3>("xi").get_device_data(), nz-h-2, Kokkos::ALL(), Kokkos::ALL());
     auto& RIP1 = RIP1_field_.get_mutable_device_data();
 
-    halo_exchanger_.exchange_halos(state.get_field<3>("w"));
     auto& w = state.get_field<3>("w").get_mutable_device_data();
     auto& chi_field = state.get_field<2>("chi");
     auto& chi = chi_field.get_mutable_device_data();
@@ -232,16 +230,15 @@ void WindSolver::solve_uv(Core::State& state) {
     auto& RIP2 = RIP2_field_.get_mutable_device_data();
 
     // Solve psi
-    Kokkos::deep_copy(RIP1, zeta_slice);
-    // Kokkos::deep_copy(RIP1, 0);
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), RIP1, zeta_slice);
     halo_exchanger_.exchange_halos(psi_field);
     halo_exchanger_.exchange_halos(psinm1_field);
     halo_exchanger_.exchange_halos(RIP1_field_);
     relax_2d(psi_field, psinm1_field, RIP1_field_, ROP1_field_);
 
     // Copy psi data to previous step and step
-    Kokkos::deep_copy(psinm1_field.get_mutable_device_data(), psi);
-    Kokkos::deep_copy(psi, ROP1_field_.get_mutable_device_data());
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), psinm1_field.get_mutable_device_data(), psi);
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), psi, ROP1_field_.get_mutable_device_data());
 
     // Solve chi
     Kokkos::parallel_for("interpolation", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
@@ -252,8 +249,8 @@ void WindSolver::solve_uv(Core::State& state) {
     relax_2d(chi_field, chinm1_field, RIP2_field_, ROP2_field_);
 
     // Copy psi data to previous step and step
-    Kokkos::deep_copy(chinm1_field.get_mutable_device_data(), chi);
-    Kokkos::deep_copy(chi, ROP2_field_.get_mutable_device_data());
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), chinm1_field.get_mutable_device_data(), chi);
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), chi, ROP2_field_.get_mutable_device_data());
 
     // Calculate utop, vtop
     auto& utop_field = state.get_field<2>("utop");
@@ -275,9 +272,9 @@ void WindSolver::solve_uv(Core::State& state) {
     auto& v_field = state.get_field<3>("v");
     auto& v = v_field.get_mutable_device_data();
 
+    auto& utopm = state.get_field<0>("utop_mean").get_mutable_device_data();
+    auto& vtopm = state.get_field<0>("vtop_mean").get_mutable_device_data();
 #if defined(ENABLE_NCCL)
-    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> utopm("utopm");
-    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> vtopm("vtopm");
     state.calculate_horizontal_mean(utop_field, utopm);
     state.calculate_horizontal_mean(vtop_field, vtopm);
 #else
@@ -289,7 +286,6 @@ void WindSolver::solve_uv(Core::State& state) {
     auto& vtopmn = state.get_field<0>("vtopmn").get_device_data();
     Kokkos::parallel_for("uvtop_process", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
         KOKKOS_LAMBDA(int j, int i) {
-            // TODO: uvtop predict
             u(nz-h-1,j,i) = utopmn() + utop(j,i) - utopm();
             v(nz-h-1,j,i) = vtopmn() + vtop(j,i) - vtopm();
         }
@@ -317,8 +313,7 @@ void WindSolver::solve_uv(Core::State& state) {
                       + ((w(nz-h-1,j+1,i) - w(nz-h-1,j,i))*rdy() -  xi(nz-h-1,j,i)) * dz() / flex_height_coef_up(nz-h-1); 
         }
     );
-    halo_exchanger_.exchange_halos(u_field);
-    halo_exchanger_.exchange_halos(v_field);
+    halo_exchanger_.exchange_multiple_halos({"u", "v"}, state);
     return;
 }
 
