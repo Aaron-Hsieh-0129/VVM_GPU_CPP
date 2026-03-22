@@ -19,8 +19,10 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     int ny_total = grid.get_local_total_points_y();
     int nz_total = grid.get_local_total_points_z();
     // 0D field
-    add_field<0>("utopmn", {});
-    add_field<0>("vtopmn", {});
+    add_field<0>("utopmn", {}); // This is the prediction of utop mean
+    add_field<0>("vtopmn", {}); // This is the prediction of vtop mean
+    add_field<0>("utop_mean", {}); // This is the temporary varaible of u top mean
+    add_field<0>("vtop_mean", {}); // This is the temporary varaible of u top mean
 
     // 1D field
     add_field<1>("Tbar", {nz_total});

@@ -490,17 +490,29 @@ void Initializer::initialize_perturbation() const {
             );
         }
     } 
-
-    if (perturbation == "none") return;
-    else if (perturbation == "bubble") {
-        auto& th = state_.get_field<3>("th").get_mutable_device_data();
+    else if (test_mode == "2dbubble") {
         Kokkos::parallel_for("init_perturbation", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
             KOKKOS_LAMBDA(int k, int j, int i) {
-                const int local_j = j;
-                const int local_i = i;
+                const int global_j = global_start_j + j;
+                const int global_i = global_start_i + i;
 
-                const int global_j = global_start_j + local_j;
-                const int global_i = global_start_i + local_i;
+                double radius_norm = std::sqrt(
+                                      std::pow(((global_i + 1) - (int) (nx/2)) * dx() / 1500., 2) +
+                                      std::pow((z_mid(k) - 3000.) / 1500., 2)
+                                     );
+                if (radius_norm <= 1) {
+                    th(k, j, i) += 5. * (std::cos(PI * 0.5 * radius_norm));
+                }
+            }
+        );
+    }
+
+    if (perturbation == "none") return;
+    else if (perturbation == "2dbubble") {
+        Kokkos::parallel_for("init_perturbation", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
+            KOKKOS_LAMBDA(int k, int j, int i) {
+                const int global_j = global_start_j + j;
+                const int global_i = global_start_i + i;
 
                 double radius_norm = std::sqrt(
                                       std::pow(((global_i + 1) - (int) (nx/2)) * dx() / 2000., 2) +
@@ -513,8 +525,26 @@ void Initializer::initialize_perturbation() const {
             }
         );
     }
+    else if (perturbation == "3dbubble") {
+        Kokkos::parallel_for("init_perturbation", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
+            KOKKOS_LAMBDA(int k, int j, int i) {
+                const int global_j = global_start_j + j;
+                const int global_i = global_start_i + i;
+
+                double radius_norm = std::sqrt(
+                                      std::pow(((global_i + 1) - (int) (nx/2)) * dx() / 2000., 2) +
+                                      std::pow(((global_j + 1) - (int) (ny/2)) * dy() / 2000., 2) +
+                                      std::pow((z_mid(k) - 3000.) / 2000., 2)
+                                     );
+                if (radius_norm <= 1) {
+                    th(k, j, i) += 5. * (std::cos(PI * 0.5 * radius_norm));
+                }
+            }
+        );
+    }
 
     halo_exchanger_.exchange_multiple_halos({"th", "xi", "eta", "zeta"}, state_);
+    if (test_mode == "none") halo_exchanger_.exchange_multiple_halos({"u", "v", "w"}, state_);
     return;
 }
 
