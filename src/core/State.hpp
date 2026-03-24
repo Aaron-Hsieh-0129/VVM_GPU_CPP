@@ -87,6 +87,7 @@ public:
     }
 
 
+// FIXME: Use class member and refine thie function
 #if defined(ENABLE_NCCL)
     template<size_t Dim>
     void calculate_horizontal_mean(
@@ -101,10 +102,11 @@ public:
         const int h = grid_.get_halo_cells();
         const int gnx = grid_.get_global_points_x();
         const int gny = grid_.get_global_points_y();
-        const double total_points_horizontal = static_cast<double>(gnx * gny);
+        const double total_points_horizontal = static_cast<double>(gnx) * static_cast<double>(gny);
 
         const int nz = grid_.get_local_total_points_z();
         if (k_level == -1) k_level = nz-h-1;
+
 
         if (total_points_horizontal == 0.0) {
             Kokkos::parallel_for("set_zero_mean", 
@@ -149,16 +151,7 @@ public:
                 });
         }
 
-        cudaStream_t kokkos_stream = Kokkos::DefaultExecutionSpace().cuda_stream();
-
-        cudaEvent_t event_local_done, event_nccl_done;
-        cudaEventCreateWithFlags(&event_local_done, cudaEventDisableTiming);
-        cudaEventCreateWithFlags(&event_nccl_done, cudaEventDisableTiming);
-
-        // Record an event after finishing local sum
-        cudaEventRecord(event_local_done, kokkos_stream);
-        // wait local sum asynchronously
-        cudaStreamWaitEvent(nccl_stream_, event_local_done, 0);
+        Kokkos::fence();
 
         ncclResult_t result = ncclAllReduce(
             d_local_sum.data(), 
@@ -174,18 +167,13 @@ public:
             printf("NCCL Error: %s\n", ncclGetErrorString(result));
         }
 
-        cudaEventRecord(event_nccl_done, nccl_stream_);
-        cudaStreamWaitEvent(kokkos_stream, event_nccl_done, 0);
+        cudaStreamSynchronize(nccl_stream_);
 
         Kokkos::parallel_for("scale_global_mean",
             Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, 1),
             KOKKOS_LAMBDA(const int) {
                 d_mean_result() /= total_points_horizontal;
-            }
-        );
-
-        cudaEventDestroy(event_local_done);
-        cudaEventDestroy(event_nccl_done);
+            });
     }
 #endif
 

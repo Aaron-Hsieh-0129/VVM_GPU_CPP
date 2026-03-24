@@ -33,7 +33,7 @@
         }
     },
     "output": {
-        "output_dir": "../output/VVM_comparison/2dbubble/GPU",
+        "output_dir": "./testing_output_2dbubble/",
         "engine": "SST",
         "queue_limit": 20,
         "data_transport": "",

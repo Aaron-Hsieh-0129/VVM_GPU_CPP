@@ -272,11 +272,16 @@ void WindSolver::solve_uv(Core::State& state) {
     auto& v_field = state.get_field<3>("v");
     auto& v = v_field.get_mutable_device_data();
 
-    auto& utopm = state.get_field<0>("utop_mean").get_mutable_device_data();
-    auto& vtopm = state.get_field<0>("vtop_mean").get_mutable_device_data();
+    // FIXME: Use class member
+    // auto& utopm = state.get_field<0>("utop_mean").get_mutable_device_data();
+    // auto& vtopm = state.get_field<0>("vtop_mean").get_mutable_device_data();
 #if defined(ENABLE_NCCL)
+    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> utopm("utopm");
+    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> vtopm("vtopm");
     state.calculate_horizontal_mean(utop_field, utopm);
+    Kokkos::fence();
     state.calculate_horizontal_mean(vtop_field, vtopm);
+    Kokkos::fence();
 #else
     auto utopm = state.calculate_horizontal_mean(utop_field);
     auto vtopm = state.calculate_horizontal_mean(vtop_field);
@@ -284,6 +289,18 @@ void WindSolver::solve_uv(Core::State& state) {
 
     auto& utopmn = state.get_field<0>("utopmn").get_device_data();
     auto& vtopmn = state.get_field<0>("vtopmn").get_device_data();
+
+    // Note: this data clipping is necessary to prevent too small values and this makes CPU and GPU VVM same.
+    Kokkos::parallel_for("DataClipZero", 1, KOKKOS_LAMBDA(const int i) {
+        if (Kokkos::abs(utopm()) < 1e-15) {
+            utopm() = 0.0;
+        }
+        if (Kokkos::abs(vtopm()) < 1e-15) {
+            vtopm() = 0.0;
+        }
+    });
+
+
     Kokkos::parallel_for("uvtop_process", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
         KOKKOS_LAMBDA(int j, int i) {
             u(nz-h-1,j,i) = utopmn() + utop(j,i) - utopm();
