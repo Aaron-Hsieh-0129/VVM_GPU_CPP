@@ -2,20 +2,10 @@
 #define VVM_UTILS_TIMING_MANAGER_HPP
 
 #include <string>
-#include <map>
-#include <chrono>
-#include <vector>
 #include <mpi.h>
 
 namespace VVM {
 namespace Utils {
-
-struct TimingData {
-    double wall_time = 0.0;
-    double cpu_time = 0.0;
-    long long call_count = 0;
-    bool running = false;
-};
 
 class TimingManager {
 public:
@@ -31,10 +21,6 @@ public:
 private:
     TimingManager() = default;
     ~TimingManager() = default;
-
-    std::map<std::string, TimingData> timings_;
-    std::map<std::string, std::chrono::high_resolution_clock::time_point> wall_starts_;
-    std::map<std::string, clock_t> cpu_starts_;
 };
 
 } // namespace Utils
