@@ -107,6 +107,8 @@ void WindSolver::solve_w(Core::State& state) {
     const auto& bn_new = params_.bn_new.get_device_data();
     const auto& cn_new = params_.cn_new.get_device_data();
 
+    auto original_w_view = w;
+
 #if defined(ENABLE_NCCL)
     cudaStream_t stream = Kokkos::Cuda().cuda_stream();
     if (solve_w_graph_created_) {
@@ -115,10 +117,15 @@ void WindSolver::solve_w(Core::State& state) {
     }
     cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal);
 #endif
+
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), W3DN, w);
+
     if (w_solver_method_ == WSolverMethod::TRIDIAGONAL) {
         for (int iter = 0; iter < iter_num; iter++) {
             // Copy w to w3dn
-            Kokkos::parallel_for("copy_W3DN", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz,ny,nx}), KOKKOS_LAMBDA(int k, int j, int i) { W3DN(k,j,i) = w(k,j,i); });
+            auto temp_view = W3DN;
+            W3DN = w;
+            w = temp_view;
 
             Kokkos::parallel_for("calculate_RHSV", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1,ny-h,nx-h}),
                 KOKKOS_LAMBDA(int k, int j, int i) {
@@ -185,7 +192,11 @@ void WindSolver::solve_w(Core::State& state) {
             halo_exchanger_.exchange_halos(state.get_field<3>("w"));
         }
     }
-    halo_exchanger_.exchange_halos(state.get_field<3>("w"));
+    if (iter_num % 2 != 0) {
+        Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), original_w_view, w);
+        W3DN = w;
+        w = original_w_view;
+    }
 
 #if defined(ENABLE_NCCL)
     cudaGraph_t graph = nullptr;
@@ -272,12 +283,9 @@ void WindSolver::solve_uv(Core::State& state) {
     auto& v_field = state.get_field<3>("v");
     auto& v = v_field.get_mutable_device_data();
 
-    // FIXME: Use class member
-    // auto& utopm = state.get_field<0>("utop_mean").get_mutable_device_data();
-    // auto& vtopm = state.get_field<0>("vtop_mean").get_mutable_device_data();
+    auto& utopm = state.get_field<0>("utop_mean").get_mutable_device_data();
+    auto& vtopm = state.get_field<0>("vtop_mean").get_mutable_device_data();
 #if defined(ENABLE_NCCL)
-    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> utopm("utopm");
-    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> vtopm("vtopm");
     state.calculate_horizontal_mean(utop_field, utopm);
     state.calculate_horizontal_mean(vtop_field, vtopm);
 #else
@@ -368,7 +376,9 @@ void WindSolver::relax_2d(Core::Field<2>& A_field, Core::Field<2>& ANM1_field, C
     );
 
     for (int iter = 0; iter < iter_num; iter++) {
-        Kokkos::parallel_for("copy_ATEMP", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {ny,nx}), KOKKOS_LAMBDA(int j, int i) { ATEMP(j,i) = AOUT(j,i); });
+        auto temp_view = ATEMP;
+        ATEMP = AOUT;
+        AOUT = temp_view;
 
         Kokkos::parallel_for("AOUT", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
             KOKKOS_LAMBDA(int j, int i) {
@@ -378,6 +388,9 @@ void WindSolver::relax_2d(Core::Field<2>& A_field, Core::Field<2>& ANM1_field, C
         );
 
         halo_exchanger_.exchange_halos(AOUT_field, 1);
+    }
+    if (iter_num % 2 != 0) {
+        Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), AOUT_field.get_mutable_device_data(), AOUT);
     }
 #if defined(ENABLE_NCCL)
     cudaGraph_t graph = nullptr;
