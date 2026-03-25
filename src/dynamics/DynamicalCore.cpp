@@ -67,6 +67,8 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
     bool coriolis_zeta = config.get_value<bool>("dynamics.prognostic_variables.zeta.tendency_terms.coriolis.enable", false);
     enable_coriolis_ = coriolis_xi && coriolis_eta && coriolis_zeta;
     enable_turbulence_ = config.get_value<bool>("physics.turbulence.enable_turbulence", false);
+
+    diagnostic_scheme_ = std::make_unique<Takacs>(config_, grid_, halo_exchanger_, bc_manager_);
     
     for (auto& [var_name, var_conf] : prognostic_config.items()) {
         if (rank == 0) {
@@ -164,19 +166,16 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
 DynamicalCore::~DynamicalCore() = default;
 
 void DynamicalCore::compute_diagnostic_fields() const {
-    auto scheme = std::make_unique<Takacs>(config_, grid_, halo_exchanger_, bc_manager_);
-
     auto& R_xi_field = state_.get_field<3>("R_xi");
     auto& R_eta_field = state_.get_field<3>("R_eta");
     auto& R_zeta_field = state_.get_field<3>("R_zeta");
 
-    scheme->calculate_R_xi(state_, grid_, params_, R_xi_field);
-    scheme->calculate_R_eta(state_, grid_, params_, R_eta_field);
-    scheme->calculate_R_zeta(state_, grid_, params_, R_zeta_field);
+    diagnostic_scheme_->calculate_R_xi(state_, grid_, params_, R_xi_field);
+    diagnostic_scheme_->calculate_R_eta(state_, grid_, params_, R_eta_field);
+    diagnostic_scheme_->calculate_R_zeta(state_, grid_, params_, R_zeta_field);
 }
 
 void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
-    auto scheme = std::make_unique<Takacs>(config_, grid_, halo_exchanger_, bc_manager_);
     auto& zeta_field = state.get_field<3>("zeta");
     auto zeta_data = zeta_field.get_mutable_device_data();
     const auto& xi = state.get_field<3>("xi").get_device_data();
@@ -192,11 +191,6 @@ void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
     const double dx = grid_.get_dx();
     const auto& rdx = params_.rdx;
     const auto& rdy = params_.rdy;
-
-    // WARNING: If RHS needs different scheme, it can be put into scheme for calculate_vorticity_divergence 
-    // Core::Field<3> rhs_field("rhs_zeta_diag", {nz, ny, nx});
-    // scheme->calculate_vorticity_divergence(state, grid_, params_, rhs_field);
-    // const auto& rhs_data = rhs_field.get_device_data();
 
     const auto& flex_height_coef_up = params_.flex_height_coef_up.get_device_data();
 
@@ -529,15 +523,18 @@ void DynamicalCore::update_thermodynamics(double dt) {
                     }
                 );
             }
-            halo_exchanger_.exchange_halos(state_.get_field<3>(var_name));
-            bc_manager_.apply_horizontal_bcs(state_.get_field<3>(var_name));
+        }
+    }
 
-            if (var_name == "th" || var_name == "qv") {
-                bc_manager_.apply_zero_gradient(state_.get_field<3>(var_name));
-            }
-            else {
-                bc_manager_.apply_zero_gradient_bottom_zero_top(state_.get_field<3>(var_name));
-            }
+    halo_exchanger_.exchange_multiple_halos(thermo_vars_, state_);
+    for (const auto& var_name : thermo_vars_) {
+        bc_manager_.apply_horizontal_bcs(state_.get_field<3>(var_name));
+
+        if (var_name == "th" || var_name == "qv") {
+            bc_manager_.apply_zero_gradient(state_.get_field<3>(var_name));
+        }
+        else {
+            bc_manager_.apply_zero_gradient_bottom_zero_top(state_.get_field<3>(var_name));
         }
     }
 }

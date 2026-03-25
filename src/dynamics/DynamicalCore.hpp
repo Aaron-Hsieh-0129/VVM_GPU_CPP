@@ -11,6 +11,7 @@
 #include "utils/ConfigurationManager.hpp"
 #include "temporal_schemes/TemporalScheme.hpp"
 #include "tendency_processes/TendencyCalculator.hpp"
+#include "spatial_schemes/Takacs.hpp"
 #include "solvers/WindSolver.hpp"
 #include "core/BoundaryConditionManager.hpp"
 
@@ -61,6 +62,7 @@ private:
     std::vector<IntegrationStep> integration_procedure_;
 
     std::unique_ptr<WindSolver> wind_solver_;
+    std::unique_ptr<Takacs> diagnostic_scheme_;
 
     Core::HaloExchanger& halo_exchanger_;
 
