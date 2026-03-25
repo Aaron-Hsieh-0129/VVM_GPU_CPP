@@ -517,7 +517,7 @@ void Initializer::initialize_perturbation() const {
                                       std::pow((z_mid(k) - 5000.) / 1000., 2)
                                      );
                 if (radius_norm <= 1) {
-                    th(k, j, i) += 2. * (std::cos(PI * 0.5 * radius_norm));
+                    th(k, j, i) += 5. * (std::cos(PI * 0.5 * radius_norm));
                 }
             }
         );

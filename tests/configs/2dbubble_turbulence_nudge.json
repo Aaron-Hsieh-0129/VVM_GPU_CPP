@@ -33,7 +33,7 @@
         }
     },
     "output": {
-        "output_dir": "../output/VVM_comparison/2dbubble_turbulence_nudge/GPU",
+        "output_dir": "./testing_output_2dbubble_turbulence_nudge/",
         "engine": "SST",
         "queue_limit": 20,
         "data_transport": "",

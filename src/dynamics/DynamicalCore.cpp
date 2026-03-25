@@ -357,6 +357,8 @@ void DynamicalCore::compute_uvtopmn() {
     const auto& f = state_.get_field<1>("f").get_device_data();
 
     // Diffusion
+    auto mean_u_turb = mean_u_turb_;
+    auto mean_v_turb = mean_v_turb_;
     if (enable_turbulence_) {
         Kokkos::parallel_for("calculate_utopmn_diffusion",
             Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h, nx-h}),
@@ -374,11 +376,21 @@ void DynamicalCore::compute_uvtopmn() {
         auto mean_u_turb = state_.calculate_horizontal_mean(tempu_field);
         auto mean_v_turb = state_.calculate_horizontal_mean(tempv_field);
 #endif
+        Kokkos::parallel_for("DataClipZero", 1, KOKKOS_LAMBDA(const int i) {
+            if (Kokkos::abs(mean_u_turb()) < 1e-15) {
+                mean_u_turb() = 0.0;
+            }
+            if (Kokkos::abs(mean_v_turb()) < 1e-15) {
+                mean_v_turb() = 0.0;
+            }
+        });
     }
 
     Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), mean_u_coriolis_, 0.0);
     Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), mean_v_coriolis_, 0.0);
 
+    auto mean_u_coriolis = mean_u_coriolis_;
+    auto mean_v_coriolis = mean_v_coriolis_;
     if (enable_coriolis_) {
         // Coriolis force
         Kokkos::parallel_for("calculate_utopmn_coriolis",
@@ -395,6 +407,14 @@ void DynamicalCore::compute_uvtopmn() {
         auto mean_u_coriolis = state_.calculate_horizontal_mean(tempu_field);
         auto mean_v_coriolis = state_.calculate_horizontal_mean(tempv_field);
 #endif
+        Kokkos::parallel_for("DataClipZero", 1, KOKKOS_LAMBDA(const int i) {
+            if (Kokkos::abs(mean_u_coriolis()) < 1e-15) {
+                mean_u_coriolis() = 0.0;
+            }
+            if (Kokkos::abs(mean_v_coriolis()) < 1e-15) {
+                mean_v_coriolis() = 0.0;
+            }
+        });
     }
 
     auto& utopmn_to_update = state_.get_field<0>("utopmn");
@@ -415,11 +435,6 @@ void DynamicalCore::compute_uvtopmn() {
 
     size_t now_idx = state_.get_step() % 2;
     size_t prev_idx = (state_.get_step() + 1) % 2;
-
-    auto mean_u_turb = mean_u_turb_;
-    auto mean_v_turb = mean_v_turb_;
-    auto mean_u_coriolis = mean_u_coriolis_;
-    auto mean_v_coriolis = mean_v_coriolis_;
 
     if (state_.get_step() == 0) {
         Kokkos::parallel_for("Cauculate_uvtopmn", 
