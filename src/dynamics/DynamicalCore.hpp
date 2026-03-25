@@ -65,6 +65,7 @@ private:
     Core::HaloExchanger& halo_exchanger_;
 
     bool enable_coriolis_ = false;
+    bool enable_turbulence_ = false;
 
     Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> tempumn_{"tempumn"};
     Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> tempvmn_{"tempvmn"};

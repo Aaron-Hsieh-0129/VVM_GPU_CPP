@@ -66,6 +66,7 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
     bool coriolis_eta = config.get_value<bool>("dynamics.prognostic_variables.eta.tendency_terms.coriolis.enable", false);
     bool coriolis_zeta = config.get_value<bool>("dynamics.prognostic_variables.zeta.tendency_terms.coriolis.enable", false);
     enable_coriolis_ = coriolis_xi && coriolis_eta && coriolis_zeta;
+    enable_turbulence_ = config.get_value<bool>("physics.turbulence.enable_turbulence", false);
     
     for (auto& [var_name, var_conf] : prognostic_config.items()) {
         if (rank == 0) {
@@ -335,6 +336,16 @@ void DynamicalCore::compute_uvtopmn() {
     auto tempumn = state_.calculate_horizontal_mean(tempu_field);
     auto tempvmn = state_.calculate_horizontal_mean(tempv_field);
 #endif
+    auto tempumn = tempumn_;
+    auto tempvmn = tempvmn_;
+    Kokkos::parallel_for("DataClipZero", 1, KOKKOS_LAMBDA(const int i) {
+        if (Kokkos::abs(tempumn()) < 1e-15) {
+            tempumn() = 0.0;
+        }
+        if (Kokkos::abs(tempvmn()) < 1e-15) {
+            tempvmn() = 0.0;
+        }
+    });
 
     int NK2 = nz-h-1;
     int NK1 = nz-h-2;
@@ -346,22 +357,24 @@ void DynamicalCore::compute_uvtopmn() {
     const auto& f = state_.get_field<1>("f").get_device_data();
 
     // Diffusion
-    Kokkos::parallel_for("calculate_utopmn_diffusion",
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h, nx-h}),
-        KOKKOS_LAMBDA(const int j, const int i) {
-            tempu(j,i) = (RKM(NK1,j,i)+RKM(NK1,j,i+1)+RKM(NK2,j,i)+RKM(NK2,j,i+1))
-                         *R_eta(NK1,j,i)*rhobar_up(NK1);
-            tempv(j,i) = (RKM(NK1,j,i)+RKM(NK1,j+1,i)+RKM(NK2,j,i)+RKM(NK2,j+1,i))
-                         *R_xi(NK1,j,i)*rhobar_up(NK1);
-        }
-    );
+    if (enable_turbulence_) {
+        Kokkos::parallel_for("calculate_utopmn_diffusion",
+            Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h, nx-h}),
+            KOKKOS_LAMBDA(const int j, const int i) {
+                tempu(j,i) = (RKM(NK1,j,i)+RKM(NK1,j,i+1)+RKM(NK2,j,i)+RKM(NK2,j,i+1))
+                             *R_eta(NK1,j,i)*rhobar_up(NK1);
+                tempv(j,i) = (RKM(NK1,j,i)+RKM(NK1,j+1,i)+RKM(NK2,j,i)+RKM(NK2,j+1,i))
+                             *R_xi(NK1,j,i)*rhobar_up(NK1);
+            }
+        );
 #if defined(ENABLE_NCCL)
-    state_.calculate_horizontal_mean(tempu_field, mean_u_turb_);
-    state_.calculate_horizontal_mean(tempv_field, mean_v_turb_);
+        state_.calculate_horizontal_mean(tempu_field, mean_u_turb_);
+        state_.calculate_horizontal_mean(tempv_field, mean_v_turb_);
 #else
-    auto mean_u_turb = state_.calculate_horizontal_mean(tempu_field);
-    auto mean_v_turb = state_.calculate_horizontal_mean(tempv_field);
+        auto mean_u_turb = state_.calculate_horizontal_mean(tempu_field);
+        auto mean_v_turb = state_.calculate_horizontal_mean(tempv_field);
 #endif
+    }
 
     Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), mean_u_coriolis_, 0.0);
     Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), mean_v_coriolis_, 0.0);
@@ -403,8 +416,6 @@ void DynamicalCore::compute_uvtopmn() {
     size_t now_idx = state_.get_step() % 2;
     size_t prev_idx = (state_.get_step() + 1) % 2;
 
-    auto tempumn = tempumn_;
-    auto tempvmn = tempvmn_;
     auto mean_u_turb = mean_u_turb_;
     auto mean_v_turb = mean_v_turb_;
     auto mean_u_coriolis = mean_u_coriolis_;

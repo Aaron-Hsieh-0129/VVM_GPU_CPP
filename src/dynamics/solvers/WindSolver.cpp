@@ -279,9 +279,7 @@ void WindSolver::solve_uv(Core::State& state) {
     Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> utopm("utopm");
     Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> vtopm("vtopm");
     state.calculate_horizontal_mean(utop_field, utopm);
-    Kokkos::fence();
     state.calculate_horizontal_mean(vtop_field, vtopm);
-    Kokkos::fence();
 #else
     auto utopm = state.calculate_horizontal_mean(utop_field);
     auto vtopm = state.calculate_horizontal_mean(vtop_field);
