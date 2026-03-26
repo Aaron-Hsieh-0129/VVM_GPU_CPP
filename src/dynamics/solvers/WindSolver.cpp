@@ -45,6 +45,12 @@ WindSolver::WindSolver(const Core::Grid& grid, const Utils::ConfigurationManager
         w_solver_method_ = WSolverMethod::JACOBI;
     }
 
+    double h_WRXMU, h_rdx2, h_rdy2;
+    Kokkos::deep_copy(h_WRXMU, params_.WRXMU);
+    Kokkos::deep_copy(h_rdx2,  params_.rdx2);
+    Kokkos::deep_copy(h_rdy2,  params_.rdy2);
+    h_inv_C0_ = 1.0 / (h_WRXMU + 2.0 * h_rdx2 + 2.0 * h_rdy2);
+
 }
 
 void WindSolver::solve_w(Core::State& state) {
@@ -87,22 +93,23 @@ void WindSolver::solve_w(Core::State& state) {
                          -( xi(k,j,i) -  xi(k,j-1,i))*rdy();
         }
     );
-    // halo_exchanger_.exchange_halos(YTEM_field_);
-    // int rank;
-    // MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    // if (rank == 0) state.get_field<3>("w").print_slice_z_at_k(grid_, 0, 17);
-    // exit(1);
 
     // Linear extrapolation of initial guess
     auto& W3DNM1 = state.get_field<3>("W3DNM1").get_mutable_device_data();
-    Kokkos::parallel_for("W3DNP1", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,0,0}, {nz-h-1,ny,nx}),
+    Kokkos::parallel_for("W3DNP1", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz,ny,nx}),
         KOKKOS_LAMBDA(int k, int j, int i) {
-            W3DNP1(k,j,i) = 2.*w(k,j,i) - W3DNM1(k,j,i);
+            double w_val = w(k,j,i);
+            
+            if (k >= h && k < nz-h-1) {
+                double w_np1 = 2.0 * w_val - W3DNM1(k,j,i);
+                W3DNM1(k,j,i) = w_val;
+                w(k,j,i) = w_np1;
+            }
+            else {
+                W3DNM1(k,j,i) = w_val;
+            }
         }
     );
-
-    Kokkos::parallel_for("copy_W3DNM1", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz,ny,nx}), KOKKOS_LAMBDA(int k, int j, int i) { W3DNM1(k,j,i) = w(k,j,i); });
-    Kokkos::parallel_for("copy_w", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz,ny,nx}), KOKKOS_LAMBDA(int k, int j, int i) { w(k,j,i) = W3DNP1(k,j,i); });
 
     const auto& bn_new = params_.bn_new.get_device_data();
     const auto& cn_new = params_.cn_new.get_device_data();
@@ -323,7 +330,7 @@ void WindSolver::solve_uv(Core::State& state) {
             // The for-loop inside is to prevent racing condition because lower layers depend on upper layers.
             for (int k = nz-h-2; k >= h-1; --k) {
                 // WARNING: The eta is with negative because of the eta definition in original VVM
-                // FIXME: Need to fix it if the definition is reversed.
+                // NOTE: Need to fix it if the definition is reversed.
                 u(k,j,i) = u(k+1,j,i) 
                          - ((w(k,j,i+1) - w(k,j,i))*rdx() - eta(k,j,i)) * dz() / flex_height_coef_up(k); 
                 v(k,j,i) = v(k+1,j,i) 
@@ -367,7 +374,7 @@ void WindSolver::relax_2d(Core::Field<2>& A_field, Core::Field<2>& ANM1_field, C
     const auto& iter_num = params_.solver_iteration;
     const auto& rdx2 = params_.rdx2;
     const auto& rdy2 = params_.rdy2;
-    // const auto C0 = WRXMU() + 2.*rdx2() + 2.*rdy2();
+    const double inv_C0 = h_inv_C0_;
 
     Kokkos::parallel_for("interpolation", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {ny,nx}),
         KOKKOS_LAMBDA(int j, int i) {
@@ -383,7 +390,7 @@ void WindSolver::relax_2d(Core::Field<2>& A_field, Core::Field<2>& ANM1_field, C
         Kokkos::parallel_for("AOUT", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
             KOKKOS_LAMBDA(int j, int i) {
                 AOUT(j,i) = (WRXMU()*ATEMP(j,i) + rdx2()*(ATEMP(j,i-1)+ATEMP(j,i+1)) 
-                          + rdy2()*(ATEMP(j-1,i)+ATEMP(j+1,i)) - RHSV(j,i)) / (WRXMU() + 2.*rdx2() + 2.*rdy2());
+                          + rdy2()*(ATEMP(j-1,i)+ATEMP(j+1,i)) - RHSV(j,i)) * inv_C0;
             }
         );
 

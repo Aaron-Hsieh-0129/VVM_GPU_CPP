@@ -54,6 +54,8 @@ private:
 
     Core::HaloExchanger& halo_exchanger_;
 
+    double h_inv_C0_;
+
 #if defined(ENABLE_NCCL)
     bool solve_w_graph_created_ = false;
     cudaGraphExec_t solve_w_graph_exec_ = nullptr;
