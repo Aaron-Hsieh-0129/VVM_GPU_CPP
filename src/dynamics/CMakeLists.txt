@@ -16,4 +16,6 @@ target_link_libraries(vvm_dynamics
         vvm_core
         vvm_utils
         Kokkos::kokkos
+        PnetCDF::pnetcdf
+        NetCDF::netcdf
 )

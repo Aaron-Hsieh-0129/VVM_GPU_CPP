@@ -4,7 +4,6 @@ import os
 
 FILENAME = '../rundata/initial_conditions/spatial/init.nc'
 NZ, NY, NX = 44, 192, 192
-DX, DY = 500.0, 500.0
 
 os.makedirs(os.path.dirname(FILENAME), exist_ok=True)
 

@@ -1,8 +1,19 @@
 #include "LateralBoundaryNudging.hpp"
 #include <iostream>
+#include <pnetcdf.h>
 
 namespace VVM {
 namespace Dynamics {
+
+void LateralBoundaryNudging::check_ncmpi_error(int status, const std::string& msg) const {
+    if (status != NC_NOERR) {
+        std::string err_msg = msg + ": " + ncmpi_strerror(status);
+        int rank = grid_.get_mpi_rank();
+        if (rank == 0) std::cerr << "PnetCDF Error in LBN: " << err_msg << std::endl;
+        MPI_Abort(grid_.get_cart_comm(), status);
+        throw std::runtime_error(err_msg);
+    }
+}
 
 LateralBoundaryNudging::LateralBoundaryNudging(const Utils::ConfigurationManager& config, 
                                                const Core::Grid& grid, 
@@ -13,10 +24,10 @@ LateralBoundaryNudging::LateralBoundaryNudging(const Utils::ConfigurationManager
     enable_ = config_.get_value<bool>("dynamics.forcings.lateral_boundary_nudging.enable", false);
     
     if (enable_) {
-        nudge_W_ = config_.get_value<bool>("dynamics.forcings.lateral_boundary_nudging.boundaries.west", true);
-        nudge_E_ = config_.get_value<bool>("dynamics.forcings.lateral_boundary_nudging.boundaries.east", true);
-        nudge_S_ = config_.get_value<bool>("dynamics.forcings.lateral_boundary_nudging.boundaries.south", true);
-        nudge_N_ = config_.get_value<bool>("dynamics.forcings.lateral_boundary_nudging.boundaries.north", true);
+        nudge_W_ = config_.get_value<bool>("dynamics.forcings.lateral_boundary_nudging.boundaries.west", false);
+        nudge_E_ = config_.get_value<bool>("dynamics.forcings.lateral_boundary_nudging.boundaries.east", false);
+        nudge_S_ = config_.get_value<bool>("dynamics.forcings.lateral_boundary_nudging.boundaries.south", false);
+        nudge_N_ = config_.get_value<bool>("dynamics.forcings.lateral_boundary_nudging.boundaries.north", false);
 
         tau_b_  = config_.get_value<double>("dynamics.forcings.lateral_boundary_nudging.tau_b", 300.0);
         offset_ = config_.get_value<double>("dynamics.forcings.lateral_boundary_nudging.offset", 2500.0);
@@ -29,8 +40,20 @@ LateralBoundaryNudging::LateralBoundaryNudging(const Utils::ConfigurationManager
             "dynamics.forcings.lateral_boundary_nudging.target_vars", 
             std::vector<std::string>{"th", "qv"}
         );
-    }
 
+        data_dir_ = config_.get_value<std::string>("dynamics.forcings.lateral_boundary_nudging.forcing_data.directory", "../rundata/LS_forcings/");
+        time_varying_ = config_.get_value<bool>("dynamics.forcings.lateral_boundary_nudging.forcing_data.time_varying", false);
+
+        if (time_varying_) {
+            file_prefix_ = config_.get_value<std::string>("dynamics.forcings.lateral_boundary_nudging.forcing_data.file_prefix", "ls_forcing_");
+            update_interval_ = config_.get_value<double>("dynamics.forcings.lateral_boundary_nudging.forcing_data.update_interval_s", 3600.0);
+            time_T1_ = 0.0;
+            time_T2_ = update_interval_;
+        } 
+        else {
+            file_name_ = config_.get_value<std::string>("dynamics.forcings.lateral_boundary_nudging.forcing_data.file_name_for_not_varying", "ls_forcing_constant.nc");
+        }
+    }
 }
 
 void LateralBoundaryNudging::initialize(Core::State& state) {
@@ -49,27 +72,18 @@ void LateralBoundaryNudging::initialize(Core::State& state) {
     if (!state.has_field("lbn_weight")) {
         state.add_field<2>("lbn_weight", {ny, nx});
     }
+
     for (const auto& var_name : target_vars_) {
-        std::string ls_name = var_name + "_ls";
-        if (!state.has_field(ls_name)) {
-            state.add_field<3>(ls_name, {nz, ny, nx});
-        }
-        auto& var = state.get_field<3>(ls_name).get_mutable_device_data();
-        if (var_name == "qv") {
-            auto& qv = state.get_field<3>("qv").get_mutable_device_data();
-            Kokkos::parallel_for("init_nudge", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
-                KOKKOS_LAMBDA(int k, int j, int i) {
-                    if (i < nx/2) {
-                        var(k,j,i) = qv(k,j,i)*1.3;
-                    }
-                    else {
-                        var(k,j,i) = qv(k,j,i)*0.7;
-                    }
-                }
-            );
+        state.add_field<3>(var_name + "_ls", {nz, ny, nx});
+        
+        if (time_varying_) {
+            name_T1_[var_name] = var_name + "_ls_T1";
+            name_T2_[var_name] = var_name + "_ls_T2";
+            state.add_field<3>(name_T1_[var_name], {nz, ny, nx});
+            state.add_field<3>(name_T2_[var_name], {nz, ny, nx});
         }
     }
-    
+
     auto& weight = state.get_field<2>("lbn_weight").get_mutable_device_data();
     
     double offset = offset_;
@@ -129,6 +143,104 @@ void LateralBoundaryNudging::initialize(Core::State& state) {
             weight(j, i) = f;
         }
     );
+
+    if (time_varying_) {
+        std::ostringstream file_t1, file_t2;
+        file_t1 << data_dir_ << file_prefix_ << std::setfill('0') << std::setw(6) << static_cast<int>(time_T1_) << ".nc";
+        file_t2 << data_dir_ << file_prefix_ << std::setfill('0') << std::setw(6) << static_cast<int>(time_T2_) << ".nc";
+
+        load_forcing_data(state, file_t1.str(), false); // load to T2
+        for (const auto& var : target_vars_) { std::swap(name_T1_[var], name_T2_[var]); } // swap to T1
+        load_forcing_data(state, file_t2.str(), false); // load to T2
+    } 
+    else {
+        std::string full_filepath = data_dir_ + file_name_;
+        load_forcing_data(state, full_filepath, true);
+    }
+}
+
+void LateralBoundaryNudging::load_forcing_data(Core::State& state, const std::string& filepath, bool is_constant) {
+    int ncid;
+    int status = ncmpi_open(grid_.get_cart_comm(), filepath.c_str(), NC_NOWRITE, MPI_INFO_NULL, &ncid);
+    check_ncmpi_error(status, "Failed to open NetCDF file: " + filepath);
+
+    if (grid_.get_mpi_rank() == 0) std::cout << "  - LBN Loaded Forcing Data: " << filepath << std::endl;
+
+    MPI_Offset start[3] = {0, grid_.get_local_physical_start_y(), grid_.get_local_physical_start_x()};
+    MPI_Offset count[3] = {grid_.get_global_points_z(), grid_.get_local_physical_points_y(), grid_.get_local_physical_points_x()};
+    std::vector<double> host_buffer(count[0] * count[1] * count[2]);
+
+    const int h = grid_.get_halo_cells();
+    const int nz_in = count[0], ny_in = count[1], nx_in = count[2];
+
+    for (const auto& var : target_vars_) {
+        int varid;
+        status = ncmpi_inq_varid(ncid, var.c_str(), &varid);
+        check_ncmpi_error(status, "Cannot find 3D variable '" + var + "' in LBN file");
+        check_ncmpi_error(ncmpi_get_vara_double_all(ncid, varid, start, count, host_buffer.data()), "Failed to read 3D variable");
+
+        std::string target_field_name = is_constant ? (var + "_ls") : name_T2_[var];
+        auto& field = state.get_field<3>(target_field_name);
+        
+        auto field_view_dev = field.get_mutable_device_data();
+        auto field_view_host = Kokkos::create_mirror_view(field_view_dev);
+        
+        using HostExec = Kokkos::DefaultHostExecutionSpace;
+        Kokkos::parallel_for("Init_LBN_Buffer_3D",
+            Kokkos::MDRangePolicy<HostExec, Kokkos::Rank<3>>({0, 0, 0}, {nz_in, ny_in, nx_in}),
+            [=](const int k, const int j, const int i) {
+                size_t flat_idx = static_cast<size_t>(k) * ny_in * nx_in + static_cast<size_t>(j) * nx_in + static_cast<size_t>(i);
+                field_view_host(k + h, j + h, i + h) = host_buffer[flat_idx];
+            }
+        );
+        Kokkos::deep_copy(field_view_dev, field_view_host);
+    }
+    check_ncmpi_error(ncmpi_close(ncid), "Failed to close NetCDF file");
+}
+
+void LateralBoundaryNudging::update_large_scale_forcing(Core::State& state, double current_time) {
+    if (!time_varying_) return;
+
+    if (current_time >= time_T2_) {
+        for (const auto& var : target_vars_) {
+            auto& t1_view = state.get_field<3>(var + "_ls_T1").get_mutable_device_data();
+            auto& t2_view = state.get_field<3>(var + "_ls_T2").get_mutable_device_data();
+            auto temp = t1_view;
+            t1_view = t2_view;
+            t2_view = temp;
+        }
+
+        time_T1_ = time_T2_;
+        time_T2_ += update_interval_;
+
+        std::ostringstream filename_stream;
+        filename_stream << data_dir_ << file_prefix_ 
+                        << std::setfill('0') << std::setw(6) 
+                        << static_cast<int>(time_T2_) << ".nc";
+        
+        load_forcing_data(state, filename_stream.str(), false);
+    }
+
+    double W = (current_time - time_T1_) / (time_T2_ - time_T1_);
+    if (W < 0.0) W = 0.0;
+    if (W > 1.0) W = 1.0;
+
+    int nz = grid_.get_local_total_points_z();
+    int ny = grid_.get_local_total_points_y();
+    int nx = grid_.get_local_total_points_x();
+
+    for (const auto& var : target_vars_) {
+        const auto& t1_data = state.get_field<3>(var + "_ls_T1").get_device_data();
+        const auto& t2_data = state.get_field<3>(var + "_ls_T2").get_device_data();
+        auto& current_ls = state.get_field<3>(var + "_ls").get_mutable_device_data();
+
+        Kokkos::parallel_for("Time_Interpolation_" + var,
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {nz, ny, nx}),
+            KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                current_ls(k, j, i) = (1.0 - W) * t1_data(k, j, i) + W * t2_data(k, j, i);
+            }
+        );
+    }
 }
 
 template<size_t Dim>
@@ -153,12 +265,12 @@ void LateralBoundaryNudging::calculate_tendencies(Core::State& state,
 
     if constexpr (Dim == 3) {
         Kokkos::parallel_for("Sponge_Tendency_Lateral_" + var_name,
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, h, h}, {nz-h, ny-h, nx-h}),
+            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
                 
                 double fn = weight(j, i);
                 
-                if (fn > 0.0) {
+                if (fn > 1e-6) {
                     tend(k, j, i) += fn * inv_tau * (var_ls(k, j, i) - var(k, j, i));
                 }
             }

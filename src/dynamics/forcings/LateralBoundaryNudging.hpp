@@ -39,6 +39,13 @@ private:
     const Core::Parameters& params_;
 
     std::vector<std::string> target_vars_;
+    std::map<std::string, std::string> name_T1_;
+    std::map<std::string, std::string> name_T2_;
+
+    std::string data_dir_;
+    bool time_varying_;
+    std::string file_name_;
+    std::string file_prefix_;
 
     double tau_b_;
     double inv_tau_b_;
@@ -53,6 +60,13 @@ private:
     bool nudge_E_; // East  (x = xsize)
     bool nudge_S_; // South (y = 0)
     bool nudge_N_; // North (y = ysize)
+    
+    double time_T1_;
+    double time_T2_;
+    double update_interval_;
+
+    void load_forcing_data(Core::State& state, const std::string& filepath, bool is_constant);
+    void check_ncmpi_error(int status, const std::string& msg) const;
 };
 
 } // namespace Dynamics

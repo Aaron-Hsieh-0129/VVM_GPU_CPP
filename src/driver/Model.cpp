@@ -92,6 +92,12 @@ void Model::init() {
 
 void Model::run_step(double dt) {
     size_t current_step = state_.get_step();
+    double current_time = state_.get_time();
+
+    if (lateral_boundary_nudging_) {
+        lateral_boundary_nudging_->update_large_scale_forcing(state_, current_time);
+    }
+
     // Caculate tendencies of thermodynamics variables
     dycore_->calculate_thermo_tendencies();
 
