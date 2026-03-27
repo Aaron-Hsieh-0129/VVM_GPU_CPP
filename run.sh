@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --account=MST114418
-#SBATCH --partition=normal2
+#SBATCH --partition=normal
 #SBATCH --job-name=VVM_GPU_CPP
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=8
-#SBATCH --time=00:15:00
+#SBATCH --time=24:00:00
 #SBATCH --output=log//%j.out
 #SBATCH --error=log/%j.err
 #SBATCH --mail-type=END,FAIL

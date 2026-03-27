@@ -1,11 +1,11 @@
 {
     "grid": {
-        "nx": 32,
-        "ny": 32,
-        "nz": 33,
+        "nx": 192,
+        "ny": 192,
+        "nz": 44,
         "n_halo_cells": 2,
-        "dx": 500.0,
-        "dy": 500.0,
+        "dx": 2000.0,
+        "dy": 2000.0,
         "dz": 500.0,
         "dz1": 100.0,
         "boundary_condition": {
@@ -15,26 +15,26 @@
         }
     },
     "simulation": {
-        "total_time_s": 1500.0,
-        "dt_s": 1.0,
-        "output_interval_s": 1500.0,
-        "idealized_test": "2dbubble",
+        "total_time_s": 864000.0,
+        "dt_s": 5.0,
+        "output_interval_s": 600.0,
+        "idealized_test": "none",
         "__idealized_test": "none, advection_u, advection_v, advection_w, stretching, twisting, 2dbubble"
     },
     "initial_conditions": {
         "format": "txt",
-        "source_file": "../rundata/initial_conditions/profiles/profile_dry.txt",
+        "source_file": "../rundata/initial_conditions/profiles/profile_p3.txt",
         "perturbation": "none"
     },
     "netcdf_reader": {
-        "source_file": "../rundata/initial_conditions/spatial/init_regression_test.nc",
+        "source_file": "../rundata/initial_conditions/spatial/init.nc",
         "variables_to_read": {
             "2d": ["topo", "Tg"]
         }
     },
     "output": {
-        "output_dir": "../output/VVM_comparison/2dbubble_turbulence_nudge/GPU",
-        "engine": "SST",
+        "output_dir": "../output/boundary_x_1.3_0.7",
+        "engine": "HDF5",
         "queue_limit": 20,
         "data_transport": "",
         "__data_transport": "RDMA (for machines with infinite band), WAN (using network), and empty (for single node auto design by ADIOS2) ",
@@ -47,7 +47,7 @@
             "sw_heating", "lw_heating", "net_heating",
             "net_sw_flux", "net_lw_flux",
             "precip_liq_surf_flux", "precip_ice_surf_flux",
-            "sfc_flux_th", "sfc_flux_qv"
+            "sfc_flux_th", "sfc_flux_qv", "lbn_weight"
         ],
         "output_grid": {
             "x_start": 0,
@@ -72,12 +72,26 @@
                 "inv_CRAD": 3600.0
             },
             "random_perturbation": {
-                "enable": false,
+                "enable": true,
                 "time_s": 200,
                 "amplitude": 1,
                 "z_start_m": 0,
                 "z_end_m": 2000,
                 "random_seed": 1129
+            },
+            "lateral_boundary_nudging": {
+                "enable": true,
+                "boundaries": {
+                    "west": true,
+                    "east": true,
+                    "south": false,
+                    "north": false
+                },
+                "tau_b": 300.0,
+                "offset": 14000.0,
+                "width": 4000.0,
+                "radius": 4000.0,
+                "target_vars": ["qv"]
             }
         },
         "prognostic_variables": {
@@ -257,7 +271,7 @@
     },
     "physics": {
         "p3": {
-            "enable_p3": false,
+            "enable_p3": true,
             "make_lookup_table": false,
             "do_predict_nc": true,
             "do_prescribed_ccn": false,
@@ -276,7 +290,7 @@
             "enable_turbulence": true
         },
         "surface": {
-            "enable_surface": false,
+            "enable_surface": true,
             "frequency_step": 1
         }
     },
