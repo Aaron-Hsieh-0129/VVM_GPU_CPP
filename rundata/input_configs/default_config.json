@@ -91,7 +91,15 @@
                 "offset": 14000.0,
                 "width": 4000.0,
                 "radius": 4000.0,
-                "target_vars": ["qv"]
+                "target_vars": ["qv"],
+                "forcing_data": {
+                    "time_varying": false,
+                    "directory": "../rundata/LS_forcings/",
+                    "file_name_for_not_varying": "ls_forcing_constant.nc",
+                    "file_prefix": "ls_forcing_",
+                    "update_interval_s": 3600.0
+                }
+
             }
         },
         "prognostic_variables": {
