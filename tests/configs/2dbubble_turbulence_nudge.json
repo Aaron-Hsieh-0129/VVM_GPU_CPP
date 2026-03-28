@@ -34,7 +34,7 @@
     },
     "output": {
         "output_dir": "./testing_output_2dbubble_turbulence_nudge/",
-        "engine": "SST",
+        "engine": "HDF5",
         "queue_limit": 20,
         "data_transport": "",
         "__data_transport": "RDMA (for machines with infinite band), WAN (using network), and empty (for single node auto design by ADIOS2) ",
