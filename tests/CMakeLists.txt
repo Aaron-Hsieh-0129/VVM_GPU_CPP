@@ -5,8 +5,8 @@ set(TEST_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
 function(add_vvm_test TEST_NAME VARS_TO_TEST)
     add_test(NAME Run_${TEST_NAME} 
-             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 
-                     $<TARGET_FILE:vvm> --io-tasks 1 ${TEST_DIR}/configs/${TEST_NAME}.json
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1
+                     $<TARGET_FILE:vvm> ${TEST_DIR}/configs/${TEST_NAME}.json
              WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
     separate_arguments(VARS_LIST UNIX_COMMAND "${VARS_TO_TEST}")
