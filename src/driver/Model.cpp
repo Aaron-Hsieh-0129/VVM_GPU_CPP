@@ -48,6 +48,10 @@ Model::Model(const Utils::ConfigurationManager& config,
         sponge_layer_ = std::make_unique<Dynamics::SpongeLayer>(config_, grid_, params_, halo_exchanger_, state_);
     }
 
+    if (config_.get_value<bool>("dynamics.forcings.lateral_boundary_nudging.enable", false)) {
+        lateral_boundary_nudging_ = std::make_unique<Dynamics::LateralBoundaryNudging>(config_, grid_, params_, state_);
+    }
+
     if (config_.get_value<bool>("dynamics.forcings.random_perturbation.enable", false)) {
         random_forcing_ = std::make_unique<Dynamics::RandomForcing>(config_, grid_, params_);
     }
@@ -71,6 +75,7 @@ void Model::init() {
     if (turbulence_) turbulence_->initialize(state_);
     if (radiation_) radiation_->initialize(state_);
     if (sponge_layer_) sponge_layer_->initialize(state_);
+    if (lateral_boundary_nudging_) lateral_boundary_nudging_->initialize(state_);
     if (surface_) surface_->initialize(state_);
     if (random_forcing_) random_forcing_->initialize(state_);
     
@@ -87,6 +92,12 @@ void Model::init() {
 
 void Model::run_step(double dt) {
     size_t current_step = state_.get_step();
+    double current_time = state_.get_time();
+
+    if (lateral_boundary_nudging_) {
+        lateral_boundary_nudging_->update_large_scale_forcing(state_, current_time);
+    }
+
     // Caculate tendencies of thermodynamics variables
     dycore_->calculate_thermo_tendencies();
 
@@ -156,8 +167,20 @@ void Model::run_step(double dt) {
             VVM::Dynamics::TimeIntegrator::apply_forward_update(state_, var_name, grid_, dt, fe_tend_field);
         }
     }
+    
+    // Apply lateral boundary nudge
+    if (lateral_boundary_nudging_) {
+        for (const auto& var_name : lateral_boundary_nudging_->get_target_vars()) {
+            std::string fe_name = "fe_tendency_" + var_name;
+            auto& fe_tend_field = state_.get_field<3>(fe_name);
+            
+            fe_tend_field.set_to_zero(); 
+            lateral_boundary_nudging_->calculate_tendencies(state_, var_name, fe_tend_field);
+            VVM::Dynamics::TimeIntegrator::apply_forward_update(state_, var_name, grid_, dt, fe_tend_field);
+        }
+    }
 
-    if (turbulence_ || sponge_layer_ || surface_) {
+    if (turbulence_ || sponge_layer_ || surface_ || lateral_boundary_nudging_) {
         halo_exchanger_.exchange_multiple_halos(thermodynamics_vars_, state_);
         for (const auto& var_name : thermodynamics_vars_) {
             if (var_name == "th" || var_name == "qv") {
