@@ -61,6 +61,11 @@ Model::Model(const Utils::ConfigurationManager& config,
         thermodynamics_vars_.insert(thermodynamics_vars_.end(), {"qc", "qr", "qi", "nc", "nr", "ni", "bm", "qm"});
     }
     sfc_vars_ = {"th", "qv"};
+
+    if (config_.get_value<bool>("physics.land.enable_land", false)) {
+        land_ = std::make_unique<Physics::LandProcess>(config_, grid_, params_, halo_exchanger_);
+        land_freq_in_steps_ = config_.get_value<int>("physics.land.frequency_step", 12);
+    }
 }
 
 void Model::init() {
@@ -77,6 +82,7 @@ void Model::init() {
     if (sponge_layer_) sponge_layer_->initialize(state_);
     if (lateral_boundary_nudging_) lateral_boundary_nudging_->initialize(state_);
     if (surface_) surface_->initialize(state_);
+    if (land_) land_->init(state_);
     if (random_forcing_) random_forcing_->initialize(state_);
     
     // halo_exchanger_.exchange_halos(state_);
@@ -155,6 +161,7 @@ void Model::run_step(double dt) {
         }
     } 
 
+    if (land_) land_->run(state_, dt);
 
     // Apply sponge layer
     if (sponge_layer_) {

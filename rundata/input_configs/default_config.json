@@ -17,7 +17,7 @@
     "simulation": {
         "total_time_s": 864000.0,
         "dt_s": 5.0,
-        "output_interval_s": 600.0,
+        "output_interval_s": 50.0,
         "idealized_test": "none",
         "__idealized_test": "none, advection_u, advection_v, advection_w, stretching, twisting, 2dbubble"
     },
@@ -47,7 +47,8 @@
             "sw_heating", "lw_heating", "net_heating",
             "net_sw_flux", "net_lw_flux",
             "precip_liq_surf_flux", "precip_ice_surf_flux",
-            "sfc_flux_th", "sfc_flux_qv", "lbn_weight"
+            "sfc_flux_th", "sfc_flux_qv", 
+            "hfx", "le"
         ],
         "output_grid": {
             "x_start": 0,
@@ -72,7 +73,7 @@
                 "inv_CRAD": 3600.0
             },
             "random_perturbation": {
-                "enable": true,
+                "enable": false,
                 "time_s": 200,
                 "amplitude": 1,
                 "z_start_m": 0,
@@ -80,7 +81,7 @@
                 "random_seed": 1129
             },
             "lateral_boundary_nudging": {
-                "enable": true,
+                "enable": false,
                 "boundaries": {
                     "west": true,
                     "east": true,
@@ -298,7 +299,11 @@
             "enable_turbulence": true
         },
         "surface": {
-            "enable_surface": true,
+            "enable_surface": false,
+            "frequency_step": 1
+        },
+        "land": {
+            "enable_land": true,
             "frequency_step": 1
         }
     },

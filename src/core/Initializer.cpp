@@ -165,10 +165,7 @@ void Initializer::initialize_topo() const {
             }
         }
     );
-    // VVM::Core::HaloExchanger halo_exchanger(grid_);
-    Kokkos::fence();
     halo_exchanger_.exchange_halos(state_.get_field<3>("ITYPEW"));
-    cudaDeviceSynchronize();
 
     Kokkos::parallel_for("assign_ITYPE", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,h,h}, {nz-h,ny-h,nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
@@ -178,12 +175,9 @@ void Initializer::initialize_topo() const {
             }
         }
     );
-    Kokkos::fence();
     halo_exchanger_.exchange_halos(state_.get_field<3>("ITYPEU"));
     halo_exchanger_.exchange_halos(state_.get_field<3>("ITYPEV"));
       
-    cudaDeviceSynchronize();
-
 
     // Assign topou, topov
     auto& topou = state_.get_field<2>("topou").get_mutable_device_data();
@@ -200,10 +194,6 @@ void Initializer::initialize_topo() const {
             if (topo(j,i) == 0) topo(j,i) = h;
         }
     );
-      
-    cudaDeviceSynchronize();
-    return;
-
     return;
 }
 

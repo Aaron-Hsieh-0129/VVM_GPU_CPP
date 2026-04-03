@@ -36,3 +36,5 @@ target_link_libraries(vvm
         scream_share
         eamxx_physics
 )
+
+target_link_options(vvm PRIVATE -acc)
