@@ -191,7 +191,7 @@ void Initializer::initialize_topo() const {
 
     Kokkos::parallel_for("modifyTopo", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
         KOKKOS_LAMBDA(const int j, const int i) {
-            if (topo(j,i) == 0) topo(j,i) = h;
+            if (topo(j,i) == 0) topo(j,i) = h-1;
         }
     );
     return;
@@ -511,6 +511,12 @@ void Initializer::initialize_perturbation() const {
                 }
             }
         );
+    }
+    else if (test_mode == "topo") {
+        auto& utopmn = state_.get_field<0>("utopmn").get_mutable_device_data();
+        Kokkos::deep_copy(u, 10.);
+        Kokkos::deep_copy(utopmn, 10.);
+        
     }
 
     if (perturbation == "none") return;

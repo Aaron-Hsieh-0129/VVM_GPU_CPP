@@ -23,7 +23,7 @@
     },
     "initial_conditions": {
         "format": "txt",
-        "source_file": "../rundata/initial_conditions/profiles/profile_p3.txt",
+        "source_file": "../rundata/initial_conditions/profiles/profile_rcemip.txt",
         "perturbation": "none"
     },
     "netcdf_reader": {
@@ -287,7 +287,7 @@
             "max_total_ni": 740.0e3
         },
         "rrtmgp": {
-            "enable_rrtmgp": false,
+            "enable_rrtmgp": true,
             "column_chunk_size": 512,
             "rad_frequency_step": 120,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],

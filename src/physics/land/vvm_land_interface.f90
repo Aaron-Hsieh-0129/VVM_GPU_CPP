@@ -28,6 +28,11 @@ contains
         real(c_double), intent(inout) :: tskin(nx,ny), canopy(nx,ny), snwdph(nx,ny), zorl(nx,ny)
         real(c_double), intent(inout) :: hflux(nx,ny), qflux(nx,ny), evap(nx,ny)
 
+        real(8), parameter :: g = 9.81D0
+        real(8), parameter :: r = 287.04D0
+        real(8), parameter :: cp = 1004.6D0
+        real(8), parameter :: hltm = 2500000.0D0
+
         integer(c_int) :: myim(ny)
         integer(c_int) :: i, j, ncld, isot, ivegsrc, async_id, iter, lsm
         real(8)        :: xmin, xmax, xinc, x_val, t_val
@@ -65,11 +70,11 @@ contains
             t_val = x_val
             tbpvs(i) = 611.2D0 * exp(17.67D0 * (t_val - 273.15D0) / (t_val - 29.65D0))
         end do
-        !$acc enter data copyin(c1xpvs, c2xpvs, tbpvs)
         
         do j = 1, ny
             myim(j) = nx
         end do
+        !$acc enter data copyin(c1xpvs, c2xpvs, tbpvs, myim)
 
         !$acc data present(islimsk, vegtype, soiltyp, slopetyp, &
         !$acc              t1, q1, u1, v1, ps, prcp, swdn, lwdn, hgt, &
@@ -79,8 +84,7 @@ contains
         !$acc             shdmax, shdmin, tsurf, flag_iter, flag_guess, qsurf, &
         !$acc             gfx, ep1d, sfemis, tgclim, snoalb, alb, albedo2, &
         !$acc             sheleg, tprcp, srflag, sncover, drain, runof, zice, cice, xtice, snomt, &
-        !$acc             u10, v10, t2, q2, rh2, rh10, ro2) &
-        !$acc      copyin(myim)
+        !$acc             u10, v10, t2, q2, rh2, rh10, ro2)
 
         ncld = 1
         isot = 1; ivegsrc = 1; async_id = 1
@@ -95,7 +99,7 @@ contains
                 prsl1(i,j) = ps(i,j)
                 prslki(i,j) = (ps(i,j) / 100000.0D0) ** 0.286D0
 
-                ro2(i,j) = ps(i,j) / (287.04D0 * t1(i,j) * (1.0D0 + 0.608D0 * q1(i,j)))
+                ro2(i,j) = ps(i,j) / (r * t1(i,j) * (1.0D0 + 0.608D0 * q1(i,j)))
 
                 flag_iter(i,j) = .true.
                 flag_guess(i,j) = .false.
@@ -201,8 +205,16 @@ contains
         do j = 1, ny
             do i = 1, nx
                 tskin(i,j) = tsurf(i,j)
-                hflux(i,j) = hflux(i,j) * ro2(i,j) * 1004.6D0
-                evap(i,j) = qflux(i,j) * ro2(i,j) * 2500000.0D0
+                hflux(i,j) = hflux(i,j) * ro2(i,j) * cp
+                evap(i,j) = qflux(i,j) * ro2(i,j) * hltm
+
+                if (islimsk(i,j) == 0) then
+                    ! ocean 
+                    zorl(i,j) = max(ustar(i,j) * ustar(i,j) * 0.014D0 / g, 1.5D-5)
+                else
+                    ! land 
+                    zorl(i,j) = z0rl(i,j) / 100.0D0 ! cm -> m
+                end if
             end do
         end do
         

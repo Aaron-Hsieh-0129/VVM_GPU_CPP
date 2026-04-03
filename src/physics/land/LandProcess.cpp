@@ -62,40 +62,41 @@ void LandProcess::init(Core::State& state) {
 
     if (!state.has_field("hfx")) state.add_field<2>("hfx", {ny, nx});
     if (!state.has_field("le"))  state.add_field<2>("le", {ny, nx});
+
+    auto& th_v = state.get_field<3>("th").get_device_data();
+    auto& pibar_v = state.get_field<1>("pibar").get_device_data();
+    auto& topo_v = state.get_field<2>("topo").get_device_data();
     
     Kokkos::parallel_for("InitLandStates", 
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {m_nx, m_ny}),
         KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+            const int vi = i + m_halo_x;
+            const int vj = j + m_halo_y;
+            int hxp = topo_v(vi, vj) + 1;
+
+            double atm_t1 = th_v(hxp, vj, vi) * pibar_v(hxp);
+            m_tskin(i, j) = atm_t1;
+
             m_islimsk(i, j) = 1;
             m_vegtype(i, j) = 2;
             m_soiltyp(i, j) = 2;
             m_slopetyp(i, j) = 1;
             
-            m_t1(i,j) = 300.0;
-            m_q1(i,j) = 0.015;
-            m_u1(i,j) = 5.0;
-            m_v1(i,j) = 0.0;
-            m_ps(i,j) = 100000.0;
-            m_swdn(i,j) = 600.0;
-            m_lwdn(i,j) = 350.0;
             m_prcp(i,j) = 0.0;
 
-            m_tskin(i, j) = 300.0;
             m_zorl(i, j) = 0.1;
             m_canopy(i, j) = 0.0;
             m_snwdph(i, j) = 0.0;
 
 
             for(int k=0; k<m_nsoil; ++k) {
-                m_stc(i, k, j) = 295.0 - k;
-                m_smc(i, k, j) = 0.3;
-                m_slc(i, k, j) = 0.3;
+                m_stc(i, k, j) = atm_t1 - k * 0.5; // soil temperature
+                m_smc(i, k, j) = 0.3; // volumetric soil moisture content
+                m_slc(i, k, j) = 0.3; // liquid soil moisture
             }
         }
     );
     prepare_static_data(state);
-
-    Kokkos::fence();
     register_openacc();
 }
 
@@ -111,19 +112,19 @@ void LandProcess::prepare_static_data(Core::State& state) {
             const int vi = i + m_halo_x;
             const int vj = j + m_halo_y;
 
-            int topo_idx = topo_v(vi, vj);
+            int hx = topo_v(vi, vj);
+            int hxp = topo_v(vi, vj) + 1;
             
-            double dz = z_mid_v(topo_idx) - z_up_v(topo_idx-1);
+            double dz = z_mid_v(hxp) - z_up_v(hx);
             m_hgt(i, j) = (dz < 2.0) ? 2.0 : dz;
 
-            m_ps(i, j) = pbar_v(topo_idx); 
+            m_ps(i, j) = pbar_v(hxp); 
 
-            m_islimsk(i, j) = 1;
-            m_vegtype(i, j) = 2;
-            m_soiltyp(i, j) = 2;
-            m_slopetyp(i, j) = 1;
-            
-            m_zorl(i, j) = 0.1; 
+            m_islimsk(i, j) = 1; // sea/land/ice, 0/1/2
+            m_vegtype(i, j) = 2; // vegetation type 20 types
+            m_soiltyp(i, j) = 2; // soil type 19 types
+            m_slopetyp(i, j) = 1; // slope 9 types
+            m_zorl(i, j) = 0.1; // surface roughness (m)
         }
     );
 }
@@ -133,8 +134,13 @@ void LandProcess::preprocessing_and_packing(Core::State& state) {
     auto& v_v  = state.get_field<3>("v").get_device_data();
     auto& th_v = state.get_field<3>("th").get_device_data();
     auto& qv_v = state.get_field<3>("qv").get_device_data();
+    auto& swdn_v = state.get_field<3>("swdn").get_device_data();
+    auto& lwdn_v = state.get_field<3>("lwdn").get_device_data();
+
+
     auto& pr_v = state.get_field<1>("pbar").get_device_data();
     auto& pibar_v = state.get_field<1>("pibar").get_device_data();
+    auto& topo_v = state.get_field<2>("topo").get_device_data();
     
     auto& tskin_v  = state.get_field<2>("tskin").get_device_data();
     auto& canopy_v = state.get_field<2>("canopy").get_device_data();
@@ -148,27 +154,22 @@ void LandProcess::preprocessing_and_packing(Core::State& state) {
         KOKKOS_CLASS_LAMBDA(const int i, const int j) {
             const int vi = i + m_halo_x;
             const int vj = j + m_halo_y;
+
+            int hx = topo_v(vi, vj);
+            int hxp = topo_v(vi, vj) + 1;
             
-            m_u1(i, j) = u_v(0, vj, vi);
-            m_v1(i, j) = v_v(0, vj, vi);
-            m_q1(i, j) = qv_v(0, vj, vi);
-            m_ps(i, j) = pr_v(0);
+            m_u1(i, j) = u_v(hxp, vj, vi);
+            m_v1(i, j) = v_v(hxp, vj, vi);
+            m_q1(i, j) = qv_v(hxp, vj, vi);
+            m_ps(i, j) = pr_v(hxp);
 
-            m_t1(i, j) = th_v(0, vj, vi) * pibar_v(0);
+            m_t1(i, j) = th_v(hxp, vj, vi) * pibar_v(hxp);
 
-            // m_tskin(i, j) = tskin_v(vj, vi);
-            // m_canopy(i, j) = canopy_v(vj, vi);
-            // m_snwdph(i, j) = snwdph_v(vj, vi);
-
-            // for(int k=0; k<m_nsoil; ++k) {
-            //     m_stc(i, j, k) = stc_v(k, vj, vi);
-            //     m_smc(i, j, k) = smc_v(k, vj, vi);
-            //     m_slc(i, j, k) = slc_v(k, vj, vi);
-            // }
-        });
-    // Kokkos::fence();
-
-    Kokkos::fence();
+            m_swdn(i,j) = swdn_v(hxp, vj, vi);
+            m_lwdn(i,j) = lwdn_v(hxp, vj, vi);
+            // TODO: m_prcp = ???
+        }
+    );
 }
 
 void LandProcess::postprocessing_and_unpacking(Core::State& state) {
@@ -195,11 +196,11 @@ void LandProcess::postprocessing_and_unpacking(Core::State& state) {
             canopy_v(vj, vi) = m_canopy(i, j);
             snwdph_v(vj, vi) = m_snwdph(i, j);
 
-            // for(int k=0; k<m_nsoil; ++k) {
-            //     stc_v(k, vj, vi) = m_stc(i, j, k);
-            //     smc_v(k, vj, vi) = m_smc(i, j, k);
-            //     slc_v(k, vj, vi) = m_slc(i, j, k);
-            // }
+            for(int k=0; k<m_nsoil; ++k) {
+                stc_v(k, vj, vi) = m_stc(i, k, j);
+                smc_v(k, vj, vi) = m_smc(i, k, j);
+                slc_v(k, vj, vi) = m_slc(i, k, j);
+            }
         }
     );
 }
@@ -207,6 +208,8 @@ void LandProcess::postprocessing_and_unpacking(Core::State& state) {
 
 void LandProcess::run(Core::State& state, double dt) {
     preprocessing_and_packing(state);
+
+    Kokkos::fence();
 
     run_vvm_land_wrapper(m_nx, m_ny, m_nsoil, dt,
         m_islimsk.data(), m_vegtype.data(), m_soiltyp.data(), m_slopetyp.data(),

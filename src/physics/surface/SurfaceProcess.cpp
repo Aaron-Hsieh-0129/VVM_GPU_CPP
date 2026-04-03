@@ -194,8 +194,8 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
         KOKKOS_LAMBDA(const int j, const int i) {
             // NOTE: Need to check about the difference between original VVM and this
-            int hx1 = hx(j,i) - 1;
-            int hxp = hx(j,i);
+            int hx1 = hx(j,i);
+            int hxp = hx(j,i)+1;
 
             double ztmp = 0.5 * dz() / flex_height_coef_mid(hxp);
             double speedtp = 0.5 * Kokkos::sqrt(
@@ -233,8 +233,8 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
     Kokkos::parallel_for("SFlux_3D",
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
         KOKKOS_LAMBDA(const int j, const int i) {
-            int hx1 = hx(j,i)-1;
-            int hxp = hx(j,i);
+            int hx1 = hx(j,i);
+            int hxp = hx(j,i)+1;
             int hxup = hxu(j,i) + 1;
             int hxvp = hxv(j,i) + 1;
 
@@ -281,7 +281,7 @@ void SurfaceProcess::calculate_tendencies(Core::State& state,
         Kokkos::parallel_for("SfcFlux_Tendency_TH",
             Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
             KOKKOS_LAMBDA(const int j, const int i) {
-                int hxp = hx(j,i);
+                int hxp = hx(j,i)+1;
                 tend(hxp, j, i) += flux(j, i) * flex_height_coef_mid(hxp) * rdz() / rhobar(hxp);
             }
         );
@@ -291,7 +291,7 @@ void SurfaceProcess::calculate_tendencies(Core::State& state,
         Kokkos::parallel_for("SfcFlux_Tendency_QV",
             Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
             KOKKOS_LAMBDA(const int j, const int i) {
-                int hxp = hx(j,i);
+                int hxp = hx(j,i)+1;
                 tend(hxp, j, i) += flux(j, i) * flex_height_coef_mid(hxp) * rdz() / rhobar(hxp);
             }
         );
