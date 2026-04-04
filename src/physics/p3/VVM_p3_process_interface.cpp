@@ -675,6 +675,7 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
     auto ITYPEW = state.get_field<3>("ITYPEW").get_device_data();
     auto thbar  = state.get_field<1>("thbar").get_device_data();
     auto pibar  = state.get_field<1>("pibar").get_device_data();
+    auto topo = state.get_field<2>("topo").get_device_data();
 
     auto qc_p3 = m_qc_view;
     auto nc_p3 = m_nc_view;
@@ -697,6 +698,8 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
     auto precip_ice_surf_p3 = m_precip_ice_surf_mass_view;
     auto precip_liq_surf_flux_p3 = m_precip_liq_surf_flux_view;
     auto precip_ice_surf_flux_p3 = m_precip_ice_surf_flux_view;
+    auto precip_liq_flux_p3 = m_precip_liq_flux_view;
+    auto precip_ice_flux_p3 = m_precip_ice_flux_view;
 
     Kokkos::parallel_for("Fused_PostProc_Unpack", m_policy,
         KOKKOS_LAMBDA(const MemberType& team) {
@@ -707,12 +710,14 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
             const int ix_vvm = ix + halo;
             const int iy_vvm = iy + halo;
 
+            /*
             Kokkos::single(Kokkos::PerTeam(team), [&]() {
                 precip_liq_surf_2d(iy_vvm, ix_vvm) = precip_liq_surf_p3(icol);
                 precip_ice_surf_2d(iy_vvm, ix_vvm) = precip_ice_surf_p3(icol);
                 precip_liq_surf_flux_2d(iy_vvm, ix_vvm) = precip_liq_surf_flux_p3(icol);
                 precip_ice_surf_flux_2d(iy_vvm, ix_vvm) = precip_ice_surf_flux_p3(icol);
             });
+            */
 
             Kokkos::parallel_for(Kokkos::TeamThreadRange(team, nlev_packs), [&](const int k_pack) {
                 const int k_offset = k_pack * Spack::n;
@@ -734,10 +739,20 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
                 Spack eff_qi_val = eff_rad_qi_p3(icol, k_pack);
                 Spack eff_qr_val = eff_rad_qr_p3(icol, k_pack);
 
+                Spack precip_liq_flux_val = precip_liq_flux_p3(icol, k_pack);
+                Spack precip_ice_flux_val = precip_ice_flux_p3(icol, k_pack);
+
                 Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, (int)Spack::n), [&](const int k_vec) {
                     const int k_phys = k_offset + k_vec;
                     if (k_phys < nz_phys) {
                         int k_vvm = (nz_phys - 1) - k_phys + halo;
+
+                        int hxp = topo(iy_vvm, ix_vvm) + 1;
+
+                        if (k_vvm == hxp) {
+                            precip_liq_surf_2d(iy_vvm, ix_vvm) = precip_liq_flux_val[k_vec];
+                            precip_ice_surf_2d(iy_vvm, ix_vvm) = precip_ice_flux_val[k_vec];
+                        }
                         
                         if (ITYPEW(k_vvm, iy_vvm, ix_vvm) != 1) {
                             qc_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;

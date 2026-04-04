@@ -15,9 +15,9 @@
         }
     },
     "simulation": {
-        "total_time_s": 864000.0,
+        "total_time_s": 86400.0,
         "dt_s": 5.0,
-        "output_interval_s": 50.0,
+        "output_interval_s": 500.0,
         "idealized_test": "none",
         "__idealized_test": "none, advection_u, advection_v, advection_w, stretching, twisting, 2dbubble"
     },
@@ -33,8 +33,8 @@
         }
     },
     "output": {
-        "output_dir": "../output/boundary_x_1.3_0.7",
-        "engine": "HDF5",
+        "output_dir": "../output/land",
+        "engine": "SST",
         "queue_limit": 20,
         "data_transport": "",
         "__data_transport": "RDMA (for machines with infinite band), WAN (using network), and empty (for single node auto design by ADIOS2) ",
@@ -46,9 +46,9 @@
             "qv", "qc", "qr", "qi",
             "sw_heating", "lw_heating", "net_heating",
             "net_sw_flux", "net_lw_flux",
-            "precip_liq_surf_flux", "precip_ice_surf_flux",
+            "precip_liq_surf_mass", "precip_ice_surf_mass",
             "sfc_flux_th", "sfc_flux_qv", 
-            "hfx", "le"
+            "hfx", "le", "swdn", "lwdn"
         ],
         "output_grid": {
             "x_start": 0,
@@ -73,7 +73,7 @@
                 "inv_CRAD": 3600.0
             },
             "random_perturbation": {
-                "enable": false,
+                "enable": true,
                 "time_s": 200,
                 "amplitude": 1,
                 "z_start_m": 0,
@@ -288,8 +288,8 @@
         },
         "rrtmgp": {
             "enable_rrtmgp": true,
-            "column_chunk_size": 512,
-            "rad_frequency_step": 120,
+            "column_chunk_size": 18432,
+            "rad_frequency_step": 24,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
             "fixed_total_solar_irradiance": 551.58,
             "fixed_solar_zenith_angle": 0.74256,

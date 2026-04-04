@@ -205,8 +205,9 @@ contains
         do j = 1, ny
             do i = 1, nx
                 tskin(i,j) = tsurf(i,j)
-                hflux(i,j) = hflux(i,j) * ro2(i,j) * cp
-                evap(i,j) = qflux(i,j) * ro2(i,j) * hltm
+
+                hflux(i,j) = hflux(i,j) ! K/(m*s)
+                evap(i,j)  = qflux(i,j) ! (kg/kg) / (m*s)
 
                 if (islimsk(i,j) == 0) then
                     ! ocean 

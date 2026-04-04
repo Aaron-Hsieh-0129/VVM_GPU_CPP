@@ -36,6 +36,10 @@ public:
     void prepare_static_data(Core::State& state);
     void preprocessing_and_packing(Core::State& state);
     void postprocessing_and_unpacking(Core::State& state);
+    template<size_t Dim>
+    void calculate_tendencies(Core::State& state, 
+                              const std::string& var_name, 
+                              Core::Field<Dim>& out_tendency);
 
 private:
     void register_openacc();

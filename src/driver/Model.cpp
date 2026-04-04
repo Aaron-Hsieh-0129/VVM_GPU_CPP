@@ -153,7 +153,21 @@ void Model::run_step(double dt) {
             surface_->calculate_tendencies(state_, var_name, fe_tend_field);
         }
     }
-    if (turbulence_ || surface_) {
+
+    if (land_) {
+        if ((state_.get_step()-1) % land_freq_in_steps_ == 0) {
+            land_->run(state_, dt);
+        }
+        for (const auto& var_name : sfc_vars_) {
+            std::string fe_name = "fe_tendency_" + var_name;
+            auto& fe_tend_field = state_.get_field<3>(fe_name);
+            if (!turbulence_) fe_tend_field.set_to_zero(); 
+            land_->calculate_tendencies(state_, var_name, fe_tend_field);
+        }
+    }
+
+
+    if (turbulence_ || surface_ || land_) {
         for (const auto& var_name : (turbulence_ ? turbulence_->get_thermodynamics_vars() : sfc_vars_) ) {
             std::string fe_name = "fe_tendency_" + var_name;
             auto& fe_tend_field = state_.get_field<3>(fe_name);
@@ -161,7 +175,6 @@ void Model::run_step(double dt) {
         }
     } 
 
-    if (land_) land_->run(state_, dt);
 
     // Apply sponge layer
     if (sponge_layer_) {
@@ -187,7 +200,7 @@ void Model::run_step(double dt) {
         }
     }
 
-    if (turbulence_ || sponge_layer_ || surface_ || lateral_boundary_nudging_) {
+    if (turbulence_ || sponge_layer_ || surface_ || land_ || lateral_boundary_nudging_) {
         halo_exchanger_.exchange_multiple_halos(thermodynamics_vars_, state_);
         for (const auto& var_name : thermodynamics_vars_) {
             if (var_name == "th" || var_name == "qv") {

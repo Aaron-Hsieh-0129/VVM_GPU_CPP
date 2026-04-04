@@ -578,12 +578,10 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                     Real net_lw = buffer.lw_flux_dn_k(i, k) - buffer.lw_flux_up_k(i, k);
 
                     int k_vvm = nlay - k + halo;
-                    if (k < nlay) {
-                        net_sw_flux(k_vvm, iy + halo, ix + halo) = net_sw;
-                        net_lw_flux(k_vvm, iy + halo, ix + halo) = net_lw;
-                        swdn(k_vvm, iy+halo, ix+halo) = buffer.sw_flux_dn_k(i, k);
-                        lwdn(k_vvm, iy+halo, ix+halo) = buffer.lw_flux_dn_k(i, k);
-                    }
+                    net_sw_flux(k_vvm, iy + halo, ix + halo) = net_sw;
+                    net_lw_flux(k_vvm, iy + halo, ix + halo) = net_lw;
+                    swdn(k_vvm, iy+halo, ix+halo) = buffer.sw_flux_dn_k(i, k);
+                    lwdn(k_vvm, iy+halo, ix+halo) = buffer.lw_flux_dn_k(i, k);
                  }
         });
     }
