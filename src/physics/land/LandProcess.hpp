@@ -23,32 +23,33 @@ namespace Physics {
 
 class LandProcess {
 public:
-    LandProcess(const Utils::ConfigurationManager &config, 
-                const Core::Grid &grid, 
-                const Core::Parameters &params, 
-                Core::HaloExchanger& halo_exchanger);
+    LandProcess(const Utils::ConfigurationManager& config, 
+                const Core::Grid& grid, 
+                const Core::Parameters& params, 
+                Core::HaloExchanger& halo_exchanger, 
+                Core::State& state);
     
     ~LandProcess() = default;
 
-    void init(Core::State& state);
-    void run(Core::State& state, double dt);
+    void init();
+    void run(double dt);
     void finalize();
-    void prepare_static_data(Core::State& state);
-    void preprocessing_and_packing(Core::State& state);
-    void postprocessing_and_unpacking(Core::State& state);
+    void prepare_static_data();
+    void preprocessing_and_packing();
+    void postprocessing_and_unpacking();
     template<size_t Dim>
-    void calculate_tendencies(Core::State& state, 
-                              const std::string& var_name, 
+    void calculate_tendencies(const std::string& var_name, 
                               Core::Field<Dim>& out_tendency);
 
 private:
     void register_openacc();
     void unregister_openacc();
 
-    const Utils::ConfigurationManager& m_config;
-    const Core::Grid& m_grid;
-    const Core::Parameters& m_params;
-    Core::HaloExchanger& m_halo_exchanger;
+    const Utils::ConfigurationManager& config_;
+    const Core::Grid& grid_;
+    const Core::Parameters& params_;
+    Core::HaloExchanger& halo_exchanger_;
+    Core::State& state_;
 
     int m_nx;
     int m_ny;

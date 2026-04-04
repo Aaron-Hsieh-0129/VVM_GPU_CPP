@@ -15,9 +15,9 @@
         }
     },
     "simulation": {
-        "total_time_s": 86400.0,
+        "total_time_s": 8640000.0,
         "dt_s": 5.0,
-        "output_interval_s": 500.0,
+        "output_interval_s": 1800.0,
         "idealized_test": "none",
         "__idealized_test": "none, advection_u, advection_v, advection_w, stretching, twisting, 2dbubble"
     },
@@ -27,14 +27,14 @@
         "perturbation": "none"
     },
     "netcdf_reader": {
-        "source_file": "../rundata/initial_conditions/spatial/init.nc",
+        "source_file": "../rundata/initial_conditions/spatial/init_sea305K.nc",
         "variables_to_read": {
-            "2d": ["topo", "Tg"]
+            "2d": ["topo", "Tg", "sea_land_ice_mask"]
         }
     },
     "output": {
-        "output_dir": "../output/land",
-        "engine": "SST",
+        "output_dir": "../output/sea_305K",
+        "engine": "HDF5",
         "queue_limit": 20,
         "data_transport": "",
         "__data_transport": "RDMA (for machines with infinite band), WAN (using network), and empty (for single node auto design by ADIOS2) ",
@@ -47,8 +47,7 @@
             "sw_heating", "lw_heating", "net_heating",
             "net_sw_flux", "net_lw_flux",
             "precip_liq_surf_mass", "precip_ice_surf_mass",
-            "sfc_flux_th", "sfc_flux_qv", 
-            "hfx", "le", "swdn", "lwdn"
+            "hfx", "le", "swdn", "lwdn", "Tg"
         ],
         "output_grid": {
             "x_start": 0,
@@ -63,7 +62,7 @@
         "solver": {
             "w_solver_method": "tridiagonal",
             "_w_solver_method_options": "Choose 'tridiagonal' (original) or 'jacobi' (3D parallel)",
-            "iteration": 200,
+            "iteration": 50,
             "WRXMU": 2.5e-7
         },
         "forcings": {

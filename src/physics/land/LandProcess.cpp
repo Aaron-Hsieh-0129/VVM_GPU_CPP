@@ -10,13 +10,14 @@ namespace Physics {
 LandProcess::LandProcess(const Utils::ConfigurationManager& config, 
                          const Core::Grid& grid, 
                          const Core::Parameters& params, 
-                         Core::HaloExchanger& halo_exchanger)
-    : m_config(config), m_grid(grid), m_params(params), m_halo_exchanger(halo_exchanger)
+                         Core::HaloExchanger& halo_exchanger, 
+                         Core::State& state)
+    : config_(config), grid_(grid), params_(params), halo_exchanger_(halo_exchanger), state_(state)
 {
-    m_nx = m_grid.get_local_physical_points_x();
-    m_ny = m_grid.get_local_physical_points_y();
-    m_halo_x = m_grid.get_halo_cells(); 
-    m_halo_y = m_grid.get_halo_cells();
+    m_nx = grid_.get_local_physical_points_x();
+    m_ny = grid_.get_local_physical_points_y();
+    m_halo_x = grid_.get_halo_cells(); 
+    m_halo_y = grid_.get_halo_cells();
     m_nsoil = 4;
 
     m_islimsk = view_2d_int_ll("lsm_islimsk", m_nx, m_ny);
@@ -46,26 +47,26 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
     m_hflux = view_2d_ll("lsm_hflux", m_nx, m_ny);
     m_qflux = view_2d_ll("lsm_qflux", m_nx, m_ny);
     m_evap = view_2d_ll("lsm_evap", m_nx, m_ny);
-}
 
-void LandProcess::init(Core::State& state) {
     int ny = m_ny+2*m_halo_y;
     int nx = m_nx+2*m_halo_x;
-    state.add_field<2>("tskin", {ny, nx});
-    state.add_field<2>("canopy", {ny, nx});
-    state.add_field<2>("snwdph", {ny, nx});
-    state.add_field<2>("zorl", {ny, nx});
-
-    state.add_field<3>("stc", {m_nsoil, ny, nx});
-    state.add_field<3>("smc", {m_nsoil, ny, nx});
-    state.add_field<3>("slc", {m_nsoil, ny, nx});
 
     if (!state.has_field("hfx")) state.add_field<2>("hfx", {ny, nx});
-    if (!state.has_field("le"))  state.add_field<2>("le", {ny, nx});
+    if (!state.has_field("le")) state.add_field<2>("le", {ny, nx});
+    if (!state.has_field("sea_land_ice_mask")) state.add_field<2>("sea_land_ice_mask", {ny, nx});
+    if (!state.has_field("canopy")) state.add_field<2>("canopy", {ny, nx});
+    if (!state.has_field("snwdph")) state.add_field<2>("snwdph", {ny, nx});
+    if (!state.has_field("zorl")) state.add_field<2>("zorl", {ny, nx});
+    if (!state.has_field("stc")) state.add_field<3>("stc", {m_nsoil, ny, nx});
+    if (!state.has_field("smc")) state.add_field<3>("smc", {m_nsoil, ny, nx});
+    if (!state.has_field("slc")) state.add_field<3>("slc", {m_nsoil, ny, nx});
+}
 
-    auto& th_v = state.get_field<3>("th").get_device_data();
-    auto& pibar_v = state.get_field<1>("pibar").get_device_data();
-    auto& topo_v = state.get_field<2>("topo").get_device_data();
+void LandProcess::init() {
+    auto& th_v = state_.get_field<3>("th").get_device_data();
+    auto& pibar_v = state_.get_field<1>("pibar").get_device_data();
+    auto& topo_v = state_.get_field<2>("topo").get_device_data();
+    auto& Tg = state_.get_field<2>("Tg").get_mutable_device_data(); 
     
     Kokkos::parallel_for("InitLandStates", 
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {m_nx, m_ny}),
@@ -74,8 +75,7 @@ void LandProcess::init(Core::State& state) {
             const int vj = j + m_halo_y;
             int hxp = topo_v(vi, vj) + 1;
 
-            double atm_t1 = th_v(hxp, vj, vi) * pibar_v(hxp);
-            m_tskin(i, j) = atm_t1;
+            m_tskin(i, j) = Tg(vj, vi);
 
             m_islimsk(i, j) = 1;
             m_vegtype(i, j) = 2;
@@ -91,21 +91,23 @@ void LandProcess::init(Core::State& state) {
             m_t1(i, j) = th_v(hxp, vj, vi) * pibar_v(hxp);
 
             for(int k=0; k<m_nsoil; ++k) {
-                m_stc(i, k, j) = atm_t1 - k * 0.5; // soil temperature
+                m_stc(i, k, j) = m_tskin(i, j) - k * 0.5; // soil temperature
                 m_smc(i, k, j) = 0.3; // volumetric soil moisture content
                 m_slc(i, k, j) = 0.3; // liquid soil moisture
             }
         }
     );
-    prepare_static_data(state);
+    prepare_static_data();
     register_openacc();
 }
 
-void LandProcess::prepare_static_data(Core::State& state) {
-    auto& topo_v = state.get_field<2>("topo").get_device_data();
-    auto& pbar_v = state.get_field<1>("pbar").get_device_data();
-    auto z_mid_v = m_params.z_mid.get_device_data();
-    auto z_up_v = m_params.z_up.get_device_data();
+void LandProcess::prepare_static_data() {
+    auto& topo_v = state_.get_field<2>("topo").get_device_data();
+    auto& pbar_v = state_.get_field<1>("pbar").get_device_data();
+    auto z_mid_v = params_.z_mid.get_device_data();
+    auto z_up_v = params_.z_up.get_device_data();
+
+    auto& sea_land_ice_mask = state_.get_field<2>("sea_land_ice_mask").get_device_data();
 
     Kokkos::parallel_for("PrepareLandStaticData", 
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {m_nx, m_ny}),
@@ -113,17 +115,15 @@ void LandProcess::prepare_static_data(Core::State& state) {
             const int vi = i + m_halo_x;
             const int vj = j + m_halo_y;
 
-            int hx = topo_v(vi, vj);
-            int hxp = topo_v(vi, vj) + 1;
-            
+            int hx = topo_v(vj, vi);
+            int hxp = topo_v(vj, vi) + 1;
             double dz = z_mid_v(hxp) - z_up_v(hx);
             m_hgt(i, j) = (dz < 2.0) ? 2.0 : dz;
 
             m_ps(i, j) = pbar_v(hxp); 
 
-            // m_islimsk(i, j) = 1; // sea/land/ice, 0/1/2
-            if (i < (m_nx+m_halo_x)/2) m_islimsk(i, j) = 0;
-            else m_islimsk(i, j) = 1;
+            // sea/land/ice, 0/1/2
+            m_islimsk(i, j) = sea_land_ice_mask(vj, vi);
             m_vegtype(i, j) = 2; // vegetation type 20 types
             m_soiltyp(i, j) = 1; // soil type 19 types
             m_slopetyp(i, j) = 1; // slope 9 types
@@ -132,24 +132,23 @@ void LandProcess::prepare_static_data(Core::State& state) {
     );
 }
 
-void LandProcess::preprocessing_and_packing(Core::State& state) {
-    auto& u_v  = state.get_field<3>("u").get_device_data();
-    auto& v_v  = state.get_field<3>("v").get_device_data();
-    auto& qv_v = state.get_field<3>("qv").get_device_data();
-    auto& swdn_v = state.get_field<3>("swdn").get_device_data();
-    auto& lwdn_v = state.get_field<3>("lwdn").get_device_data();
+void LandProcess::preprocessing_and_packing() {
+    auto& u_v  = state_.get_field<3>("u").get_device_data();
+    auto& v_v  = state_.get_field<3>("v").get_device_data();
+    auto& qv_v = state_.get_field<3>("qv").get_device_data();
+    auto& swdn_v = state_.get_field<3>("swdn").get_device_data();
+    auto& lwdn_v = state_.get_field<3>("lwdn").get_device_data();
 
-    auto& pr_v = state.get_field<1>("pbar").get_device_data();
-    auto& topo_v = state.get_field<2>("topo").get_device_data();
+    auto& pr_v = state_.get_field<1>("pbar").get_device_data();
+    auto& topo_v = state_.get_field<2>("topo").get_device_data();
     
-    auto& tskin_v  = state.get_field<2>("tskin").get_device_data();
-    auto& canopy_v = state.get_field<2>("canopy").get_device_data();
-    auto& snwdph_v = state.get_field<2>("snwdph").get_device_data();
-    auto& stc_v    = state.get_field<3>("stc").get_device_data();
-    auto& smc_v    = state.get_field<3>("smc").get_device_data();
-    auto& slc_v    = state.get_field<3>("slc").get_device_data();
-    auto& precip_liq_surf_2d = state.get_field<2>("precip_liq_surf_mass").get_mutable_device_data();
-    auto& precip_ice_surf_2d = state.get_field<2>("precip_ice_surf_mass").get_mutable_device_data();
+    auto& canopy_v = state_.get_field<2>("canopy").get_device_data();
+    auto& snwdph_v = state_.get_field<2>("snwdph").get_device_data();
+    auto& stc_v    = state_.get_field<3>("stc").get_device_data();
+    auto& smc_v    = state_.get_field<3>("smc").get_device_data();
+    auto& slc_v    = state_.get_field<3>("slc").get_device_data();
+    auto& precip_liq_surf_2d = state_.get_field<2>("precip_liq_surf_mass").get_mutable_device_data();
+    auto& precip_ice_surf_2d = state_.get_field<2>("precip_ice_surf_mass").get_mutable_device_data();
 
     Kokkos::parallel_for("PackToLand", 
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {m_nx, m_ny}),
@@ -172,16 +171,17 @@ void LandProcess::preprocessing_and_packing(Core::State& state) {
     );
 }
 
-void LandProcess::postprocessing_and_unpacking(Core::State& state) {
-    auto& hfx_v    = state.get_field<2>("hfx").get_mutable_device_data();
-    auto& le_v     = state.get_field<2>("le").get_mutable_device_data();
+void LandProcess::postprocessing_and_unpacking() {
+    auto& hfx_v    = state_.get_field<2>("hfx").get_mutable_device_data();
+    auto& le_v     = state_.get_field<2>("le").get_mutable_device_data();
     
-    auto& tskin_v  = state.get_field<2>("tskin").get_mutable_device_data();
-    auto& canopy_v = state.get_field<2>("canopy").get_mutable_device_data();
-    auto& snwdph_v = state.get_field<2>("snwdph").get_mutable_device_data();
-    auto& stc_v    = state.get_field<3>("stc").get_mutable_device_data();
-    auto& smc_v    = state.get_field<3>("smc").get_mutable_device_data();
-    auto& slc_v    = state.get_field<3>("slc").get_mutable_device_data();
+    auto& canopy_v = state_.get_field<2>("canopy").get_mutable_device_data();
+    auto& snwdph_v = state_.get_field<2>("snwdph").get_mutable_device_data();
+    auto& stc_v    = state_.get_field<3>("stc").get_mutable_device_data();
+    auto& smc_v    = state_.get_field<3>("smc").get_mutable_device_data();
+    auto& slc_v    = state_.get_field<3>("slc").get_mutable_device_data();
+    auto& Tg = state_.get_field<2>("Tg").get_mutable_device_data(); 
+
 
     Kokkos::parallel_for("UnpackToVVM", 
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {m_nx, m_ny}),
@@ -192,7 +192,7 @@ void LandProcess::postprocessing_and_unpacking(Core::State& state) {
             hfx_v(vj, vi) = m_hflux(i, j);
             le_v(vj, vi)  = m_evap(i, j);
 
-            tskin_v(vj, vi) = m_tskin(i, j);
+            Tg(vj, vi) = m_tskin(i, j);
             canopy_v(vj, vi) = m_canopy(i, j);
             snwdph_v(vj, vi) = m_snwdph(i, j);
 
@@ -206,8 +206,8 @@ void LandProcess::postprocessing_and_unpacking(Core::State& state) {
 }
 
 
-void LandProcess::run(Core::State& state, double dt) {
-    preprocessing_and_packing(state);
+void LandProcess::run(double dt) {
+    preprocessing_and_packing();
 
     Kokkos::fence();
 
@@ -219,7 +219,7 @@ void LandProcess::run(Core::State& state, double dt) {
         m_canopy.data(), m_snwdph.data(),
         m_hflux.data(), m_qflux.data(), m_evap.data(), m_zorl.data());
 
-    postprocessing_and_unpacking(state);
+    postprocessing_and_unpacking();
 }
 
 void LandProcess::finalize() {
@@ -258,22 +258,21 @@ void LandProcess::unregister_openacc() {
 
 
 template<size_t Dim>
-void LandProcess::calculate_tendencies(Core::State& state, 
-                                          const std::string& var_name, 
-                                          Core::Field<Dim>& out_tendency) {
+void LandProcess::calculate_tendencies(const std::string& var_name, 
+                                      Core::Field<Dim>& out_tendency) {
     if (var_name != "th" && var_name != "qv") return;
 
     auto tend = out_tendency.get_mutable_device_data();
-    int ny = m_grid.get_local_total_points_y();
-    int nx = m_grid.get_local_total_points_x();
-    int h = m_grid.get_halo_cells();
-    const auto& rhobar = state.get_field<1>("rhobar").get_device_data(); // Density
-    const auto& hx     = state.get_field<2>("topo").get_device_data();
-    const auto& rdz = m_params.rdz; 
-    const auto& flex_height_coef_mid = m_params.flex_height_coef_mid.get_device_data();
+    int ny = grid_.get_local_total_points_y();
+    int nx = grid_.get_local_total_points_x();
+    int h = grid_.get_halo_cells();
+    const auto& rhobar = state_.get_field<1>("rhobar").get_device_data(); // Density
+    const auto& hx     = state_.get_field<2>("topo").get_device_data();
+    const auto& rdz = params_.rdz; 
+    const auto& flex_height_coef_mid = params_.flex_height_coef_mid.get_device_data();
 
     if (var_name == "th") {
-        const auto& flux = state.get_field<2>("hfx").get_device_data();
+        const auto& flux = state_.get_field<2>("hfx").get_device_data();
         Kokkos::parallel_for("SfcFlux_Tendency_TH",
             Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
             KOKKOS_LAMBDA(const int j, const int i) {
@@ -283,7 +282,7 @@ void LandProcess::calculate_tendencies(Core::State& state,
         );
     } 
     else if (var_name == "qv") {
-        const auto& flux = state.get_field<2>("le").get_device_data();
+        const auto& flux = state_.get_field<2>("le").get_device_data();
         Kokkos::parallel_for("SfcFlux_Tendency_QV",
             Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
             KOKKOS_LAMBDA(const int j, const int i) {
@@ -295,7 +294,7 @@ void LandProcess::calculate_tendencies(Core::State& state,
     return;
 }
 
-template void LandProcess::calculate_tendencies(Core::State& state, const std::string& var_name, Core::Field<3ul>& out_tendency);
+template void LandProcess::calculate_tendencies(const std::string& var_name, Core::Field<3ul>& out_tendency);
 
 } // namespace Physics
 } // namespace VVM

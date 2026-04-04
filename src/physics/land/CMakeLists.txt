@@ -37,5 +37,5 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     target_link_options(vvm_land PRIVATE -acc -fortranlibs -c++libs)
 endif()
 
-target_link_libraries(vvm_land PUBLIC Kokkos::kokkos)
+target_link_libraries(vvm_land PUBLIC Kokkos::kokkos vvm_core)
 target_link_libraries(eamxx_physics INTERFACE vvm_land)
