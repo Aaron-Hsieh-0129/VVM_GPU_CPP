@@ -335,7 +335,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
     // TODO: Need timestamp/year from VVM state or time manager
     // For now assuming a default or simple time stepping
     // double calday = 1.0;       // Placeholder for Jan 1st
-    double calday = 172.1639;
+    double calday = 172.666 + (state.get_time() / 86400.0);
     if (eccen >= 0 && obliq >= 0 && mvelp >= 0) {
         orbital_year = shr_orb_undef_int_c2f;
     }
