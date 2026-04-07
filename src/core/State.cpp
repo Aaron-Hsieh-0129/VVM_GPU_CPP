@@ -34,6 +34,7 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<1>("pbar_up", {nz_total});
     add_field<1>("dpbar_mid", {nz_total});
     add_field<1>("pibar", {nz_total});
+    add_field<1>("pibar_up", {nz_total});
     add_field<1>("qvbar", {nz_total});
     add_field<1>("U", {nz_total});
     add_field<1>("V", {nz_total});

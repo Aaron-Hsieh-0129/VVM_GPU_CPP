@@ -34,6 +34,7 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
     m_swdn = view_2d_ll("lsm_swdn", m_nx, m_ny);
     m_lwdn = view_2d_ll("lsm_lwdn", m_nx, m_ny);
     m_hgt = view_2d_ll("lsm_hgt", m_nx, m_ny);
+    m_prslki = view_2d_ll("lsm_prslki", m_nx, m_ny);
 
     m_stc = view_3d_ll("lsm_stc", m_nx, m_nsoil, m_ny);
     m_smc = view_3d_ll("lsm_smc", m_nx, m_nsoil, m_ny);
@@ -107,6 +108,9 @@ void LandProcess::prepare_static_data() {
     auto z_mid_v = params_.z_mid.get_device_data();
     auto z_up_v = params_.z_up.get_device_data();
 
+    auto& pibar_v = state_.get_field<1>("pibar").get_device_data();
+    auto& pibar_up_v = state_.get_field<1>("pibar_up").get_device_data();
+
     auto& sea_land_ice_mask = state_.get_field<2>("sea_land_ice_mask").get_device_data();
 
     Kokkos::parallel_for("PrepareLandStaticData", 
@@ -121,6 +125,7 @@ void LandProcess::prepare_static_data() {
             m_hgt(i, j) = (dz < 2.0) ? 2.0 : dz;
 
             m_ps(i, j) = pbar_v(hxp); 
+            m_prslki(i, j) = pibar_up_v(hx) / pibar_v(hxp);
 
             // sea/land/ice, 0/1/2
             m_islimsk(i, j) = sea_land_ice_mask(vj, vi);
@@ -220,7 +225,7 @@ void LandProcess::run(double dt) {
     run_vvm_land_wrapper(m_nx, m_ny, m_nsoil, dt,
         m_islimsk.data(), m_vegtype.data(), m_soiltyp.data(), m_slopetyp.data(),
         m_t1.data(), m_q1.data(), m_u1.data(), m_v1.data(), m_ps.data(), 
-        m_prcp.data(), m_swdn.data(), m_lwdn.data(), m_hgt.data(),
+        m_prcp.data(), m_swdn.data(), m_lwdn.data(), m_hgt.data(), m_prslki.data(),
         m_stc.data(), m_smc.data(), m_slc.data(), m_tskin.data(), 
         m_canopy.data(), m_snwdph.data(),
         m_hflux.data(), m_qflux.data(), m_evap.data(), m_zorl.data());
@@ -244,7 +249,7 @@ void LandProcess::register_openacc() {
     MAP_KOKKOS_DEVICE(m_t1); MAP_KOKKOS_DEVICE(m_q1); 
     MAP_KOKKOS_DEVICE(m_u1); MAP_KOKKOS_DEVICE(m_v1);
     MAP_KOKKOS_DEVICE(m_ps); MAP_KOKKOS_DEVICE(m_prcp); 
-    MAP_KOKKOS_DEVICE(m_swdn); MAP_KOKKOS_DEVICE(m_lwdn); MAP_KOKKOS_DEVICE(m_hgt);
+    MAP_KOKKOS_DEVICE(m_swdn); MAP_KOKKOS_DEVICE(m_lwdn); MAP_KOKKOS_DEVICE(m_hgt), MAP_KOKKOS_DEVICE(m_prslki);
     MAP_KOKKOS_DEVICE(m_stc); MAP_KOKKOS_DEVICE(m_smc); MAP_KOKKOS_DEVICE(m_slc);
     MAP_KOKKOS_DEVICE(m_tskin); MAP_KOKKOS_DEVICE(m_canopy); MAP_KOKKOS_DEVICE(m_snwdph);
     MAP_KOKKOS_DEVICE(m_hflux); MAP_KOKKOS_DEVICE(m_qflux); MAP_KOKKOS_DEVICE(m_evap);
@@ -256,7 +261,7 @@ void LandProcess::unregister_openacc() {
     UNMAP_KOKKOS_DEVICE(m_t1); UNMAP_KOKKOS_DEVICE(m_q1); 
     UNMAP_KOKKOS_DEVICE(m_u1); UNMAP_KOKKOS_DEVICE(m_v1);
     UNMAP_KOKKOS_DEVICE(m_ps); UNMAP_KOKKOS_DEVICE(m_prcp); 
-    UNMAP_KOKKOS_DEVICE(m_swdn); UNMAP_KOKKOS_DEVICE(m_lwdn); UNMAP_KOKKOS_DEVICE(m_hgt);
+    UNMAP_KOKKOS_DEVICE(m_swdn); UNMAP_KOKKOS_DEVICE(m_lwdn); UNMAP_KOKKOS_DEVICE(m_hgt), UNMAP_KOKKOS_DEVICE(m_prslki);
     UNMAP_KOKKOS_DEVICE(m_stc); UNMAP_KOKKOS_DEVICE(m_smc); UNMAP_KOKKOS_DEVICE(m_slc);
     UNMAP_KOKKOS_DEVICE(m_tskin); UNMAP_KOKKOS_DEVICE(m_canopy); UNMAP_KOKKOS_DEVICE(m_snwdph);
     UNMAP_KOKKOS_DEVICE(m_hflux); UNMAP_KOKKOS_DEVICE(m_qflux); UNMAP_KOKKOS_DEVICE(m_evap);

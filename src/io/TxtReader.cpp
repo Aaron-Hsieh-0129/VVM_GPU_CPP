@@ -113,6 +113,7 @@ void TxtReader::initialize_thermodynamics(VVM::Core::State& state) {
     auto qvbar = state.get_field<1>("qvbar").get_host_data();
     auto pbar = state.get_field<1>("pbar").get_host_data();
     auto pibar = state.get_field<1>("pibar").get_host_data();
+    auto pibar_up = state.get_field<1>("pibar_up").get_host_data();
     auto thbar = state.get_field<1>("thbar").get_host_data();
     auto Tvbar = state.get_field<1>("Tvbar").get_host_data();
     auto rhobar = state.get_field<1>("rhobar").get_host_data();
@@ -148,6 +149,7 @@ void TxtReader::initialize_thermodynamics(VVM::Core::State& state) {
     double pi_sfc = std::pow(pbar(h-1) / P0, RbCp);
     pibar(h-1) = pi_sfc;
     pilog[h-1] = std::log(pi_sfc);
+    pibar_up(h-1) = pi_sfc;
 
     for (int iter = 0; iter < 3; ++iter) {
         for (int k = h-1; k < nz; ++k) {
@@ -165,6 +167,10 @@ void TxtReader::initialize_thermodynamics(VVM::Core::State& state) {
             thbar(k) = Tbar(k) / pibar(k);
         }
         thbar(h-1) = Tbar(h-1) / pibar(h-1);
+    }
+
+    for (int k = h; k < nz; k++) {
+        pibar_up(k) = 0.5 * (pibar(k) + pibar(k+1));
     }
 
     for (int k = h-1; k < nz; ++k) {
@@ -195,6 +201,7 @@ void TxtReader::initialize_thermodynamics(VVM::Core::State& state) {
     Kokkos::deep_copy(state.get_field<1>("qvbar").get_mutable_device_data(), qvbar);
     Kokkos::deep_copy(state.get_field<1>("pbar").get_mutable_device_data(), pbar);
     Kokkos::deep_copy(state.get_field<1>("pibar").get_mutable_device_data(), pibar);
+    Kokkos::deep_copy(state.get_field<1>("pibar_up").get_mutable_device_data(), pibar_up);
     Kokkos::deep_copy(state.get_field<1>("thbar").get_mutable_device_data(), thbar);
     Kokkos::deep_copy(state.get_field<1>("Tvbar").get_mutable_device_data(), Tvbar);
     Kokkos::deep_copy(state.get_field<1>("rhobar").get_mutable_device_data(), rhobar);

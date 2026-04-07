@@ -292,6 +292,7 @@ void Initializer::assign_vars() const {
     if (rank == 0) state_.get_field<1>("Tbar").print_profile(grid_, 0, 0, 0);
     if (rank == 0) state_.get_field<1>("Tvbar").print_profile(grid_, 0, 0, 0);
     if (rank == 0) state_.get_field<1>("pibar").print_profile(grid_, 0, 0, 0);
+    if (rank == 0) state_.get_field<1>("pibar_up").print_profile(grid_, 0, 0, 0);
     if (rank == 0) state_.get_field<1>("pbar").print_profile(grid_, 0, 0, 0);
     if (rank == 0) parameters_.z_mid.print_profile(grid_, 0, 0, 0);
     if (rank == 0) parameters_.z_up.print_profile(grid_, 0, 0, 0);

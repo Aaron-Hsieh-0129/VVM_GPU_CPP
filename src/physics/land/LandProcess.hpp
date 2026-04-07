@@ -13,7 +13,7 @@ extern "C" {
     void run_vvm_land_wrapper(int nx, int ny, int nsoil, double dt,
         int* islimsk, int* vegtype, int* soiltyp, int* slopetyp,
         double* t1, double* q1, double* u1, double* v1, double* ps, 
-        double* prcp, double* swdn, double* lwdn, double* hgt,
+        double* prcp, double* swdn, double* lwdn, double* hgt, double* prslki_in,
         double* stc, double* smc, double* slc, double* tskin, double* canopy, double* snwdph,
         double* hflux, double* qflux, double* evap, double* zorl);
 }
@@ -64,7 +64,7 @@ private:
 
     view_2d_int_ll m_islimsk, m_vegtype, m_soiltyp, m_slopetyp;
 
-    view_2d_ll m_t1, m_q1, m_u1, m_v1, m_ps, m_prcp, m_swdn, m_lwdn, m_hgt;
+    view_2d_ll m_t1, m_q1, m_u1, m_v1, m_ps, m_prcp, m_swdn, m_lwdn, m_hgt, m_prslki;
 
     view_3d_ll m_stc, m_smc, m_slc;
     view_2d_ll m_tskin, m_canopy, m_snwdph, m_zorl;

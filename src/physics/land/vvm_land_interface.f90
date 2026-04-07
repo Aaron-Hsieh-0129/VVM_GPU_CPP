@@ -12,7 +12,7 @@ contains
 
     subroutine run_vvm_land_wrapper(nx, ny, nsoil, dt, &
         islimsk, vegtype, soiltyp, slopetyp, &
-        t1, q1, u1, v1, ps, prcp, swdn, lwdn, hgt, &
+        t1, q1, u1, v1, ps, prcp, swdn, lwdn, hgt, prslki_in, &
         stc, smc, slc, tskin, canopy, snwdph, &
         hflux, qflux, evap, zorl) bind(c, name="run_vvm_land_wrapper")
         
@@ -23,6 +23,7 @@ contains
         real(c_double), intent(in)    :: t1(nx,ny), q1(nx,ny), u1(nx,ny), v1(nx,ny)
         real(c_double), intent(in)    :: ps(nx,ny), prcp(nx,ny), swdn(nx,ny), lwdn(nx,ny)
         real(c_double), intent(in)    :: hgt(nx,ny) ! VVM height (m)
+        real(c_double), intent(in)    :: prslki_in(nx,ny) ! VVM portion (pi(sfc)/pi(air)) 
 
         real(c_double), intent(inout) :: stc(nx,nsoil,ny), smc(nx,nsoil,ny), slc(nx,nsoil,ny)
         real(c_double), intent(inout) :: tskin(nx,ny), canopy(nx,ny), snwdph(nx,ny), zorl(nx,ny)
@@ -97,7 +98,7 @@ contains
             do i = 1, nx
                 psi(i,j) = ps(i,j)
                 prsl1(i,j) = ps(i,j)
-                prslki(i,j) = (ps(i,j) / 100000.0D0) ** 0.286D0
+                prslki(i,j) = prslki_in(i,j)
 
                 ro2(i,j) = ps(i,j) / (r * t1(i,j) * (1.0D0 + 0.608D0 * q1(i,j)))
 
