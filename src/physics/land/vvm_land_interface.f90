@@ -12,6 +12,7 @@ contains
 
     subroutine run_vvm_land_wrapper(nx, ny, nsoil, dt, &
         islimsk, vegtype, soiltyp, slopetyp, &
+        sigmaf, sfemis, alb, shdmin, shdmax, &
         t1, q1, u1, v1, ps, prcp, swdn, lwdn, hgt, prslki_in, &
         stc, smc, slc, tskin, canopy, snwdph, &
         hflux, qflux, evap, zorl) bind(c, name="run_vvm_land_wrapper")
@@ -24,6 +25,9 @@ contains
         real(c_double), intent(in)    :: ps(nx,ny), prcp(nx,ny), swdn(nx,ny), lwdn(nx,ny)
         real(c_double), intent(in)    :: hgt(nx,ny) ! VVM height (m)
         real(c_double), intent(in)    :: prslki_in(nx,ny) ! VVM portion (pi(sfc)/pi(air)) 
+
+        real(c_double), intent(in)    :: sigmaf(nx,ny), sfemis(nx,ny)
+        real(c_double), intent(in)    :: alb(nx,ny), shdmin(nx,ny), shdmax(nx,ny)
 
         real(c_double), intent(inout) :: stc(nx,nsoil,ny), smc(nx,nsoil,ny), slc(nx,nsoil,ny)
         real(c_double), intent(inout) :: tskin(nx,ny), canopy(nx,ny), snwdph(nx,ny), zorl(nx,ny)
@@ -43,12 +47,12 @@ contains
         real(c_double) :: tg(nx,ny), z0rl(nx,ny), cd(nx,ny), cdq(nx,ny), rb(nx,ny)
         real(c_double) :: stress(nx,ny), fm(nx,ny), fh(nx,ny), ustar(nx,ny), sfcw(nx,ny)
         real(c_double) :: ddvel(nx,ny), fm10(nx,ny), fh2(nx,ny), fh10(nx,ny)
-        real(c_double) :: sigmaf(nx,ny), shdmax(nx,ny), shdmin(nx,ny), tsurf(nx,ny)
+        real(c_double) :: tsurf(nx,ny)
         logical        :: flag_iter(nx,ny), flag_guess(nx,ny)
         
         real(c_double) :: qsurf(nx,ny), gfx(nx,ny), ep1d(nx,ny)
-        real(c_double) :: sfemis(nx,ny), tgclim(nx,ny)
-        real(c_double) :: snoalb(nx,ny), alb(nx,ny), albedo2(nx,ny)
+        real(c_double) :: tgclim(nx,ny)
+        real(c_double) :: snoalb(nx,ny), albedo2(nx,ny)
         real(c_double) :: sheleg(nx,ny), tprcp(nx,ny), srflag(nx,ny), sncover(nx,ny)
         real(c_double) :: drain(nx,ny), runof(nx,ny)
         real(c_double) :: zice(nx,ny), cice(nx,ny), xtice(nx,ny), snomt(nx,ny)
@@ -59,6 +63,8 @@ contains
         
         jlistnum = ny
         my_max = ny
+        isot = 1
+        ivegsrc = 1
         call set_soilveg(isot, ivegsrc)
         
         xmin = 180.0D0
@@ -105,15 +111,8 @@ contains
                 flag_iter(i,j) = .true.
                 flag_guess(i,j) = .false.
                 
-                sigmaf(i,j) = 0.8D0
-                sfemis(i,j) = 0.98D0
-                tgclim(i,j) = 285.0D0
-                
-                
-                shdmin(i,j) = 0.01D0
-                shdmax(i,j) = 0.99D0
+                tgclim(i,j) = 285.0D0 
                 snoalb(i,j) = 0.60D0
-                alb(i,j) = 0.20D0
                 albedo2(i,j) = 0.0D0
                 z0rl(i,j) = zorl(i,j) * 100.0D0  ! NCEP zorl to cm
                 
