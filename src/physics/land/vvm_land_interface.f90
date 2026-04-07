@@ -84,12 +84,13 @@ contains
         !$acc enter data copyin(c1xpvs, c2xpvs, tbpvs, myim)
 
         !$acc data present(islimsk, vegtype, soiltyp, slopetyp, &
+        !$acc              sigmaf, sfemis, alb, shdmin, shdmax, &
         !$acc              t1, q1, u1, v1, ps, prcp, swdn, lwdn, hgt, &
         !$acc              stc, smc, slc, tskin, canopy, snwdph, hflux, qflux, evap, zorl) &
         !$acc      create(psi, prsl1, prslki, tg, z0rl, cd, cdq, rb, stress, &
-        !$acc             fm, fh, ustar, sfcw, ddvel, fm10, fh2, fh10, sigmaf, &
-        !$acc             shdmax, shdmin, tsurf, flag_iter, flag_guess, qsurf, &
-        !$acc             gfx, ep1d, sfemis, tgclim, snoalb, alb, albedo2, &
+        !$acc             fm, fh, ustar, sfcw, ddvel, fm10, fh2, fh10, &
+        !$acc             tsurf, flag_iter, flag_guess, qsurf, &
+        !$acc             gfx, ep1d, tgclim, snoalb, albedo2, &
         !$acc             sheleg, tprcp, srflag, sncover, drain, runof, zice, cice, xtice, snomt, &
         !$acc             u10, v10, t2, q2, rh2, rh10, ro2)
 
@@ -218,7 +219,7 @@ contains
         
         !$acc wait(async_id)
         !$acc end data
-        !$acc exit data delete(c1xpvs, c2xpvs, tbpvs)
+        !$acc exit data delete(c1xpvs, c2xpvs, tbpvs, myim)
         
     end subroutine run_vvm_land_wrapper
 end module vvm_land_interface

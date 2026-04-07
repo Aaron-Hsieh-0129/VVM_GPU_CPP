@@ -271,6 +271,7 @@ void Model::run_step(double dt) {
 void Model::finalize() {
     if (microphysics_) microphysics_->finalize();
     if (radiation_) radiation_->finalize();
+    if (land_) land_->finalize();
 }
 
 }
