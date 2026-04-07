@@ -198,9 +198,6 @@ contains
                           qsurf, u10, v10, t2, q2, prslki, qflux, fm, fh, fm10, fh2, fh10, &
                           rh2, rh10, async_id)
 
-        ! =================================================================
-        ! Kinematic Flux to W/m²
-        ! =================================================================
         !$acc parallel loop collapse(2) async(async_id)
         do j = 1, ny
             do i = 1, nx
