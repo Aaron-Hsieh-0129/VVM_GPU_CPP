@@ -73,7 +73,7 @@ void LandProcess::init() {
         KOKKOS_CLASS_LAMBDA(const int i, const int j) {
             const int vi = i + m_halo_x;
             const int vj = j + m_halo_y;
-            int hxp = topo_v(vi, vj) + 1;
+            int hxp = topo_v(vj, vi) + 1;
 
             m_tskin(i, j) = Tg(vj, vi);
 
@@ -156,11 +156,11 @@ void LandProcess::preprocessing_and_packing() {
             const int vi = i + m_halo_x;
             const int vj = j + m_halo_y;
 
-            int hx = topo_v(vi, vj);
-            int hxp = topo_v(vi, vj) + 1;
+            int hx = topo_v(vj, vi);
+            int hxp = topo_v(vj, vi) + 1;
             
-            m_u1(i, j) = u_v(hxp, vj, vi);
-            m_v1(i, j) = v_v(hxp, vj, vi);
+            m_u1(i, j) = 0.5 * (u_v(hxp, vj, vi) + u_v(hxp, vj, vi-1));
+            m_v1(i, j) = 0.5 * (v_v(hxp, vj, vi) + v_v(hxp, vj-1, vi));
             m_q1(i, j) = qv_v(hxp, vj, vi);
             m_ps(i, j) = pr_v(hxp);
 
