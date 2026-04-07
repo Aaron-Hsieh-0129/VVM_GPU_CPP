@@ -1,6 +1,10 @@
 #include "physics/land/LandProcess.hpp"
 #include <cmath>
 
+#if defined(KOKKOS_ENABLE_CUDA)
+#include <cuda_runtime.h>
+#endif
+
 #define MAP_KOKKOS_DEVICE(view) acc_map_data(view.data(), view.data(), view.span() * sizeof(view.data()[0]))                                           
 #define UNMAP_KOKKOS_DEVICE(view) acc_unmap_data(view.data())
 
@@ -238,7 +242,12 @@ void LandProcess::postprocessing_and_unpacking() {
 void LandProcess::run(double dt) {
     preprocessing_and_packing();
 
-    Kokkos::fence();
+#if defined(KOKKOS_ENABLE_CUDA)
+    cudaStream_t stream = Kokkos::DefaultExecutionSpace().cuda_stream();
+    acc_set_cuda_stream(1, stream);
+#elif defined(KOKKOS_ENABLE_HIP)
+    hipStream_t stream = Kokkos::DefaultExecutionSpace().hip_stream();
+#endif
 
     run_vvm_land_wrapper(m_nx, m_ny, m_nsoil, dt,
         m_islimsk.data(), m_vegtype.data(), m_soiltype.data(), m_slopetype.data(),
