@@ -131,7 +131,9 @@ static void rrtmgp_initialize(
   const size_t nlay = gas_concs.nlay;
   const size_t nlev = gas_concs.nlay;
   const size_t my_size_ref = ncol * nlay * nlev;
-  pool_t::init(2e6 * (float(my_size_ref) / base_ref) * multiplier);
+  // pool_t::init(2e6 * (float(my_size_ref) / base_ref) * multiplier);
+  // modify type to make it large enough
+  pool_t::init(static_cast<size_t>(2e6 * (double(my_size_ref) / base_ref) * multiplier));
 
   // We are now initialized!
   initialized_k = true;

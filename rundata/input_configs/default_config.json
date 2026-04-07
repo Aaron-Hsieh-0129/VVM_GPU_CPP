@@ -27,13 +27,13 @@
         "perturbation": "none"
     },
     "netcdf_reader": {
-        "source_file": "../rundata/initial_conditions/spatial/init_grass_urban.nc",
+        "source_file": "../rundata/initial_conditions/spatial/init_topo.nc",
         "variables_to_read": {
             "2d": ["topo", "Tg", "sea_land_ice_mask", "vegtype", "soiltype", "slopetype"]
         }
     },
     "output": {
-        "output_dir": "/raid/mog/profiling",
+        "output_dir": "/raid/mog/test",
         "engine": "HDF5",
         "queue_limit": 20,
         "data_transport": "",
@@ -287,7 +287,8 @@
         },
         "rrtmgp": {
             "enable_rrtmgp": true,
-            "column_chunk_size": 18432,
+            "column_chunk_size": 36864,
+            "__column_chunk_size": "This should be modified according to domain and rank and the larger the faster (costs more memory).",
             "rad_frequency_step": 24,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
             "fixed_total_solar_irradiance": 1367,
