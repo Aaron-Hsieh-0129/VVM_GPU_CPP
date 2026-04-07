@@ -15,9 +15,9 @@
         }
     },
     "simulation": {
-        "total_time_s": 8640000.0,
+        "total_time_s": 172800.0,
         "dt_s": 5.0,
-        "output_interval_s": 1800.0,
+        "output_interval_s": 600.0,
         "idealized_test": "none",
         "__idealized_test": "none, advection_u, advection_v, advection_w, stretching, twisting, 2dbubble"
     },
@@ -27,13 +27,13 @@
         "perturbation": "none"
     },
     "netcdf_reader": {
-        "source_file": "../rundata/initial_conditions/spatial/init_sea305K.nc",
+        "source_file": "../rundata/initial_conditions/spatial/init_grass_urban.nc",
         "variables_to_read": {
-            "2d": ["topo", "Tg", "sea_land_ice_mask"]
+            "2d": ["topo", "Tg", "sea_land_ice_mask", "vegtype", "soiltype", "slopetype"]
         }
     },
     "output": {
-        "output_dir": "../output/sea_305K",
+        "output_dir": "/raid/mog/profiling",
         "engine": "HDF5",
         "queue_limit": 20,
         "data_transport": "",
@@ -47,7 +47,7 @@
             "sw_heating", "lw_heating", "net_heating",
             "net_sw_flux", "net_lw_flux",
             "precip_liq_surf_mass", "precip_ice_surf_mass",
-            "hfx", "le", "swdn", "lwdn", "Tg"
+            "hfx", "le", "swdn", "lwdn", "Tg", "sfc_flux_th", "sfc_flux_qv"
         ],
         "output_grid": {
             "x_start": 0,
@@ -290,8 +290,8 @@
             "column_chunk_size": 18432,
             "rad_frequency_step": 24,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
-            "fixed_total_solar_irradiance": 551.58,
-            "fixed_solar_zenith_angle": 0.74256,
+            "fixed_total_solar_irradiance": 1367,
+            "fixed_solar_zenith_angle": -1,
             "pool_size_multiplier": 1.933
         },
         "turbulence": {
@@ -299,7 +299,9 @@
         },
         "surface": {
             "enable_surface": false,
-            "frequency_step": 1
+            "frequency_step": 12,
+            "mode": "sflux_tc_2d",
+            "__mode": "sflux_2d, sflux_tc_2d" 
         },
         "land": {
             "enable_land": true,
