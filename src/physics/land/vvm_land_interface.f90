@@ -81,7 +81,7 @@ contains
         do j = 1, ny
             myim(j) = nx
         end do
-        !$acc enter data copyin(c1xpvs, c2xpvs, tbpvs, myim) async(async_id)
+        !$acc enter data copyin(c1xpvs, c2xpvs, tbpvs, myim)
 
         !$acc data present(islimsk, vegtype, soiltyp, slopetyp, &
         !$acc              sigmaf, sfemis, alb, shdmin, shdmax, &
@@ -217,8 +217,9 @@ contains
             end do
         end do
         
+        !$acc wait(async_id)
         !$acc end data
-        !$acc exit data delete(c1xpvs, c2xpvs, tbpvs, myim) async(async_id)
+        !$acc exit data delete(c1xpvs, c2xpvs, tbpvs, myim)
         
     end subroutine run_vvm_land_wrapper
 end module vvm_land_interface
