@@ -188,12 +188,12 @@ void LandProcess::preprocessing_and_packing() {
             int hx = topo_v(vj, vi);
             int hxp = topo_v(vj, vi) + 1;
             
-            // m_u1(i, j) = 0.5 * (u_v(hxp, vj, vi) + u_v(hxp, vj, vi-1));
-            // m_v1(i, j) = 0.5 * (v_v(hxp, vj, vi) + v_v(hxp, vj-1, vi));
 
             m_t1(i, j) = th_v(hxp, vj, vi) * pibar_v(hxp);
-            m_u1(i, j) = u_v(hxp, vj, vi);
-            m_v1(i, j) = v_v(hxp, vj, vi);
+            m_u1(i, j) = 0.5 * (u_v(hxp, vj, vi) + u_v(hxp, vj, vi-1));
+            m_v1(i, j) = 0.5 * (v_v(hxp, vj, vi) + v_v(hxp, vj-1, vi));
+            // m_u1(i, j) = u_v(hxp, vj, vi);
+            // m_v1(i, j) = v_v(hxp, vj, vi);
             m_q1(i, j) = qv_v(hxp, vj, vi);
             m_ps(i, j) = pr_v(hxp);
 
