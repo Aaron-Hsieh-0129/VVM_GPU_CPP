@@ -6,7 +6,6 @@
 
 A GPU-accelerated (Kokkos-based) C++ implementation of the **Vector Vorticity equation cloud-resolving Model (VVM)**.
 
----
 
 ## Table of Contents
 
@@ -16,7 +15,6 @@ A GPU-accelerated (Kokkos-based) C++ implementation of the **Vector Vorticity eq
 - [License](#license)
 - [Contact & Support](#contact--support)
 
----
 
 ## Features
 
@@ -27,7 +25,6 @@ A GPU-accelerated (Kokkos-based) C++ implementation of the **Vector Vorticity eq
   - **Land Surface Model**: Noah land surface model with GPU acceleration (Fortran OpenACC), provided by the Central Weather Administration (CWA) of Taiwan.
 - **TaiwanVVM Support**: Capable of simulating high-resolution Taiwan topography using generated terrain datasets (example scripts provided).
 
----
 
 ## Requirements
 
@@ -54,7 +51,6 @@ A GPU-accelerated (Kokkos-based) C++ implementation of the **Vector Vorticity eq
 
 *Please refer to our [Installation Tutorial](link-to-tutorial-here) for detailed instructions on setting up these libraries.*
 
----
 
 ## Quick Start
 
