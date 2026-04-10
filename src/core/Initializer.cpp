@@ -386,18 +386,14 @@ void Initializer::assign_vars() const {
         }
     );
 
-    auto& lon = state_.get_field<1>("lon").get_mutable_device_data();
-    Kokkos::deep_copy(lon, 121.);
-
-    auto& lat = state_.get_field<1>("lat").get_mutable_device_data();
-    Kokkos::deep_copy(lat, 23.458);
+    auto& lat = state_.get_field<2>("lat").get_mutable_device_data();
 
     double OMEGA = config_.get_value<double>("constants.OMEGA", 7.292e-5);
     double PI = config_.get_value<double>("constants.PI", 3.14159265);
     auto& f = state_.get_field<1>("f").get_mutable_device_data();
     Kokkos::parallel_for("Init_Coriolis", Kokkos::RangePolicy<>(0, ny),
         KOKKOS_LAMBDA(const int j) {
-            f(j) = 2. * OMEGA * Kokkos::sin(lat(j) * PI / 180.);
+            f(j) = 2. * OMEGA * Kokkos::sin(lat(j, 0) * PI / 180.);
         }
     );
     return;

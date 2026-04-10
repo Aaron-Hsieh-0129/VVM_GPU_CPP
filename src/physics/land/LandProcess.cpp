@@ -71,6 +71,10 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
     if (!state.has_field("vegtype")) state.add_field<2>("vegtype", {ny, nx});
     if (!state.has_field("soiltype")) state.add_field<2>("soiltype", {ny, nx});
     if (!state.has_field("slopetype")) state.add_field<2>("slopetype", {ny, nx});
+    if (!state.has_field("shdmin")) state.add_field<2>("shdmin", {ny, nx});
+    if (!state.has_field("shdmax")) state.add_field<2>("shdmax", {ny, nx});
+    if (!state.has_field("albedo")) state.add_field<2>("albedo", {ny, nx});
+    if (!state.has_field("gvf")) state.add_field<2>("gvf", {ny, nx});
     if (!state.has_field("stc")) state.add_field<3>("stc", {m_nsoil, ny, nx});
     if (!state.has_field("smc")) state.add_field<3>("smc", {m_nsoil, ny, nx});
     if (!state.has_field("slc")) state.add_field<3>("slc", {m_nsoil, ny, nx});
@@ -105,9 +109,9 @@ void LandProcess::init() {
             m_t1(i, j) = th_v(hxp, vj, vi) * pibar_v(hxp);
 
             for(int k=0; k<m_nsoil; ++k) {
-                m_stc(i, k, j) = m_tskin(i, j) - k * 0.5; // soil temperature
-                m_smc(i, k, j) = 0.3; // volumetric soil moisture content
-                m_slc(i, k, j) = 0.3; // liquid soil moisture
+                m_stc(i, k, j) = m_t1(i, j); // soil temperature
+                m_smc(i, k, j) = 0.34; // volumetric soil moisture content
+                m_slc(i, k, j) = 0.34; // liquid soil moisture
             }
         }
     );
@@ -128,6 +132,10 @@ void LandProcess::prepare_static_data() {
     auto& vegtype = state_.get_field<2>("vegtype").get_device_data();
     auto& soiltype = state_.get_field<2>("soiltype").get_device_data();
     auto& slopetype = state_.get_field<2>("slopetype").get_device_data();
+    auto& shdmin = state_.get_field<2>("shdmin").get_device_data();
+    auto& shdmax = state_.get_field<2>("shdmax").get_device_data();
+    auto& albedo = state_.get_field<2>("albedo").get_device_data();
+    auto& gvf = state_.get_field<2>("gvf").get_device_data();
 
     Kokkos::parallel_for("PrepareLandStaticData", 
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {m_nx, m_ny}),
@@ -143,11 +151,11 @@ void LandProcess::prepare_static_data() {
             m_ps(i, j) = pbar_v(hxp); 
             m_prslki(i, j) = pibar_up_v(hx) / pibar_v(hxp);
 
-            m_sigmaf(i, j) = 0.8;  // Green Vegetation Fraction
+            m_sigmaf(i, j) = gvf(vj, vi) / 100.;  // Green Vegetation Fraction
             m_sfemis(i, j) = 0.98; // Surface Emissivity
-            m_alb(i, j)    = 0.2;  // Surface Emissivity
-            m_shdmin(i, j) = 0.01; // Minimum Fractional Coverage
-            m_shdmax(i, j) = 0.99; // Maximum Fractional Coverage
+            m_alb(i, j)    = albedo(vj, vi) / 100.;  // Surface albedo
+            m_shdmin(i, j) = shdmin(vj, vi) / 100.; // Minimum Fractional Coverage
+            m_shdmax(i, j) = shdmax(vj, vi) / 100.; // Maximum Fractional Coverage
 
             // sea/land/ice, 0/1/2
             m_islimsk(i, j) = sea_land_ice_mask(vj, vi);
