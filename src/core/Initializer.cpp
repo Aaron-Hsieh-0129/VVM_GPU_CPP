@@ -386,7 +386,12 @@ void Initializer::assign_vars() const {
         }
     );
 
+    auto& lon = state_.get_field<2>("lon").get_mutable_device_data();
     auto& lat = state_.get_field<2>("lat").get_mutable_device_data();
+    if (config_.get_value<bool>("grid.fix_latlon", false)) {
+        Kokkos::deep_copy(lon, 120.95);
+        Kokkos::deep_copy(lat, 23.458);
+    }
 
     double OMEGA = config_.get_value<double>("constants.OMEGA", 7.292e-5);
     double PI = config_.get_value<double>("constants.PI", 3.14159265);

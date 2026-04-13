@@ -12,7 +12,8 @@
             "x": "periodic",
             "y": "periodic",
             "__bc_option": "periodic, zero_gradient"
-        }
+        },
+        "fix_lonlat": true
     },
     "simulation": {
         "total_time_s": 172800.0,
@@ -38,7 +39,7 @@
         }
     },
     "output": {
-        "output_dir": "/raid/mog/taiwanvvm_20120818",
+        "output_dir": "/raid/mog/taiwanvvm_20120818_fixlonlat",
         "engine": "HDF5",
         "queue_limit": 20,
         "data_transport": "",
