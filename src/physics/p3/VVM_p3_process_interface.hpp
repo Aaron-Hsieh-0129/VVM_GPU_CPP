@@ -455,11 +455,11 @@ protected:
     // Diagnostic (OUT)
     view_1d m_precip_liq_surf_mass_view; // accumulate
     view_1d m_precip_ice_surf_mass_view; // accumulate
-    view_1d m_precip_liq_surf_flux_view;
-    view_1d m_precip_ice_surf_flux_view;
+    view_1d m_precip_liq_surf_flux_view; // 2D intensity
+    view_1d m_precip_ice_surf_flux_view; // 2D intensity
     view_2d m_qv2qi_depos_tend_view;
-    view_2d m_precip_liq_flux_view;
-    view_2d m_precip_ice_flux_view;
+    view_2d m_precip_liq_flux_view; // 3D flux
+    view_2d m_precip_ice_flux_view; // 3D flux
     view_2d m_precip_total_tend_view;
     view_2d m_nevapr_view;
     view_2d m_rho_qi_view;

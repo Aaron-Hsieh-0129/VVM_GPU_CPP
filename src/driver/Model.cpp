@@ -61,6 +61,11 @@ Model::Model(const Utils::ConfigurationManager& config,
         thermodynamics_vars_.insert(thermodynamics_vars_.end(), {"qc", "qr", "qi", "nc", "nr", "ni", "bm", "qm"});
     }
     sfc_vars_ = {"th", "qv"};
+
+    if (config_.get_value<bool>("physics.land.enable_land", false)) {
+        land_ = std::make_unique<Physics::LandProcess>(config_, grid_, params_, halo_exchanger_, state_);
+        land_freq_in_steps_ = config_.get_value<int>("physics.land.frequency_step", 12);
+    }
 }
 
 void Model::init() {
@@ -77,9 +82,8 @@ void Model::init() {
     if (sponge_layer_) sponge_layer_->initialize(state_);
     if (lateral_boundary_nudging_) lateral_boundary_nudging_->initialize(state_);
     if (surface_) surface_->initialize(state_);
+    if (land_) land_->init();
     if (random_forcing_) random_forcing_->initialize(state_);
-    
-    // halo_exchanger_.exchange_halos(state_);
     
     if (rank == 0) std::cout << "=== Model Initialization Complete ===\n" << std::endl;
 
@@ -147,7 +151,21 @@ void Model::run_step(double dt) {
             surface_->calculate_tendencies(state_, var_name, fe_tend_field);
         }
     }
-    if (turbulence_ || surface_) {
+
+    if (land_) {
+        if ((state_.get_step()-1) % land_freq_in_steps_ == 0) {
+            land_->run(dt);
+        }
+        for (const auto& var_name : sfc_vars_) {
+            std::string fe_name = "fe_tendency_" + var_name;
+            auto& fe_tend_field = state_.get_field<3>(fe_name);
+            if (!turbulence_) fe_tend_field.set_to_zero(); 
+            land_->calculate_tendencies(var_name, fe_tend_field);
+        }
+    }
+
+
+    if (turbulence_ || surface_ || land_) {
         for (const auto& var_name : (turbulence_ ? turbulence_->get_thermodynamics_vars() : sfc_vars_) ) {
             std::string fe_name = "fe_tendency_" + var_name;
             auto& fe_tend_field = state_.get_field<3>(fe_name);
@@ -180,7 +198,7 @@ void Model::run_step(double dt) {
         }
     }
 
-    if (turbulence_ || sponge_layer_ || surface_ || lateral_boundary_nudging_) {
+    if (turbulence_ || sponge_layer_ || surface_ || land_ || lateral_boundary_nudging_) {
         halo_exchanger_.exchange_multiple_halos(thermodynamics_vars_, state_);
         for (const auto& var_name : thermodynamics_vars_) {
             if (var_name == "th" || var_name == "qv") {
@@ -253,6 +271,7 @@ void Model::run_step(double dt) {
 void Model::finalize() {
     if (microphysics_) microphysics_->finalize();
     if (radiation_) radiation_->finalize();
+    if (land_) land_->finalize();
 }
 
 }

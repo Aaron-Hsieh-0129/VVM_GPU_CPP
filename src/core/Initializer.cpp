@@ -165,10 +165,7 @@ void Initializer::initialize_topo() const {
             }
         }
     );
-    // VVM::Core::HaloExchanger halo_exchanger(grid_);
-    Kokkos::fence();
     halo_exchanger_.exchange_halos(state_.get_field<3>("ITYPEW"));
-    cudaDeviceSynchronize();
 
     Kokkos::parallel_for("assign_ITYPE", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,h,h}, {nz-h,ny-h,nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
@@ -178,12 +175,9 @@ void Initializer::initialize_topo() const {
             }
         }
     );
-    Kokkos::fence();
     halo_exchanger_.exchange_halos(state_.get_field<3>("ITYPEU"));
     halo_exchanger_.exchange_halos(state_.get_field<3>("ITYPEV"));
       
-    cudaDeviceSynchronize();
-
 
     // Assign topou, topov
     auto& topou = state_.get_field<2>("topou").get_mutable_device_data();
@@ -197,13 +191,9 @@ void Initializer::initialize_topo() const {
 
     Kokkos::parallel_for("modifyTopo", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
         KOKKOS_LAMBDA(const int j, const int i) {
-            if (topo(j,i) == 0) topo(j,i) = h;
+            if (topo(j,i) == 0) topo(j,i) = h-1;
         }
     );
-      
-    cudaDeviceSynchronize();
-    return;
-
     return;
 }
 
@@ -302,6 +292,7 @@ void Initializer::assign_vars() const {
     if (rank == 0) state_.get_field<1>("Tbar").print_profile(grid_, 0, 0, 0);
     if (rank == 0) state_.get_field<1>("Tvbar").print_profile(grid_, 0, 0, 0);
     if (rank == 0) state_.get_field<1>("pibar").print_profile(grid_, 0, 0, 0);
+    if (rank == 0) state_.get_field<1>("pibar_up").print_profile(grid_, 0, 0, 0);
     if (rank == 0) state_.get_field<1>("pbar").print_profile(grid_, 0, 0, 0);
     if (rank == 0) parameters_.z_mid.print_profile(grid_, 0, 0, 0);
     if (rank == 0) parameters_.z_up.print_profile(grid_, 0, 0, 0);
@@ -395,18 +386,19 @@ void Initializer::assign_vars() const {
         }
     );
 
-    auto& lon = state_.get_field<1>("lon").get_mutable_device_data();
-    Kokkos::deep_copy(lon, 121.);
-
-    auto& lat = state_.get_field<1>("lat").get_mutable_device_data();
-    Kokkos::deep_copy(lat, 23.458);
+    auto& lon = state_.get_field<2>("lon").get_mutable_device_data();
+    auto& lat = state_.get_field<2>("lat").get_mutable_device_data();
+    if (config_.get_value<bool>("grid.fix_latlon", false)) {
+        Kokkos::deep_copy(lon, 120.95);
+        Kokkos::deep_copy(lat, 23.458);
+    }
 
     double OMEGA = config_.get_value<double>("constants.OMEGA", 7.292e-5);
     double PI = config_.get_value<double>("constants.PI", 3.14159265);
     auto& f = state_.get_field<1>("f").get_mutable_device_data();
     Kokkos::parallel_for("Init_Coriolis", Kokkos::RangePolicy<>(0, ny),
         KOKKOS_LAMBDA(const int j) {
-            f(j) = 2. * OMEGA * Kokkos::sin(lat(j) * PI / 180.);
+            f(j) = 2. * OMEGA * Kokkos::sin(lat(j, 0) * PI / 180.);
         }
     );
     return;
@@ -521,6 +513,12 @@ void Initializer::initialize_perturbation() const {
                 }
             }
         );
+    }
+    else if (test_mode == "topo") {
+        auto& utopmn = state_.get_field<0>("utopmn").get_mutable_device_data();
+        Kokkos::deep_copy(u, 10.);
+        Kokkos::deep_copy(utopmn, 10.);
+        
     }
 
     if (perturbation == "none") return;

@@ -66,6 +66,8 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
     if (!state.has_field("net_heating")) state.add_field<3>("net_heating", {nz_total, ny_total, nx_total});
     if (!state.has_field("net_sw_flux")) state.add_field<3>("net_sw_flux", {nz_total, ny_total, nx_total});
     if (!state.has_field("net_lw_flux")) state.add_field<3>("net_lw_flux", {nz_total, ny_total, nx_total});
+    if (!state.has_field("swdn")) state.add_field<3>("swdn", {nz_total, ny_total, nx_total});
+    if (!state.has_field("lwdn")) state.add_field<3>("lwdn", {nz_total, ny_total, nx_total});
 
     using PC = scream::physics::Constants<Real>;
 
@@ -147,8 +149,8 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
     const auto& h = m_grid.get_halo_cells();
     const auto& ny = m_grid.get_local_physical_points_y();
     const auto& nx = m_grid.get_local_physical_points_x();
-    const auto& lon = state.get_field<1>("lon").get_device_data();
-    const auto& lat = state.get_field<1>("lat").get_device_data();
+    const auto& lon = state.get_field<2>("lon").get_device_data();
+    const auto& lat = state.get_field<2>("lat").get_device_data();
     m_lat = Kokkos::View<double*>("m_lat", m_ncol);
     m_lon = Kokkos::View<double*>("m_lon", m_ncol);
     auto m_lat_view = m_lat; 
@@ -159,8 +161,8 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
             int ix = k % nx;
             int iy = k / nx;
 
-            m_lon_view(k) = lon(ix + h);
-            m_lat_view(k) = lat(iy + h);
+            m_lon_view(k) = lon(0, ix + h);
+            m_lat_view(k) = lat(iy + h, 0);
         }
     );
 
@@ -320,6 +322,8 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
     auto& net_heating = state.get_field<3>("net_heating").get_mutable_device_data();
     auto& net_sw_flux = state.get_field<3>("net_sw_flux").get_mutable_device_data();
     auto& net_lw_flux = state.get_field<3>("net_lw_flux").get_mutable_device_data();
+    auto& swdn = state.get_field<3>("swdn").get_mutable_device_data();
+    auto& lwdn = state.get_field<3>("lwdn").get_mutable_device_data();
 
     // Orbital parameters and Zenith Angle
     double obliqr, lambm0, mvelpp;
@@ -331,7 +335,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
     // TODO: Need timestamp/year from VVM state or time manager
     // For now assuming a default or simple time stepping
     // double calday = 1.0;       // Placeholder for Jan 1st
-    double calday = 172.1639;
+    double calday = 231.66667 + (state.get_time() / 86400.0);
     if (eccen >= 0 && obliq >= 0 && mvelp >= 0) {
         orbital_year = shr_orb_undef_int_c2f;
     }
@@ -574,10 +578,10 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                     Real net_lw = buffer.lw_flux_dn_k(i, k) - buffer.lw_flux_up_k(i, k);
 
                     int k_vvm = nlay - k + halo;
-                    if (k < nlay) {
-                        net_sw_flux(k_vvm, iy + halo, ix + halo) = net_sw;
-                        net_lw_flux(k_vvm, iy + halo, ix + halo) = net_lw;
-                    }
+                    net_sw_flux(k_vvm, iy + halo, ix + halo) = net_sw;
+                    net_lw_flux(k_vvm, iy + halo, ix + halo) = net_lw;
+                    swdn(k_vvm, iy+halo, ix+halo) = buffer.sw_flux_dn_k(i, k);
+                    lwdn(k_vvm, iy+halo, ix+halo) = buffer.lw_flux_dn_k(i, k);
                  }
         });
     }

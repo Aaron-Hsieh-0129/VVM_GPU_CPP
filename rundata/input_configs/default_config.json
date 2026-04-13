@@ -1,7 +1,7 @@
 {
     "grid": {
-        "nx": 192,
-        "ny": 192,
+        "nx": 256,
+        "ny": 256,
         "nz": 44,
         "n_halo_cells": 2,
         "dx": 2000.0,
@@ -12,10 +12,11 @@
             "x": "periodic",
             "y": "periodic",
             "__bc_option": "periodic, zero_gradient"
-        }
+        },
+        "fix_lonlat": true
     },
     "simulation": {
-        "total_time_s": 864000.0,
+        "total_time_s": 172800.0,
         "dt_s": 5.0,
         "output_interval_s": 600.0,
         "idealized_test": "none",
@@ -23,17 +24,22 @@
     },
     "initial_conditions": {
         "format": "txt",
-        "source_file": "../rundata/initial_conditions/profiles/profile_p3.txt",
+        "source_file": "../rundata/initial_conditions/profiles/tpe_20120819_modified.txt",
         "perturbation": "none"
     },
     "netcdf_reader": {
-        "source_file": "../rundata/initial_conditions/spatial/init.nc",
+        "source_file": "../rundata/initial_conditions/spatial/taiwan_topo.nc",
         "variables_to_read": {
-            "2d": ["topo", "Tg"]
+            "2d": [
+                "lon", "lat",
+                "topo", "sea_land_ice_mask", 
+                "vegtype", "soiltype", "slopetype", "Tg", 
+                "albedo", "gvf", "lai", "shdmax", "shdmin"
+            ]
         }
     },
     "output": {
-        "output_dir": "../output/boundary_x_1.3_0.7",
+        "output_dir": "/raid/mog/taiwanvvm_20120818_fixlonlat",
         "engine": "HDF5",
         "queue_limit": 20,
         "data_transport": "",
@@ -46,8 +52,8 @@
             "qv", "qc", "qr", "qi",
             "sw_heating", "lw_heating", "net_heating",
             "net_sw_flux", "net_lw_flux",
-            "precip_liq_surf_flux", "precip_ice_surf_flux",
-            "sfc_flux_th", "sfc_flux_qv", "lbn_weight"
+            "precip_liq_surf_mass", "precip_ice_surf_mass",
+            "hfx", "le", "swdn", "lwdn", "Tg", "sfc_flux_th", "sfc_flux_qv", "topo", "lon", "lat"
         ],
         "output_grid": {
             "x_start": 0,
@@ -62,17 +68,17 @@
         "solver": {
             "w_solver_method": "tridiagonal",
             "_w_solver_method_options": "Choose 'tridiagonal' (original) or 'jacobi' (3D parallel)",
-            "iteration": 200,
+            "iteration": 50,
             "WRXMU": 2.5e-7
         },
         "forcings": {
             "sponge_layer": {
                 "enable": true,
-                "sponge_layer_base": 13000.0,
+                "sponge_layer_base": 24800.0,
                 "inv_CRAD": 3600.0
             },
             "random_perturbation": {
-                "enable": true,
+                "enable": false,
                 "time_s": 200,
                 "amplitude": 1,
                 "z_start_m": 0,
@@ -80,7 +86,7 @@
                 "random_seed": 1129
             },
             "lateral_boundary_nudging": {
-                "enable": true,
+                "enable": false,
                 "boundaries": {
                     "west": true,
                     "east": true,
@@ -286,19 +292,27 @@
             "max_total_ni": 740.0e3
         },
         "rrtmgp": {
-            "enable_rrtmgp": false,
-            "column_chunk_size": 512,
-            "rad_frequency_step": 120,
+            "enable_rrtmgp": true,
+            "column_chunk_size": 16384,
+            "__column_chunk_size": "This should be modified according to domain and rank and the larger the faster (costs more memory).",
+            "rad_frequency_step": 24,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
-            "fixed_total_solar_irradiance": 551.58,
-            "fixed_solar_zenith_angle": 0.74256,
-            "pool_size_multiplier": 1.933
+            "fixed_total_solar_irradiance": 1367,
+            "fixed_solar_zenith_angle": -1,
+            "pool_size_multiplier": 1.933,
+            "orbital_year": 2012 
         },
         "turbulence": {
             "enable_turbulence": true
         },
         "surface": {
-            "enable_surface": true,
+            "enable_surface": false,
+            "frequency_step": 12,
+            "mode": "sflux_tc_2d",
+            "__mode": "sflux_2d, sflux_tc_2d" 
+        },
+        "land": {
+            "enable_land": true,
             "frequency_step": 1
         }
     },

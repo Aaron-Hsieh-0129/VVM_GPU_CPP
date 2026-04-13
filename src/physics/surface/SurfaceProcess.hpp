@@ -46,7 +46,14 @@ private:
                   double& ustar, double ventfc[2], double& molen);
 
     static KOKKOS_INLINE_FUNCTION
+    void sflux_tc_2d(double sigmau, double thvm, double thvsm, double speed1, 
+                     double zr, double zrough, 
+                     double& ustar, double ventfc[2], double& molen);
+
+    static KOKKOS_INLINE_FUNCTION
     double compute_es(double t);
+
+    std::string mode_;
 };
 
 } // namespace Physics

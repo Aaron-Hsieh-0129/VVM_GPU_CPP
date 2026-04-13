@@ -39,6 +39,8 @@ void SurfaceProcess::initialize(Core::State& state) {
     
     if (!state.has_field("ustar")) state.add_field<2>("ustar", {ny, nx});
     if (!state.has_field("molen")) state.add_field<2>("molen", {ny, nx});
+
+    mode_ = config_.get_value<std::string>("physics.surface.mode", "sflux_2d");
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -146,6 +148,131 @@ void SurfaceProcess::sflux_2d(double sigmau, double thvm, double thvsm, double s
 }
 
 
+KOKKOS_INLINE_FUNCTION
+void SurfaceProcess::sflux_tc_2d(double sigmau, double thvm, double thvsm, double speed1, 
+                                 double zr, double zrough, 
+                                 double& ustar, double ventfc[2], double& molen) {
+    const double crit = 0.003;
+    const int maxit = 20;
+    const double verysmall = 1.e-6;
+    const double z0m_min = 1.27e-7;
+    const double z0m_max = 2.85e-3;
+    const double z0s = 1.0e-4; // scalar roughness (fixed)
+    
+    const double vk = 0.4;
+    const double pi = 3.141592653589793;
+    const double grav = 9.806;
+
+    bool stopit = false;
+    double speedm = (speed1 > 1.e-3) ? speed1 : 1.e-3;
+
+    bool stable = (thvsm < 0.0);
+
+    // Unstable case (Gustiness floor for unstable case)
+    if (!stable) speedm = (speedm > sigmau) ? speedm : sigmau;
+
+    // Initial guess for coefficients
+    double z0m = Kokkos::max(Kokkos::min(zrough, z0m_max), z0m_min);
+
+    double den_m = Kokkos::log(zr / z0m);
+    double den_s = Kokkos::log(zr / z0s);
+
+    double cd = (vk / den_m) * (vk / den_m);
+    double cs = (vk * vk) / (den_m * den_s);
+
+    int it = 0;
+    bool cap_stable = false;
+    bool converged = false;
+
+    // START ITERATION
+    while (!stopit) {
+        it++;
+        cap_stable = false;
+
+        double cd_old = cd;
+        double cs_old = cs;
+
+        double ustar_tmp = Kokkos::sqrt(Kokkos::max(cd_old, verysmall)) * speedm;
+
+        // Update z0m (WRF-like high-wind formula)
+        double zw = Kokkos::min(1.0, Kokkos::pow(ustar_tmp / 1.06, 0.3));
+        double z1 = 0.011 * ustar_tmp * ustar_tmp / grav + 1.59e-5;
+        double z2 = 10.0 * Kokkos::exp(-9.5 * Kokkos::pow(ustar_tmp, -1.0/3.0)) 
+                  + 1.65e-6 / Kokkos::max(ustar_tmp, 0.01);
+
+        z0m = (1.0 - zw) * z1 + zw * z2;
+        z0m = Kokkos::max(Kokkos::min(z0m, z0m_max), z0m_min);
+
+        // zeta = z / L
+        double zeta = -zr * cs_old * vk * grav * thvsm / 
+                      (thvm * Kokkos::pow(Kokkos::max(cd_old, verysmall), 1.5) * speedm * speedm);
+
+        double psi_m, psi_h;
+        if (stable) {
+            // STABLE CASE
+            if (zeta >= 2.45) {
+                cap_stable = true;
+                zeta = 2.45;
+            }
+            psi_m = -4.7 * zeta;
+            psi_h = -4.7 * zeta;
+        } 
+        else {
+            // UNSTABLE OR NEUTRAL CASE
+            double x = Kokkos::pow(1.0 - 15.0 * zeta, 0.25);
+            double y = Kokkos::pow(1.0 - 9.0 * zeta, 0.25);
+
+            psi_m = Kokkos::log((1.0 + x * x) / 2.0) 
+                  + 2.0 * Kokkos::log((1.0 + x) / 2.0) 
+                  - 2.0 * Kokkos::atan(x) + pi / 2.0;
+
+            psi_h = 2.0 * Kokkos::log((1.0 + y * y) / 2.0);
+        }
+
+        // Effective denominators
+        double den_m_neu = Kokkos::log(zr / z0m);
+        double den_s_neu = Kokkos::log(zr / z0s);
+        den_m = den_m_neu - psi_m;
+        den_s = den_s_neu - psi_h;
+
+        if (!stable) {
+            den_m = Kokkos::max(den_m, 0.5 * den_m_neu);
+            den_s = Kokkos::max(den_s, 0.3 * den_s_neu);
+        }
+
+        // Update coefficients
+        double cd_new = Kokkos::pow(vk / den_m, 2.0);
+        double cs_new = (vk * vk) / (den_m * den_s);
+
+        cd_new = Kokkos::max(cd_new, verysmall);
+        cs_new = Kokkos::max(cs_new, verysmall);
+
+        // Convergence check
+        double res_cd = Kokkos::abs(cd_new / cd_old - 1.0);
+        double res_cs = Kokkos::abs(cs_new / cs_old - 1.0);
+
+        converged = (res_cd <= crit) && (res_cs <= crit);
+        stopit = cap_stable || converged || (it >= maxit);
+
+        cd = cd_new;
+        cs = cs_new;
+    }
+
+    // ITERATION COMPLETED. FINAL OUTPUTS
+    ustar = Kokkos::sqrt(Kokkos::max(cd, verysmall)) * speedm;
+
+    ventfc[0] = cd * speedm; // Cd * U
+    ventfc[1] = cs * speedm; // Cs * U
+
+    // FINAL MONIN-OBUKHOV LENGTH
+    double zeta = -zr * cs * vk * grav * thvsm / 
+                  (thvm * Kokkos::pow(Kokkos::max(cd, verysmall), 1.5) * speedm * speedm);
+                  
+    zeta = Kokkos::max(Kokkos::abs(zeta), 1e-6) * std::copysign(1.0, zeta);
+    molen = zr / Kokkos::min(zeta, 2.45);
+}
+
+
 void SurfaceProcess::compute_coefficients(Core::State& state) {
     const auto& u = state.get_field<3>("u").get_device_data();
     const auto& v = state.get_field<3>("v").get_device_data();
@@ -190,51 +317,97 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
     const double hlm = 3.336e5;
     const double delta = 0.608;
 
-    Kokkos::parallel_for("SFlux_3D",
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
-        KOKKOS_LAMBDA(const int j, const int i) {
-            // NOTE: Need to check about the difference between original VVM and this
-            int hx1 = hx(j,i) - 1;
-            int hxp = hx(j,i);
+    if (mode_ == "sflux_2d") {
+        Kokkos::parallel_for("SFlux_3D",
+            Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
+            KOKKOS_LAMBDA(const int j, const int i) {
+                // NOTE: Need to check about the difference between original VVM and this
+                int hx1 = hx(j,i);
+                int hxp = hx(j,i)+1;
 
-            double ztmp = 0.5 * dz() / flex_height_coef_mid(hxp);
-            double speedtp = 0.5 * Kokkos::sqrt(
-                            Kokkos::pow(u(hxp,j,i-1) + u(hxp,j,i), 2) + 
-                            Kokkos::pow(v(hxp,j-1,i) + v(hxp,j,i), 2)
-                         );
+                double ztmp = 0.5 * dz() / flex_height_coef_mid(hxp);
+                double speedtp = 0.5 * Kokkos::sqrt(
+                                Kokkos::pow(u(hxp,j,i-1) + u(hxp,j,i), 2) + 
+                                Kokkos::pow(v(hxp,j-1,i) + v(hxp,j,i), 2)
+                             );
 
-            double es1 = compute_es(Tg(j, i)); 
-            double qsfc = es1 * 0.622 / (pbar(hx1) - es1);
-            double ts = cp * Tg(j, i) + grav() * z_up(hx1); 
+                double es1 = compute_es(Tg(j, i)); 
+                double qsfc = es1 * 0.622 / (pbar(hx1) - es1);
+                double ts = cp * Tg(j, i) + grav() * z_up(hx1); 
 
-            double Q = qv(hxp, j, i) + qc(hxp, j, i) + qi(hxp, j, i);
-            double T = cp * th(hxp, j, i) * pibar(hxp) 
-                         - hlf * qc(hxp, j, i)
-                         + grav() * z_mid(hxp)
-                         - (hlf + hlm) * qi(hxp, j, i);
-            double thvsm = Tg(j,i) / pibar(hx1) - th(hxp,j,i) + 
-                           Kokkos::abs(gwet(j,i))*thbar(hxp) * (delta * (qsfc-qv(hxp,j,i)));
+                double Q = qv(hxp, j, i) + qc(hxp, j, i) + qi(hxp, j, i);
+                double T = cp * th(hxp, j, i) * pibar(hxp) 
+                             - hlf * qc(hxp, j, i)
+                             + grav() * z_mid(hxp)
+                             - (hlf + hlm) * qi(hxp, j, i);
+                double thvsm = Tg(j,i) / pibar(hx1) - th(hxp,j,i) + 
+                               Kokkos::abs(gwet(j,i))*thbar(hxp) * (delta * (qsfc-qv(hxp,j,i)));
 
-            double sigmau = 0.0;
-            double ustar, molen;
-            double ventfc[2];
-            sflux_2d(sigmau, thbar(hxp), thvsm, speedtp, ztmp, zrough(j, i), ustar, ventfc, molen);
+                double sigmau = 0.0;
+                double ustar, molen;
+                double ventfc[2];
+                sflux_2d(sigmau, thbar(hxp), thvsm, speedtp, ztmp, zrough(j, i), ustar, ventfc, molen);
 
-            double wt = ventfc[1] * (ts - T);
-            double wq = ventfc[1] * std::abs(gwet(j, i)) * (qsfc - Q);
-            VEN2D(j,i) = ventfc[0];
+                double wt = ventfc[1] * (ts - T);
+                double wq = ventfc[1] * std::abs(gwet(j, i)) * (qsfc - Q);
+                VEN2D(j,i) = ventfc[0];
 
-            sfc_flux_qv(j,i) = wq * rhobar_up(hx1);
-            sfc_flux_th(j,i) = wt * rhobar_up(hx1) / (cp * pibar(hx1));
-        }
-    );
+                sfc_flux_qv(j,i) = wq * rhobar_up(hx1);
+                sfc_flux_th(j,i) = wt * rhobar_up(hx1) / (cp * pibar(hx1));
+            }
+        );
+    }
+    else if (mode_ == "sflux_tc_2d") {
+        Kokkos::parallel_for("SFlux_3D",
+            Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
+            KOKKOS_LAMBDA(const int j, const int i) {
+                // NOTE: Need to check about the difference between original VVM and this
+                int hx1 = hx(j,i);
+                int hxp = hx(j,i)+1;
+
+                double ztmp = 0.5 * dz() / flex_height_coef_mid(hxp);
+                double speedtp = 0.5 * Kokkos::sqrt(
+                                Kokkos::pow(u(hxp,j,i-1) + u(hxp,j,i), 2) + 
+                                Kokkos::pow(v(hxp,j-1,i) + v(hxp,j,i), 2)
+                             );
+
+                double es1 = compute_es(Tg(j, i)); 
+                double qsfc = es1 * 0.622 / (pbar(hx1) - es1);
+                double ts = cp * Tg(j, i) + grav() * z_up(hx1); 
+
+                double Q = qv(hxp, j, i) + qc(hxp, j, i) + qi(hxp, j, i);
+                double T = cp * th(hxp, j, i) * pibar(hxp) 
+                             - hlf * qc(hxp, j, i)
+                             + grav() * z_mid(hxp)
+                             - (hlf + hlm) * qi(hxp, j, i);
+                double thvsm = Tg(j,i) / pibar(hx1) - th(hxp,j,i) + 
+                               Kokkos::abs(gwet(j,i))*thbar(hxp) * (delta * (qsfc-qv(hxp,j,i)));
+
+                double sigmau = 0.0;
+                double ustar, molen;
+                double ventfc[2];
+                sflux_tc_2d(sigmau, thbar(hxp), thvsm, speedtp, ztmp, zrough(j, i), ustar, ventfc, molen);
+
+                double wt = ventfc[1] * (ts - T);
+                double wq = ventfc[1] * std::abs(gwet(j, i)) * (qsfc - Q);
+                VEN2D(j,i) = ventfc[0];
+
+                sfc_flux_qv(j,i) = wq * rhobar_up(hx1);
+                sfc_flux_th(j,i) = wt * rhobar_up(hx1) / (cp * pibar(hx1));
+            }
+        );
+    }
+    else {
+        exit(1);
+    }
+
     halo_exchanger_.exchange_halos(state.get_field<2>("VEN2D"));
 
     Kokkos::parallel_for("SFlux_3D",
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
         KOKKOS_LAMBDA(const int j, const int i) {
-            int hx1 = hx(j,i)-1;
-            int hxp = hx(j,i);
+            int hx1 = hx(j,i);
+            int hxp = hx(j,i)+1;
             int hxup = hxu(j,i) + 1;
             int hxvp = hxv(j,i) + 1;
 
@@ -281,7 +454,7 @@ void SurfaceProcess::calculate_tendencies(Core::State& state,
         Kokkos::parallel_for("SfcFlux_Tendency_TH",
             Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
             KOKKOS_LAMBDA(const int j, const int i) {
-                int hxp = hx(j,i);
+                int hxp = hx(j,i)+1;
                 tend(hxp, j, i) += flux(j, i) * flex_height_coef_mid(hxp) * rdz() / rhobar(hxp);
             }
         );
@@ -291,7 +464,7 @@ void SurfaceProcess::calculate_tendencies(Core::State& state,
         Kokkos::parallel_for("SfcFlux_Tendency_QV",
             Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
             KOKKOS_LAMBDA(const int j, const int i) {
-                int hxp = hx(j,i);
+                int hxp = hx(j,i)+1;
                 tend(hxp, j, i) += flux(j, i) * flex_height_coef_mid(hxp) * rdz() / rhobar(hxp);
             }
         );

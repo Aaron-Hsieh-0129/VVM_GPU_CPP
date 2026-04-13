@@ -4,6 +4,7 @@
 #include "physics/rrtmgp/VVM_rrtmgp_process_interface.hpp"
 #include "physics/turbulence/TurbulenceProcess.hpp"
 #include "physics/surface/SurfaceProcess.hpp"
+#include "physics/land/LandProcess.hpp"
 #include "core/Initializer.hpp"
 #include "core/BoundaryConditionManager.hpp"
 #include "dynamics/temporal_schemes/TimeIntegrator.hpp"
@@ -47,9 +48,11 @@ private:
     std::unique_ptr<Dynamics::SpongeLayer> sponge_layer_;
     std::unique_ptr<Dynamics::RandomForcing> random_forcing_;
     std::unique_ptr<Dynamics::LateralBoundaryNudging> lateral_boundary_nudging_;
+    std::unique_ptr<Physics::LandProcess> land_;
 
     int rad_freq_in_steps_;
     int surface_freq_in_steps_;
+    int land_freq_in_steps_;
 
     bool wind_solver_ = true;
 };

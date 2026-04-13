@@ -13,6 +13,7 @@ target_link_libraries(vvm_driver
     vvm_utils
     vvm_turbulence
     vvm_surface
+    vvm_land
 )
 
 target_include_directories(vvm_driver PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
