@@ -3,4 +3,8 @@ rundata/input_configs/* linguist-vendored
 rundata/p3/* linguist-vendored
 rundata/rrtmgp/* linguist-vendored
 rundata/* linguist-vendored
+src/physics/land/** linguist-vendored
+src/physics/rrtmgp/** linguist-vendored
+src/physics/p3/** linguist-vendored
+*.h linguist-language=C++
 tests/baselines/*.h5 filter=lfs diff=lfs merge=lfs -text
