@@ -184,8 +184,8 @@ void LandProcess::preprocessing_and_packing() {
     auto& stc_v    = state_.get_field<3>("stc").get_device_data();
     auto& smc_v    = state_.get_field<3>("smc").get_device_data();
     auto& slc_v    = state_.get_field<3>("slc").get_device_data();
-    auto& precip_liq_surf_2d = state_.get_field<2>("precip_liq_surf_mass").get_mutable_device_data();
-    auto& precip_ice_surf_2d = state_.get_field<2>("precip_ice_surf_mass").get_mutable_device_data();
+    auto& precip_liq_surf_2d = state_.get_field<2>("precip_liq_surf_flux").get_mutable_device_data();
+    auto& precip_ice_surf_2d = state_.get_field<2>("precip_ice_surf_flux").get_mutable_device_data();
 
     Kokkos::parallel_for("PackToLand", 
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {m_nx, m_ny}),

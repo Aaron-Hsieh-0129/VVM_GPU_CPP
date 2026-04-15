@@ -269,10 +269,10 @@ struct p3_postamble {
       // therefore we must accumulate these fluxes.
       // Note: we need to ensure that only a single thread within the team is
       //       updating the mass value.
-      Kokkos::single(Kokkos::PerTeam(team), [&] {
-        precip_liq_surf_mass(icol) += precip_liq_surf_flux(icol) * PC::RHO_H2O * m_dt;
-        precip_ice_surf_mass(icol) += precip_ice_surf_flux(icol) * PC::RHO_H2O * m_dt;
-      });
+      // Kokkos::single(Kokkos::PerTeam(team), [&] {
+      //   precip_liq_surf_mass(icol) += precip_liq_surf_flux(icol) * PC::RHO_H2O * m_dt;
+      //   precip_ice_surf_mass(icol) += precip_ice_surf_flux(icol) * PC::RHO_H2O * m_dt;
+      // });
     } // operator
     
     // Local variables
@@ -384,6 +384,8 @@ public:
     template<typename VVMViewType, typename P3ViewType>
     void pack_2d_to_1d(const VVMViewType& vvm_view, const P3ViewType& p3_view);
     void initialize_constant_buffers(VVM::Core::State& initial_state);
+    void compute_time_averaged_precip(VVM::Core::State& state);
+    void reset_precip_accumulation(VVM::Core::State& state);
 
 protected:
     void allocate_p3_buffers();
@@ -481,6 +483,9 @@ protected:
     using MemberType = typename P3F::KT::MemberType;
 
     std::unique_ptr<VVM::Core::Field<3>> m_pseudo_density;
+
+    double m_output_interval_s;
+    bool m_need_reset_precip = false;
 };
 
 } // namespace Physics

@@ -25,6 +25,8 @@ VVM_P3_Interface::VVM_P3_Interface(const VVM::Utils::ConfigurationManager &confi
     // Note that users can use runtime)options to load some configuration related to p3
     // runtime_options.load_runtime_options_from_file(m_params);
 
+    m_output_interval_s = config_.get_value<double>("simulation.output_interval_s", 600.0);
+
     m_infrastructure.it = 0;
     m_infrastructure.its = 0;
     m_infrastructure.ite = m_num_cols - 1;
@@ -108,7 +110,7 @@ void VVM_P3_Interface::allocate_p3_buffers() {
     Kokkos::deep_copy(m_unused, 0.0);                                                                                
     Kokkos::deep_copy(m_dummy_input, 0.0);   
 
-    const int num_wsm_vars = 64;
+    const int num_wsm_vars = 70;
 
     const size_t wsm_size_in_bytes = WSM::get_total_bytes_needed(nk_pack_p1, num_wsm_vars, m_policy);
     const size_t wsm_size_in_spacks = (wsm_size_in_bytes + sizeof(Spack) - 1) / sizeof(Spack);
@@ -278,7 +280,7 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
     );
     
     const int nk_pack_p1 = ekat::npack<Spack>(m_num_levs+1);
-    workspace_mgr.setup(m_wsm_data, nk_pack_p1, 64, m_policy);
+    workspace_mgr.setup(m_wsm_data, nk_pack_p1, 70, m_policy);
 
     this->initialize_constant_buffers(state);
 }
@@ -648,6 +650,7 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
     const int nx_phys = grid_.get_local_physical_points_x();
     const int nlev_packs = m_num_lev_packs;
     const int halo = grid_.get_halo_cells();
+    auto dt = m_infrastructure.dt;
 
     auto qc_3d = state.get_field<3>("qc").get_mutable_device_data();
     auto nc_3d = state.get_field<3>("nc").get_mutable_device_data();
@@ -750,8 +753,11 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
                         int hxp = topo(iy_vvm, ix_vvm) + 1;
 
                         if (k_vvm == hxp) {
-                            precip_liq_surf_2d(iy_vvm, ix_vvm) = precip_liq_flux_val[k_vec];
-                            precip_ice_surf_2d(iy_vvm, ix_vvm) = precip_ice_flux_val[k_vec];
+                            precip_liq_surf_flux_2d(iy_vvm, ix_vvm) = precip_liq_flux_val[k_vec];
+                            precip_ice_surf_flux_2d(iy_vvm, ix_vvm) = precip_ice_flux_val[k_vec];
+
+                            precip_liq_surf_2d(iy_vvm, ix_vvm) += precip_liq_flux_val[k_vec] * dt;
+                            precip_ice_surf_2d(iy_vvm, ix_vvm) += precip_ice_flux_val[k_vec] * dt;
                         }
                         
                         if (ITYPEW(k_vvm, iy_vvm, ix_vvm) != 1) {
@@ -812,6 +818,12 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
 
 void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
     VVM::Utils::Timer p3_timer("P3_timer");
+
+    if (m_need_reset_precip) {
+        std::cout << "inside reset" << std::endl;
+        this->reset_precip_accumulation(state);
+        m_need_reset_precip = false;
+    }
 
 
     // FIXME: The pmid, pmid_try should be decided. The pmid from VVM is now dry pressure. 
@@ -1007,7 +1019,40 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
     ); // Kokkos::parallel_for(p3_main_local_vals)
     Kokkos::fence();
     postprocessing_and_unpacking(state);
+
+    int output_steps = std::round(m_output_interval_s / dt);
+    if (m_infrastructure.it > 0 && (m_infrastructure.it % output_steps) == 0) {
+        this->compute_time_averaged_precip(state);
+        m_need_reset_precip = true;
+    }
 }
+
+void VVM_P3_Interface::compute_time_averaged_precip(VVM::Core::State& state) {
+    auto& precip_liq_surf_mass_2d = state.get_field<2>("precip_liq_surf_mass").get_mutable_device_data();
+    auto& precip_ice_surf_mass_2d = state.get_field<2>("precip_ice_surf_mass").get_mutable_device_data();
+
+    double total_time = (m_output_interval_s > 0.0) ? m_output_interval_s : 1.0;
+
+    int ny = grid_.get_local_total_points_y();
+    int nx = grid_.get_local_total_points_x();
+
+    Kokkos::parallel_for("Compute_Precip_Average", 
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, nx}),
+        KOKKOS_LAMBDA(const int j, const int i) {
+            precip_liq_surf_mass_2d(j, i) /= total_time;
+            precip_ice_surf_mass_2d(j, i) /= total_time;
+        }
+    );
+}
+
+void VVM_P3_Interface::reset_precip_accumulation(VVM::Core::State& state) {
+    auto& precip_liq_surf_mass_2d = state.get_field<2>("precip_liq_surf_mass").get_mutable_device_data();
+    auto& precip_ice_surf_mass_2d = state.get_field<2>("precip_ice_surf_mass").get_mutable_device_data();
+
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), precip_liq_surf_mass_2d, 0.0);
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), precip_ice_surf_mass_2d, 0.0);
+}
+
 
 void VVM_P3_Interface::finalize() {
     m_wsm_view_storage = {}; 
