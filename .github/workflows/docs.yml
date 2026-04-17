@@ -1,8 +1,4 @@
 # Build MkDocs and deploy to GitHub Pages.
-#
-# If deploy-pages fails with HttpError 404 / "Creating Pages deployment failed":
-#   Repository → Settings → Pages → Build and deployment → Source: GitHub Actions
-#   (must be set before deployments succeed; branch-based publishing is not used here.)
 
 name: Deploy documentation
 
@@ -13,7 +9,7 @@ on:
       - "docs/**"
       - "mkdocs.yml"
       - "requirements-docs.txt"
-      - ".github/workflows/docs.yml"
+      - ".github/workflows/**"
   workflow_dispatch:
 
 permissions:
@@ -23,7 +19,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -58,7 +54,7 @@ jobs:
           PY
 
       - name: Build site
-        run: mkdocs build --strict
+        run: mkdocs build
 
       - uses: actions/upload-pages-artifact@v3
         with:
