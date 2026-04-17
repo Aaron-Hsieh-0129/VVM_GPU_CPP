@@ -1,14 +1,11 @@
 site_name: GVVM Documentation
 site_description: GPU-accelerated Vector Vorticity Model
 site_author: GVVM Development Team
-# Local dev: serve at http://127.0.0.1:8000/ (no /VVM_GPU_CPP/ prefix). GitHub Actions replaces this with the real Pages URL before deploy.
 site_url: https://Aaron-Hsieh-0129.github.io/VVM_GPU_CPP/
 repo_url: https://github.com/Aaron-Hsieh-0129/VVM_GPU_CPP
 repo_name: VVM_GPU_CPP
 edit_uri: edit/main/docs/
 
-# Match local `mkdocs serve` and GitHub Pages: default scheme follows the browser/OS
-# (otherwise the first palette entry is always the initial paint — often confused with "wrong theme").
 plugins:
   - search
 
@@ -23,7 +20,6 @@ theme:
     - search.highlight
     - content.code.copy
   palette:
-    # Default follows prefers-color-scheme; toggle still switches schemes (persists in localStorage)
     - media: "(prefers-color-scheme: light)"
       scheme: default
       primary: indigo
@@ -38,7 +34,6 @@ theme:
       toggle:
         icon: material/brightness-7
         name: Switch to light mode
-  # Avoid Google Fonts (blocked in some networks); same typography locally and on GitHub Pages
   font: false
 
 markdown_extensions:
