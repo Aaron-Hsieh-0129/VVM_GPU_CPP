@@ -1,5 +1,8 @@
 # Build MkDocs and deploy to GitHub Pages.
-# After the first successful run: Repository → Settings → Pages → Source: GitHub Actions.
+#
+# If deploy-pages fails with HttpError 404 / "Creating Pages deployment failed":
+#   Repository → Settings → Pages → Build and deployment → Source: GitHub Actions
+#   (must be set before deployments succeed; branch-based publishing is not used here.)
 
 name: Deploy documentation
 
@@ -64,6 +67,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

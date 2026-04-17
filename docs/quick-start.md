@@ -102,19 +102,9 @@ Details: [I/O management](user-guides/io-management.md).
 To preview this documentation locally (requires [MkDocs](https://www.mkdocs.org/) and the [Material theme](https://squidfunk.github.io/mkdocs-material/)):
 
 ```bash
-pip install mkdocs-material
+pip install -r requirements-docs.txt
 mkdocs serve
 ```
 
-Then open the served URL in your browser.
-
-### Publishing on GitHub Pages
-
-The repository includes `.github/workflows/docs.yml`. After you push to `main` (or `master`), the workflow builds the site and deploys it.
-
-1. On GitHub: **Settings → Pages**.
-2. Under **Build and deployment**, set **Source** to **GitHub Actions** (not “Deploy from a branch”).
-3. Open the **Actions** tab and confirm the “Deploy documentation” workflow succeeds.
-
-The site is served at `https://<your-username>.github.io/<repository>/` (for example `https://Aaron-Hsieh-0129.github.io/VVM_GPU_CPP/`). Forks get the correct `site_url` and `repo_url` from the workflow automatically.
+Use `requirements-docs.txt` so your local MkDocs/Material versions match GitHub Actions. Then open the served URL in your browser.
 

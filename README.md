@@ -76,13 +76,13 @@ cmake --build build -j<core_number>
 
 ### Step 4: Configure the Experiment
 
-- **Main Settings**: Modify `rundata/input_configs/default_configs.json` to design your experiment. Each physical process has its own toggle switch.
+- **Main Settings**: Modify `rundata/input_configs/default_config.json` to design your experiment. Each physical process has its own toggle switch.
     
 - **Initial Conditions**:
     
     - Generate initial input files using the Python scripts located under `scripts/`.
         
-    - Specify your generated spatial file path (typically placed in `rundata/initial_conditions/spatial/`) within the `default_configs.json`.
+    - Specify your generated spatial file path (typically placed in `rundata/initial_conditions/spatial/`) within `default_config.json`.
         
     - Initial profiles should be placed under `rundata/initial_conditions/profiles/`.
 
@@ -98,7 +98,7 @@ mpirun -np 1 ./vvm
 
 #### Asynchronous I/O (Optional)
 
-To use asynchronous output, specify the SST engine in your `default_configs.json`. You can then allocate dedicated tasks for I/O.
+To use asynchronous output, specify the SST engine in `default_config.json`. You can then allocate dedicated tasks for I/O.
 
 For example, to use **1 GPU/CPU for the model** and **1 CPU for I/O**:
 
