@@ -1,0 +1,61 @@
+site_name: GVVM Documentation
+site_description: GPU-accelerated Vector Vorticity Model
+site_author: GVVM Development Team
+site_url: https://Aaron-Hsieh-0129.github.io/VVM_GPU_CPP/
+repo_url: https://github.com/Aaron-Hsieh-0129/VVM_GPU_CPP
+repo_name: VVM_GPU_CPP
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: en
+  features:
+    - toc.integrate        
+    - navigation.indexes   
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  palette:
+    # Palette toggle for light/dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - tables
+
+
+nav:
+  - Home: index.md
+  - Quick Start: quick-start.md
+  - User Guides:
+      - Overview: user-guides/index.md
+      - Model Configuration: user-guides/configuration.md
+      - I/O Management: user-guides/io-management.md
+  - Developer Guides:
+      - Overview: developer-guides/index.md
+      - System Architecture: developer-guides/architecture.md
+      - Physics Implementation: developer-guides/physics.md
+  - Examples:
+      - Gallery Overview: examples/index.md
+      - Idealized Simulations: examples/idealized.md
+      - TaiwanVVM: examples/taiwan-vvm.md
+
