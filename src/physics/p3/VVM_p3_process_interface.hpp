@@ -364,7 +364,7 @@ public:
      * @brief Pack: VVM 3D (z,y,x) + halo -> P3 2D (col,lev_packs)
      */
     template<typename VVMViewType, typename P3ViewType>
-    void pack_3d_to_2d_packed(const VVMViewType& vvm_view, const P3ViewType& p3_view);
+    void pack_3d_to_2d_packed(const VVMViewType& vvm_view, const P3ViewType& p3_view, const double pad_val = 0.0);
 
     /**
      * @brief Unpack: P3 2D (col,lev_packs) -> VVM 3D (z,y,x) + halo

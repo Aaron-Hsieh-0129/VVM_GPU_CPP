@@ -2,6 +2,9 @@
 #include "io/TxtReader.hpp"
 #include "io/PnetcdfReader.hpp"
 #include <Kokkos_Core.hpp>
+#include <algorithm>
+#include <iostream>
+#include <string>
 
 namespace VVM {
 namespace Core {
@@ -396,11 +399,18 @@ void Initializer::assign_vars() const {
     double OMEGA = config_.get_value<double>("constants.OMEGA", 7.292e-5);
     double PI = config_.get_value<double>("constants.PI", 3.14159265);
     auto& f = state_.get_field<1>("f").get_mutable_device_data();
-    Kokkos::parallel_for("Init_Coriolis", Kokkos::RangePolicy<>(0, ny),
-        KOKKOS_LAMBDA(const int j) {
-            f(j) = 2. * OMEGA * Kokkos::sin(lat(j, 0) * PI / 180.);
+    auto& f_2d = state_.get_field<2>("f_2d").get_mutable_device_data();
+    const int global_start_j = grid_.get_local_physical_start_y();
+    const auto& dy = parameters_.dy;
+    Kokkos::parallel_for("Init_Coriolis", 
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {ny, nx}),
+        KOKKOS_LAMBDA(const int j, const int i) {
+            const int global_j = global_start_j + j;
+            f(j) = 2. * OMEGA * Kokkos::sin((global_j - 1540./2. - 0.5)*dy()/6.37e6);
+            f_2d(j,i) = 2. * OMEGA * Kokkos::sin((global_j - 1540./2. - 0.5)*dy()/6.37e6);
         }
     );
+    halo_exchanger_.exchange_halos(state_.get_field<2>("f_2d"));
     return;
 }
 

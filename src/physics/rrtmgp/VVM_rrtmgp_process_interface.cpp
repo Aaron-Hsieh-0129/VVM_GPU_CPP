@@ -68,6 +68,7 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
     if (!state.has_field("net_lw_flux")) state.add_field<3>("net_lw_flux", {nz_total, ny_total, nx_total});
     if (!state.has_field("swdn")) state.add_field<3>("swdn", {nz_total, ny_total, nx_total});
     if (!state.has_field("lwdn")) state.add_field<3>("lwdn", {nz_total, ny_total, nx_total});
+    if (!state.has_field("lwup")) state.add_field<3>("lwup", {nz_total, ny_total, nx_total});
 
     using PC = scream::physics::Constants<Real>;
 
@@ -324,6 +325,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
     auto& net_lw_flux = state.get_field<3>("net_lw_flux").get_mutable_device_data();
     auto& swdn = state.get_field<3>("swdn").get_mutable_device_data();
     auto& lwdn = state.get_field<3>("lwdn").get_mutable_device_data();
+    auto& lwup = state.get_field<3>("lwup").get_mutable_device_data();
 
     // Orbital parameters and Zenith Angle
     double obliqr, lambm0, mvelpp;
@@ -582,6 +584,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                     net_lw_flux(k_vvm, iy + halo, ix + halo) = net_lw;
                     swdn(k_vvm, iy+halo, ix+halo) = buffer.sw_flux_dn_k(i, k);
                     lwdn(k_vvm, iy+halo, ix+halo) = buffer.lw_flux_dn_k(i, k);
+                    lwup(k_vvm, iy+halo, ix+halo) = buffer.lw_flux_up_k(i, k);
                  }
         });
     }

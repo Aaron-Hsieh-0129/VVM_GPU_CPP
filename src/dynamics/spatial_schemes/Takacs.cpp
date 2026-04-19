@@ -792,7 +792,8 @@ void Takacs::calculate_coriolis_tendency_x(
     
     auto& tendency = out_tendency.get_mutable_device_data();
     const auto& u = state.get_field<3>("u").get_device_data();
-    const auto& f = state.get_field<1>("f").get_device_data();
+    // const auto& f = state.get_field<1>("f").get_device_data();
+    const auto& f_2d = state.get_field<2>("f_2d").get_device_data();
     const auto& rdz = params.rdz;
     const auto& flex_height_coef_up = params.flex_height_coef_up.get_device_data();
 
@@ -804,7 +805,7 @@ void Takacs::calculate_coriolis_tendency_x(
     Kokkos::parallel_for("coriolis_tendency_x",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h-1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            tendency(k, j, i) += 0.25 * f(j) * flex_height_coef_up(k) * rdz() *
+            tendency(k, j, i) += 0.25 * f_2d(j,i) * flex_height_coef_up(k) * rdz() *
                                  (u(k+1,j,i-1)-u(k,j,i-1)                                           
                                  +u(k+1,j,i  )-u(k,j,i)                                           
                                  +u(k+1,j+1,i  )-u(k,j+1,i  )                                           
@@ -821,7 +822,8 @@ void Takacs::calculate_coriolis_tendency_y(
 
     auto& tendency = out_tendency.get_mutable_device_data();
     const auto& v = state.get_field<3>("v").get_device_data();
-    const auto& f = state.get_field<1>("f").get_device_data();
+    // const auto& f = state.get_field<1>("f").get_device_data();
+    const auto& f_2d = state.get_field<2>("f_2d").get_device_data();
     const auto& rdz = params.rdz;
     const auto& flex_height_coef_up = params.flex_height_coef_up.get_device_data();
 
@@ -833,7 +835,7 @@ void Takacs::calculate_coriolis_tendency_y(
     Kokkos::parallel_for("coriolis_tendency_y",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h-1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            tendency(k, j, i) += -0.25 * f(j) * flex_height_coef_up(k) * rdz() *
+            tendency(k, j, i) += -0.25 * f_2d(j,i) * flex_height_coef_up(k) * rdz() *
                                  (v(k+1,j,i+1)-v(k,j,i+1)
                                  +v(k+1,j,i  )-v(k,j,i)
                                  +v(k+1,j-1,i)-v(k,j-1,i)
@@ -850,7 +852,8 @@ void Takacs::calculate_coriolis_tendency_z(
     auto& tendency = out_tendency.get_mutable_device_data();
     const auto& u = state.get_field<3>("u").get_device_data();
     const auto& v = state.get_field<3>("v").get_device_data();
-    const auto& f = state.get_field<1>("f").get_device_data();
+    // const auto& f = state.get_field<1>("f").get_device_data();
+    const auto& f_2d = state.get_field<2>("f_2d").get_device_data();
     const auto& rdx = params.rdx;
     const auto& rdy = params.rdy;
     const auto& flex_height_coef_up = params.flex_height_coef_up.get_device_data();
@@ -865,9 +868,9 @@ void Takacs::calculate_coriolis_tendency_z(
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h, h}, {ny-h, nx-h}),
         KOKKOS_LAMBDA(const int j, const int i) {
             tendency(NK2, j, i) +=
-                -0.25*f(j)*(u(NK2,j,i+1)-u(NK2,j,i-1)
+                -0.25*f_2d(j,i)*(u(NK2,j,i+1)-u(NK2,j,i-1)
                            +u(NK2,j+1,i+1)-u(NK2,j+1,i-1)) * rdx()                                         
-                -0.25*f(j)*(v(NK2,j+1,i)-v(NK2,j-1,i)
+                -0.25*f_2d(j,i)*(v(NK2,j+1,i)-v(NK2,j-1,i)
                            +v(NK2,j+1,i+1)-v(NK2,j-1,i+1)) * rdy();
         }
     );

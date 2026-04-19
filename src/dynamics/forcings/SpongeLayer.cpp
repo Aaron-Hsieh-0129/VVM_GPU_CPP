@@ -83,7 +83,7 @@ void SpongeLayer::initialize(Core::State& state) {
     );
     
     auto& CGR_vort = state.get_field<1>("CGR_vort").get_mutable_device_data();
-    Kokkos::parallel_for("assign_coefficient", Kokkos::RangePolicy<>(k_start_vort, nz-h-1),
+    Kokkos::parallel_for("assign_coefficient", Kokkos::RangePolicy<>(k_start_vort, nz-h),
         KOKKOS_LAMBDA(const int k) {
             // CGR_vort(k) = CRAD*(z_up(k)-z_mid(k_start_vort-1))/(z_mid(nz-h-1)-z_mid(k_start_vort-1));
             // FIXME: This follows original VVM now, but I think the ratio should be considered carefully.

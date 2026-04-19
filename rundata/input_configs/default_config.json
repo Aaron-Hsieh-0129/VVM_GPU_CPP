@@ -1,7 +1,7 @@
 {
     "grid": {
-        "nx": 256,
-        "ny": 256,
+        "nx": 6144,
+        "ny": 1536,
         "nz": 44,
         "n_halo_cells": 2,
         "dx": 2000.0,
@@ -16,19 +16,19 @@
         "fix_lonlat": true
     },
     "simulation": {
-        "total_time_s": 172800.0,
+        "total_time_s": 1728000.0,
         "dt_s": 5.0,
-        "output_interval_s": 600.0,
+        "output_interval_s": 3600.0,
         "idealized_test": "none",
         "__idealized_test": "none, advection_u, advection_v, advection_w, stretching, twisting, 2dbubble"
     },
     "initial_conditions": {
         "format": "txt",
-        "source_file": "../rundata/initial_conditions/profiles/tpe_20120819_modified.txt",
+        "source_file": "../rundata/initial_conditions/profiles/profile_rcemip.txt",
         "perturbation": "none"
     },
     "netcdf_reader": {
-        "source_file": "../rundata/initial_conditions/spatial/taiwan_topo.nc",
+        "source_file": "../rundata/initial_conditions/spatial/tcvvm.nc",
         "variables_to_read": {
             "2d": [
                 "lon", "lat",
@@ -39,8 +39,8 @@
         }
     },
     "output": {
-        "output_dir": "/raid/mog/taiwanvvm_20120818_fixlonlat",
-        "engine": "HDF5",
+        "output_dir": "/raid/mog/tcvvm_new",
+        "engine": "SST",
         "queue_limit": 20,
         "data_transport": "",
         "__data_transport": "RDMA (for machines with infinite band), WAN (using network), and empty (for single node auto design by ADIOS2) ",
@@ -50,10 +50,9 @@
             "thbar", "pibar", "rhobar", "rhobar_up",
             "u", "v", "w", "th", "xi", "eta", "zeta",
             "qv", "qc", "qr", "qi",
-            "sw_heating", "lw_heating", "net_heating",
-            "net_sw_flux", "net_lw_flux",
+            "sw_heating", "lw_heating", "swdn", "lwdn", "lwup", 
             "precip_liq_surf_mass", "precip_ice_surf_mass",
-            "hfx", "le", "swdn", "lwdn", "Tg", "sfc_flux_th", "sfc_flux_qv", "topo", "lon", "lat"
+            "hfx", "le", "Tg", "sfc_flux_th", "sfc_flux_qv"
         ],
         "output_grid": {
             "x_start": 0,
@@ -68,8 +67,8 @@
         "solver": {
             "w_solver_method": "tridiagonal",
             "_w_solver_method_options": "Choose 'tridiagonal' (original) or 'jacobi' (3D parallel)",
-            "iteration": 50,
-            "WRXMU": 2.5e-7
+            "iteration": 100,
+            "WRXMU": 6.25e-8
         },
         "forcings": {
             "sponge_layer": {
@@ -78,9 +77,9 @@
                 "inv_CRAD": 3600.0
             },
             "random_perturbation": {
-                "enable": false,
+                "enable": true,
                 "time_s": 200,
-                "amplitude": 1,
+                "amplitude": 0.5,
                 "z_start_m": 0,
                 "z_end_m": 2000,
                 "random_seed": 1129
@@ -141,7 +140,7 @@
                         "spatial_scheme": "Takacs"
                     },
                     "coriolis": {
-                        "enable": false,
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -170,7 +169,7 @@
                         "spatial_scheme": "Takacs"
                     },
                     "coriolis": {
-                        "enable": false,
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -194,7 +193,7 @@
                         "spatial_scheme": "Takacs"
                     },
                     "coriolis": {
-                        "enable": false,
+                        "enable": true,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -293,12 +292,12 @@
         },
         "rrtmgp": {
             "enable_rrtmgp": true,
-            "column_chunk_size": 16384,
+            "column_chunk_size": 12288,
             "__column_chunk_size": "This should be modified according to domain and rank and the larger the faster (costs more memory).",
             "rad_frequency_step": 24,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
-            "fixed_total_solar_irradiance": 1367,
-            "fixed_solar_zenith_angle": -1,
+            "fixed_total_solar_irradiance": 551.58,
+            "fixed_solar_zenith_angle": 0.74256,
             "pool_size_multiplier": 1.933,
             "orbital_year": 2012 
         },
@@ -306,13 +305,13 @@
             "enable_turbulence": true
         },
         "surface": {
-            "enable_surface": false,
-            "frequency_step": 12,
+            "enable_surface": true,
+            "frequency_step": 24,
             "mode": "sflux_tc_2d",
             "__mode": "sflux_2d, sflux_tc_2d" 
         },
         "land": {
-            "enable_land": true,
+            "enable_land": false,
             "frequency_step": 1
         }
     },
