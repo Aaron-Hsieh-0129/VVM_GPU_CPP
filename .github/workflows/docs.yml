@@ -1,14 +1,12 @@
 # Build MkDocs and deploy to GitHub Pages.
-
 name: Deploy documentation
 
 on:
   push:
-    branches: [main, master]
+    branches: main
     paths:
       - "docs/**"
       - "mkdocs.yml"
-      - "requirements-docs.txt"
       - ".github/workflows/**"
   workflow_dispatch:
 
@@ -30,13 +28,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
-          cache: pip
-          cache-dependency-path: requirements-docs.txt
 
       - name: Install MkDocs
-        run: pip install -r requirements-docs.txt
+        run: pip install mkdocs-material 
 
-      - name: Set site and repo URLs for this fork
+      - name: Set site and repo URLs
         run: |
           python3 << 'PY'
           import pathlib
@@ -50,7 +46,7 @@ jobs:
           text = re.sub(r"^site_url:.*$", f"site_url: {site_url}", text, flags=re.M)
           text = re.sub(r"^repo_url:.*$", f"repo_url: {repo_url}", text, flags=re.M)
           path.write_text(text)
-          print("site_url:", site_url)
+          print("Auto-configured site_url:", site_url)
           PY
 
       - name: Build site
