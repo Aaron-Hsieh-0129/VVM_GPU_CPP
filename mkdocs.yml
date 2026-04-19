@@ -58,6 +58,7 @@ nav:
       - Physics Implementation: developer-guides/physics.md
   - Examples:
       - Gallery Overview: examples/index.md
+      - Video gallery: examples/gallery.md
       - Idealized Simulations: examples/idealized.md
       - TaiwanVVM: examples/taiwan-vvm.md
 
