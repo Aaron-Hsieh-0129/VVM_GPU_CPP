@@ -65,7 +65,7 @@ OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VV
         MPI_Allreduce(&is_node_head, &total_nodes, 1, MPI_INT, MPI_SUM, comm_);
         MPI_Comm_free(&nodeComm);
 
-        std::string use_collective = (total_nodes > 1) ? "true" : "false";
+        std::string use_collective = (mpi_size_ > 1) ? "true" : "false";
         if (rank_ == 0) std::cout << "  [OutputManager] Engine: HDF5. Collective: " << use_collective << std::endl;
         
         io_.SetParameter("IdleH5Writer", "true");
@@ -200,17 +200,16 @@ void OutputManager::write(int step, double time) {
                         size_t i_start = (out_x_start - rank_off_x) + h;
 
                         if constexpr (T::DimValue == 1) {
-                            if (rank_ == 0) {
-                                size_t count = adios_var.Count()[0];
-                                auto subview = Kokkos::subview(full_data_view, std::make_pair(k_start, k_start + count));
-                                
-                                if (host_buffers_1d_.find(field_name) == host_buffers_1d_.end()) {
-                                    host_buffers_1d_[field_name] = Kokkos::View<double*, Kokkos::HostSpace>(field_name + "_host", count);
-                                }
-                                auto& host_view = host_buffers_1d_[field_name];
-                                Kokkos::deep_copy(host_view, subview);
-                                writer_.Put(adios_var, host_view.data());
-                            } 
+                            size_t count = adios_var.Count()[0];
+                            auto subview = Kokkos::subview(full_data_view, std::make_pair(k_start, k_start + count));
+                            
+                            if (host_buffers_1d_.find(field_name) == host_buffers_1d_.end()) {
+                                host_buffers_1d_[field_name] = Kokkos::View<double*, Kokkos::HostSpace>(field_name + "_host", count);
+                            }
+                            auto& host_view = host_buffers_1d_[field_name];
+                            
+                            Kokkos::deep_copy(host_view, subview);
+                            writer_.Put(adios_var, host_view.data());
                         }
                         else if constexpr (T::DimValue == 2) {
                             size_t ny = adios_var.Count()[0];
@@ -295,26 +294,29 @@ void OutputManager::write_static_data() {
     const size_t h = grid_.get_halo_cells();
 
     auto var_x = io_.InquireVariable<double>("coordinates/x");
+    std::vector<double> x_coords;
     if (rank_ == 0) {
-        std::vector<double> x_coords(gnx);
+        x_coords.resize(gnx);
         for(size_t i = 0; i < gnx; ++i) x_coords[i] = i * grid_.get_dx();
-        writer_.Put<double>(var_x, x_coords.data(), adios2::Mode::Sync);
     } 
+    writer_.Put<double>(var_x, x_coords.data(), adios2::Mode::Sync);
 
     auto var_y = io_.InquireVariable<double>("coordinates/y");
+    std::vector<double> y_coords;
     if (rank_ == 0) {
-        std::vector<double> y_coords(gny);
+        y_coords.resize(gny);
         for(size_t i = 0; i < gny; ++i) y_coords[i] = i * grid_.get_dy();
-        writer_.Put<double>(var_y, y_coords.data(), adios2::Mode::Sync);
     }
+    writer_.Put<double>(var_y, y_coords.data(), adios2::Mode::Sync);
 
     auto var_z_mid = io_.InquireVariable<double>("coordinates/z_mid");
+    std::vector<double> z_mid_physical;
     if (rank_ == 0) {
+        z_mid_physical.resize(gnz);
         auto z_mid_host = params_.z_mid.get_host_data();
-        std::vector<double> z_mid_physical(gnz);
         for (size_t i = 0; i < gnz; ++i) z_mid_physical[i] = z_mid_host(i + h);
-        writer_.Put<double>(var_z_mid, z_mid_physical.data(), adios2::Mode::Sync);
     }
+    writer_.Put<double>(var_z_mid, z_mid_physical.data(), adios2::Mode::Sync);
 }
 
 void OutputManager::grads_ctl_file() {

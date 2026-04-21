@@ -398,6 +398,7 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
         );
     }
     else {
+        std::cout << "A non-existed surface flux mode was given." << std::endl;
         exit(1);
     }
 
