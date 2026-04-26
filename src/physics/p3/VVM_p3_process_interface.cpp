@@ -24,6 +24,7 @@ VVM_P3_Interface::VVM_P3_Interface(const VVM::Utils::ConfigurationManager &confi
 
     // Note that users can use runtime)options to load some configuration related to p3
     // runtime_options.load_runtime_options_from_file(m_params);
+    // If someone wants to call this function, the VVM version should be written in p3_function. 
 
     m_output_interval_s = config_.get_value<double>("simulation.output_interval_s", 600.0);
 
@@ -34,22 +35,24 @@ VVM_P3_Interface::VVM_P3_Interface(const VVM::Utils::ConfigurationManager &confi
     m_infrastructure.kte = m_num_levs - 1;
     // Get runtime options from config (mimicking m_params.get)
     m_infrastructure.predictNc = config_.get_value<bool>("physics.p3.do_predict_nc", true);
-    m_infrastructure.prescribedCCN = config_.get_value<bool>("physics.p3.do_prescribed_ccn", true);
+    m_infrastructure.prescribedCCN = config_.get_value<bool>("physics.p3.do_prescribed_ccn", false);
 
     // Set Kokkos execution policy
-    // using TPF = ekat::TeamPolicyFactory<KT::ExeSpace>;
-    // m_policy = TPF::get_default_team_policy(m_num_cols, m_num_lev_packs);
-    // m_team_size = m_policy.team_size();
-
-    // FIXME: This should be optimized by using small kernel or chunk calculation
+    // Aaron: a safe team size mode is turned on.
     using TPF = ekat::TeamPolicyFactory<KT::ExeSpace>;
     auto default_policy = TPF::get_default_team_policy(m_num_cols, m_num_lev_packs);
-    
-    long long max_int32 = 2147483647LL;
-    long long multiplier = 70LL * static_cast<long long>(m_num_cols) * static_cast<long long>(ekat::npack<Spack>(m_num_levs+1));
     int safe_team_size = default_policy.team_size();
     
+    long long max_int32 = 2147483647LL;
+#ifdef SCREAM_P3_SMALL_KERNELS
+    long long num_wsm_vars = 6LL; 
+#else
+    long long num_wsm_vars = 64LL; 
+#endif
+    long long multiplier = num_wsm_vars * static_cast<long long>(m_num_cols) * static_cast<long long>(ekat::npack<Spack>(m_num_levs+1));
+    
     if (multiplier * safe_team_size >= max_int32) {
+        if (grid_.get_mpi_rank() == 0) std::cout << "P3 note: the register memory size becomes too small because of large domain, so it's recommended to turn on SCREAM_P3_SMALL_KERNELS option when compiling to reduce memory allocation and append team size." << std::endl;
         safe_team_size = max_int32 / multiplier;
         if (safe_team_size < 1) safe_team_size = 1;
     }
@@ -57,6 +60,10 @@ VVM_P3_Interface::VVM_P3_Interface(const VVM::Utils::ConfigurationManager &confi
     m_policy = TeamPolicy(m_num_cols, safe_team_size, Spack::n);
     m_team_size = m_policy.team_size();
 
+    if (grid_.get_mpi_rank() == 0) {
+        std::cout << "p3 team size = " << m_team_size << std::endl;
+        std::cout << "p3 Spack n = " << Spack::n << std::endl;
+    }
     allocate_p3_buffers();
 }
 
@@ -126,7 +133,11 @@ void VVM_P3_Interface::allocate_p3_buffers() {
     Kokkos::deep_copy(m_unused, 0.0);                                                                                
     Kokkos::deep_copy(m_dummy_input, 0.0);   
 
-    const int num_wsm_vars = 64;
+#ifdef SCREAM_P3_SMALL_KERNELS
+    const int num_wsm_vars = 6; 
+#else
+    const int num_wsm_vars = 64; 
+#endif
 
     // const size_t wsm_size_in_bytes = WSM::get_total_bytes_needed(nk_pack_p1, num_wsm_vars, m_policy);
     const size_t wsm_size_in_bytes = num_wsm_vars * static_cast<size_t>(nk_pack_p1) * static_cast<size_t>(m_policy.league_size()) * static_cast<size_t>(m_policy.team_size()) * sizeof(Spack);
@@ -135,6 +146,73 @@ void VVM_P3_Interface::allocate_p3_buffers() {
     m_wsm_data = m_wsm_view_storage.data();
     if (m_wsm_data == nullptr) std::cerr << "ERROR: FAILED TO ALLOCATE WORKSPACE MANAGER MEMORY FOR P3." << std::endl;
 
+#ifdef SCREAM_P3_SMALL_KERNELS
+    m_temporaries.mu_r = view_2d("mu_r", m_num_cols, m_num_lev_packs);
+    m_temporaries.T_atm = view_2d("T_atm_temp", m_num_cols, m_num_lev_packs);
+    m_temporaries.lamr = view_2d("lamr", m_num_cols, m_num_lev_packs);
+    m_temporaries.logn0r = view_2d("logn0r", m_num_cols, m_num_lev_packs);
+    m_temporaries.nu = view_2d("nu", m_num_cols, m_num_lev_packs);
+    m_temporaries.cdist = view_2d("cdist", m_num_cols, m_num_lev_packs);
+    m_temporaries.cdist1 = view_2d("cdist1", m_num_cols, m_num_lev_packs);
+    m_temporaries.cdistr = view_2d("cdistr", m_num_cols, m_num_lev_packs);
+    
+    m_temporaries.inv_cld_frac_i = view_2d("inv_cld_frac_i", m_num_cols, m_num_lev_packs);
+    m_temporaries.inv_cld_frac_l = view_2d("inv_cld_frac_l", m_num_cols, m_num_lev_packs);
+    m_temporaries.inv_cld_frac_r = view_2d("inv_cld_frac_r", m_num_cols, m_num_lev_packs);
+    
+    m_temporaries.qc_incld = view_2d("qc_incld", m_num_cols, m_num_lev_packs);
+    m_temporaries.qr_incld = view_2d("qr_incld", m_num_cols, m_num_lev_packs);
+    m_temporaries.qi_incld = view_2d("qi_incld", m_num_cols, m_num_lev_packs);
+    m_temporaries.qm_incld = view_2d("qm_incld", m_num_cols, m_num_lev_packs);
+    m_temporaries.nc_incld = view_2d("nc_incld", m_num_cols, m_num_lev_packs);
+    m_temporaries.nr_incld = view_2d("nr_incld", m_num_cols, m_num_lev_packs);
+    m_temporaries.ni_incld = view_2d("ni_incld", m_num_cols, m_num_lev_packs);
+    m_temporaries.bm_incld = view_2d("bm_incld", m_num_cols, m_num_lev_packs);
+    
+    m_temporaries.inv_dz = view_2d("inv_dz", m_num_cols, m_num_lev_packs);
+    m_temporaries.inv_rho = view_2d("inv_rho", m_num_cols, m_num_lev_packs);
+    m_temporaries.ze_ice = view_2d("ze_ice", m_num_cols, m_num_lev_packs);
+    m_temporaries.ze_rain = view_2d("ze_rain", m_num_cols, m_num_lev_packs);
+    m_temporaries.prec = view_2d("prec", m_num_cols, m_num_lev_packs);
+    m_temporaries.rho = view_2d("rho_temp", m_num_cols, m_num_lev_packs);
+    m_temporaries.rhofacr = view_2d("rhofacr", m_num_cols, m_num_lev_packs);
+    m_temporaries.rhofaci = view_2d("rhofaci", m_num_cols, m_num_lev_packs);
+    m_temporaries.acn = view_2d("acn", m_num_cols, m_num_lev_packs);
+    m_temporaries.qv_sat_l = view_2d("qv_sat_l", m_num_cols, m_num_lev_packs);
+    m_temporaries.qv_sat_i = view_2d("qv_sat_i", m_num_cols, m_num_lev_packs);
+    m_temporaries.sup = view_2d("sup", m_num_cols, m_num_lev_packs);
+    m_temporaries.qv_supersat_i = view_2d("qv_supersat_i", m_num_cols, m_num_lev_packs);
+    m_temporaries.tmparr2 = view_2d("tmparr2", m_num_cols, m_num_lev_packs);
+    m_temporaries.exner = view_2d("exner_temp", m_num_cols, m_num_lev_packs);
+    m_temporaries.diag_vm_qi = view_2d("diag_vm_qi", m_num_cols, m_num_lev_packs);
+    m_temporaries.diag_diam_qi = view_2d("diag_diam_qi", m_num_cols, m_num_lev_packs);
+    m_temporaries.pratot = view_2d("pratot", m_num_cols, m_num_lev_packs);
+    m_temporaries.prctot = view_2d("prctot", m_num_cols, m_num_lev_packs);
+    
+    m_temporaries.qtend_ignore = view_2d("qtend_ignore", m_num_cols, m_num_lev_packs);
+    m_temporaries.ntend_ignore = view_2d("ntend_ignore", m_num_cols, m_num_lev_packs);
+    m_temporaries.mu_c = view_2d("mu_c", m_num_cols, m_num_lev_packs);
+    m_temporaries.lamc = view_2d("lamc", m_num_cols, m_num_lev_packs);
+    m_temporaries.qr_evap_tend = view_2d("qr_evap_tend", m_num_cols, m_num_lev_packs);
+    
+    // Cloud sedimentation
+    m_temporaries.v_qc = view_2d("v_qc", m_num_cols, m_num_lev_packs);
+    m_temporaries.v_nc = view_2d("v_nc", m_num_cols, m_num_lev_packs);
+    m_temporaries.flux_qx = view_2d("flux_qx", m_num_cols, m_num_lev_packs);
+    m_temporaries.flux_nx = view_2d("flux_nx", m_num_cols, m_num_lev_packs);
+    
+    // Ice sedimentation
+    m_temporaries.v_qit = view_2d("v_qit", m_num_cols, m_num_lev_packs);
+    m_temporaries.v_nit = view_2d("v_nit", m_num_cols, m_num_lev_packs);
+    m_temporaries.flux_nit = view_2d("flux_nit", m_num_cols, m_num_lev_packs);
+    m_temporaries.flux_bir = view_2d("flux_bir", m_num_cols, m_num_lev_packs);
+    m_temporaries.flux_qir = view_2d("flux_qir", m_num_cols, m_num_lev_packs);
+    m_temporaries.flux_qit = view_2d("flux_qit", m_num_cols, m_num_lev_packs);
+    
+    // Rain sedimentation
+    m_temporaries.v_qr = view_2d("v_qr", m_num_cols, m_num_lev_packs);
+    m_temporaries.v_nr = view_2d("v_nr", m_num_cols, m_num_lev_packs);
+#endif
 }
 
 void VVM_P3_Interface::initialize(VVM::Core::State& state) {
@@ -161,7 +239,13 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
     if (!state.has_field("P_wet")) state.add_field<3>("P_wet", {nz_total, ny_total, nx_total});
 
     // Gather runtime options
-    m_runtime_options.max_total_ni = config_.get_value<double>("physics.p3.max_total_ni"); 
+    
+    // Aaron: This value follows Fortran P3 rather than EAMxx P3
+    m_runtime_options.max_total_ni = config_.get_value<double>("physics.p3.max_total_ni", 2000.e3); 
+
+    m_runtime_options.set_cld_frac_l_to_one = true;
+    m_runtime_options.set_cld_frac_i_to_one = false;
+    m_runtime_options.set_cld_frac_r_to_one = false;
 
     // Note: P3 can tune some constants from the namelist
     // VVM didn't implement this but one can find it in p3/share/physics_constants.hpp
@@ -296,8 +380,13 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
         m_precip_liq_surf_mass_view, m_precip_ice_surf_mass_view
     );
     
+#ifdef SCREAM_P3_SMALL_KERNELS
+    const int num_wsm_vars = 6;
+#else
+    const int num_wsm_vars = 64;
+#endif
     const int nk_pack_p1 = ekat::npack<Spack>(m_num_levs+1);
-    workspace_mgr.setup(m_wsm_data, nk_pack_p1, 64, m_policy);
+    workspace_mgr.setup(m_wsm_data, nk_pack_p1, num_wsm_vars, m_policy);
 
     this->initialize_constant_buffers(state);
 }
@@ -920,7 +1009,7 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
         m_runtime_options, m_prog_state, m_diag_inputs, m_diag_outputs, m_infrastructure,
         m_history_only, m_lookup_tables,
 #ifdef SCREAM_P3_SMALL_KERNELS
-        temporaries,
+        m_temporaries,
 #endif
         workspace_mgr, m_num_cols, m_num_levs
     );
@@ -1089,6 +1178,9 @@ void VVM_P3_Interface::finalize() {
     m_dummy_input = {};
 
     m_col_location_view = {};
+#ifdef SCREAM_P3_SMALL_KERNELS
+    m_temporaries = P3F::P3Temporaries();
+#endif
 }
 
 } // namespace Physics

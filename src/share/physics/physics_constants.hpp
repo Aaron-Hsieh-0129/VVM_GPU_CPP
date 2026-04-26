@@ -24,8 +24,8 @@ struct Constants
 {
   using ci_string      = ekat::CaseInsensitiveString;
 
-  static constexpr Scalar Cpair         = 1004.64;
-  static constexpr Scalar Rair          = 287.042;
+  static constexpr Scalar Cpair         = 1004.5; // Aaron: modify from 1004.64 to 1004.5 to be same as VVM
+  static constexpr Scalar Rair          = 287.04; // Aaron: modify from 287.042 to 287.04 to be same as VVM
   static constexpr Scalar RH2O          = 461.505;
   static constexpr Scalar RV            = RH2O;         // Water vapor gas constant ~ J/K/kg     !461.51
   static constexpr Scalar RHO_H2O       = 1000.0;
@@ -35,7 +35,7 @@ struct Constants
   static constexpr Scalar MWdry         = 28.966;
   static constexpr Scalar o2mmr         = 0.23143;      // o2 mass mixing ratio
   static constexpr Scalar ep_2          = MWH2O/MWdry;  // ratio of molecular mass of water to the molecular mass of dry air !0.622
-  static constexpr Scalar gravit        = 9.80616;
+  static constexpr Scalar gravit        = 9.806; // Aaron: modify from 9.80616 to 9.806 to be same as VVM
   static constexpr Scalar LatVap        = 2501000.0;
   static constexpr Scalar LatIce        = 333700.0;
   static constexpr Scalar CpLiq         = 4188.0;
@@ -43,7 +43,7 @@ struct Constants
   static constexpr Scalar T_zerodegc    = Tmelt;
   static constexpr Scalar T_homogfrz    = Tmelt - 40;
   static constexpr Scalar T_rainfrz     = Tmelt - 4;
-  static constexpr Scalar Pi            = 3.14159265358979323;
+  static constexpr Scalar Pi            = 3.14159265; // Aaron: modify from 3.14159265358979323 to 3.14159265 to be same as VVM
   static constexpr Scalar RHOW          = RHO_H2O;
   static constexpr Scalar INV_RHOW      = 1.0/RHOW;
   static constexpr Scalar RHO_RIMEMIN   =  50.0;  //Min limit for rime density [kg m-3]

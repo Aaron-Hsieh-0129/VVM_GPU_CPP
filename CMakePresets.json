@@ -27,7 +27,12 @@
         "PNETCDF_DIR": "/home/mog/libs_GPUVVM",
 
         "ENABLE_NCCL": "ON",
-        "Kokkos_ENABLE_CUDA": "ON"
+        "EAMXX_ENABLE_GPU": "ON",
+        "Kokkos_ENABLE_CUDA": "ON",
+        "SCREAM_DOUBLE_PRECISION": "ON",
+        "SCREAM_PACK_SIZE": "1",
+        "SCREAM_P3_SMALL_KERNELS": "OFF",
+        "SCREAM_SMALL_PACK_SIZE": "1"
       }
     },
     {
@@ -51,7 +56,12 @@
         "PNETCDF_DIR": "/work/aaron900129/pnetcdf_install",
 
         "ENABLE_NCCL": "ON",
-        "Kokkos_ENABLE_CUDA": "ON"
+        "EAMXX_ENABLE_GPU": "ON",
+        "Kokkos_ENABLE_CUDA": "ON",
+        "SCREAM_DOUBLE_PRECISION": "ON",
+        "SCREAM_PACK_SIZE": "1",
+        "SCREAM_P3_SMALL_KERNELS": "OFF",
+        "SCREAM_SMALL_PACK_SIZE": "1"
       }
     },
     {
@@ -75,7 +85,12 @@
         "PNETCDF_DIR": "/home/mog/Aaron/libs_GPUVVM",
 
         "ENABLE_NCCL": "ON",
-        "Kokkos_ENABLE_CUDA": "ON"
+        "EAMXX_ENABLE_GPU": "ON",
+        "Kokkos_ENABLE_CUDA": "ON",
+        "SCREAM_DOUBLE_PRECISION": "ON",
+        "SCREAM_PACK_SIZE": "1",
+        "SCREAM_P3_SMALL_KERNELS": "OFF",
+        "SCREAM_SMALL_PACK_SIZE": "1"
       }
     },
     {
@@ -99,7 +114,12 @@
         "PNETCDF_DIR": "/work/aaron900129/pnetcdf_install",
 
         "ENABLE_NCCL": "ON",
-        "Kokkos_ENABLE_CUDA": "ON"
+        "EAMXX_ENABLE_GPU": "ON",
+        "Kokkos_ENABLE_CUDA": "ON",
+        "SCREAM_DOUBLE_PRECISION": "ON",
+        "SCREAM_PACK_SIZE": "1",
+        "SCREAM_P3_SMALL_KERNELS": "OFF",
+        "SCREAM_SMALL_PACK_SIZE": "1"
       }
     },
     {
@@ -123,7 +143,12 @@
         "PNETCDF_DIR": "/work/aaron900129/pnetcdf_install",
 
         "ENABLE_NCCL": "ON",
-        "Kokkos_ENABLE_CUDA": "ON"
+        "EAMXX_ENABLE_GPU": "ON",
+        "Kokkos_ENABLE_CUDA": "ON",
+        "SCREAM_DOUBLE_PRECISION": "ON",
+        "SCREAM_PACK_SIZE": "1",
+        "SCREAM_P3_SMALL_KERNELS": "OFF",
+        "SCREAM_SMALL_PACK_SIZE": "1"
       }
     }
   ]

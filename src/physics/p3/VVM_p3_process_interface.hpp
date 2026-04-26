@@ -486,6 +486,10 @@ protected:
 
     double m_output_interval_s;
     bool m_need_reset_precip = false;
+
+#ifdef SCREAM_P3_SMALL_KERNELS
+    P3F::P3Temporaries m_temporaries;
+#endif
 };
 
 } // namespace Physics
