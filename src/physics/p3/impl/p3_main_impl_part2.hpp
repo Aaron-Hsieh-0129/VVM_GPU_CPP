@@ -380,6 +380,7 @@ void Functions<S,D>
         revap_table_vals, rho(k), f1r, f2r, dv, mu, sc, mu_r(k), lamr(k), cdistr(k), cdist(k), qr_incld(k), qc_incld(k),
         epsr, epsc, not_skip_micro);
 
+      // TODO: Aaron: The evporation/condensation/deposition/sublimation might need to be combined together in a way that can compete esp together.
       evaporate_rain(qr_incld(k),qc_incld(k),nr_incld(k),qi_incld(k),
 		     cld_frac_l(k),cld_frac_r(k),qv(k),qv_prev(k),qv_sat_l(k),qv_sat_i(k),
 		     ab,abi,epsr,epsi_tot,T_atm(k),t_prev(k),dqsdt,dt,
@@ -423,6 +424,9 @@ void Functions<S,D>
     rain_self_collection(
       rho(k), qr_incld(k), nr_incld(k),
       nr_selfcollect_tend, runtime_options, not_skip_all);
+
+    // TODO: Aaron: Do tendency conservation here
+    //
 
     // Here we map the microphysics tendency rates back to CELL-AVERAGE quantities for updating
     // cell-average quantities.

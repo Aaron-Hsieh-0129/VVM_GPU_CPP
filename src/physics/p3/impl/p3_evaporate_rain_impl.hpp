@@ -134,12 +134,21 @@ void Functions<S,D>
     const Smask is_freezing = t_atm < Tmelt && context;
     const Smask not_freezing = !is_freezing && context;
     Spack eps_eff, A_c;
+  // TODO: Aaron: Calculate epsc like this
+   // if (qc(i,k).ge.qsmall) then
+   //    epsc = 2.*pi*rho(i,k)*dv*cdist(i,k)
+   // else
+   //    epsc = 0.
+   // endif
+
     if (is_freezing.any()){
+      // TODO: Aaron: Add epsc here
       eps_eff.set(is_freezing,epsr + epsi_tot*(1 + (latvap+latice)*inv_cp*dqsdt)/abi);
       A_c.set(is_freezing,(qv - qv_prev)*inv_dt - dqsdt*(t_atm-t_atm_prev)*inv_dt
 	      - (qv_sat_l - qv_sat_i)*(1 + (latvap+latice)*inv_cp*dqsdt)/abi*epsi_tot );
     }
     if (not_freezing.any()){
+      // TODO: Aaron: Add epsc here
       eps_eff.set(not_freezing,epsr);
       A_c.set(not_freezing, (qv - qv_prev)*inv_dt - dqsdt*(t_atm-t_atm_prev)*inv_dt );
     }
@@ -147,6 +156,16 @@ void Functions<S,D>
     //Set lower bound on eps_eff to prevent division by zero
     eps_eff.set(eps_eff<1e-20 && context, 1e-20);
     const Spack tau_eff = 1/eps_eff;
+
+
+    // TODO: Add qc condensation and qr condensation
+    // if (qc(i,k).ge.qsmall) qccon = (aaa*epsc*oxx+(ssat_cld*SCF(k)-aaa*oxx)*odt*epsc*oxx*(1.-sngl(dexp(-dble(xx*dt)))))/ab
+    // if (qr(i,k).ge.qsmall) qrcon = (aaa*epsr*oxx+(ssat_r*SPF(k)-aaa*oxx)*odt*epsr*oxx*(1.-sngl(dexp(-dble(xx*dt)))))/ab
+    
+    
+    // TODO: Add qc evaporation just like qr2qv
+    // if (sup_cld.lt.-0.001 .and. qc(i,k).lt.1.e-12)  qccon = -qc(i,k)*odt
+
 
     //If qr is posive but tiny, evap all qr if subsaturated at all.
     Smask is_qr_tiny = qr_incld < 1e-12 && qv/qv_sat_l < 0.999;
