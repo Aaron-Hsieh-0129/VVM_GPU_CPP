@@ -39,6 +39,8 @@ if (NOT EAMXX_ENABLE_GPU OR Kokkos_ENABLE_CUDA_RELOCATABLE_DEVICE_CODE OR Kokkos
     eti/p3_rain_imm_freezing.cpp
     eti/p3_droplet_self_coll.cpp
     eti/p3_evaporate_rain.cpp
+    eti/p3_calc_cond_evap_dep_sub.cpp
+    eti/p3_droplet_activation.cpp
     eti/p3_impose_max_total_ni.cpp
     eti/p3_calc_liq_relaxation_timescale.cpp
     eti/p3_ice_relaxation_timescale.cpp

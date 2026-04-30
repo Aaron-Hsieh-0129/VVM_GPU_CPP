@@ -31,6 +31,7 @@ void Functions<Real,DefaultDevice>
   const uview_2d<const Spack>& inv_cld_frac_l,
   const uview_2d<const Spack>& inv_cld_frac_i,
   const uview_2d<const Spack>& inv_cld_frac_r,
+  const uview_2d<const Spack>& T_prev,
   const uview_2d<Spack>& T_atm,
   const uview_2d<Spack>& rho,
   const uview_2d<Spack>& inv_rho,

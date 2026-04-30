@@ -80,6 +80,21 @@ struct Constants
   static constexpr Scalar bcn           = 2.;
   static constexpr Scalar dropmass      = 5.2e-7;
   static constexpr Scalar NCCNST        = 200.0e+6;
+  // Aaron - constants used in droplet activation
+  static constexpr Scalar MW            = 0.018;    // molecule weight of water [kg/mol]
+  static constexpr Scalar RR            = 8.3145;    // ideal gas constant [J/mol/K]
+  static constexpr Scalar INV_RM1       = 2.e+7;           // inverse aerosol mean size (m-1) 
+  static constexpr Scalar INV_RM2       = 7.6923076e+5;    // inverse aerosol mean size (m-1) 
+  static constexpr Scalar VI            = 3.; // number of ions in solution nu
+  static constexpr Scalar OSM           = 1.; // osmotic potential phi_s [ ]
+  static constexpr Scalar EPSM          = 0.9; // mass fraction of soluble material [ ]
+  static constexpr Scalar RHOA          = 1777.; // density of (dry) aerosol [kg/m3]
+  static constexpr Scalar MAP           = 0.132; // molecular weight of aerosol M_s [kg/mol]
+  static constexpr Scalar SIG1          = 2.0; // aerosol standard deviation
+  static constexpr Scalar SIG2          = 2.5; // aerosol standard deviation
+  static constexpr Scalar NANEW1        = 300.e6; // aerosol number mixing ratio (kg-1)   
+  static constexpr Scalar NANEW2        = 0.; // aerosol number mixing ratio (kg-1)   
+
   static constexpr Scalar incloud_limit = 5.1e-3;
   static constexpr Scalar precip_limit  = 1.0e-2;
   static constexpr Scalar Karman        = 0.4;

@@ -116,6 +116,8 @@ template<typename S, typename D>
 KOKKOS_FUNCTION
 void Functions<S,D>
 ::update_prognostic_liquid(
+  const Spack& qv2qc_nucleat_tend, const Spack& qv2qc_conden_tend, const Spack& qc2qv_evap_tend, 
+  const Spack& qv2qr_conden_tend, const Spack& nc_nuclet_tend, 
   const Spack& qc2qr_accret_tend, const Spack& nc_accret_tend,
   const Spack& qc2qr_autoconv_tend,const Spack& nc2nr_autoconv_tend, const Spack& ncautr,
   const Spack& nc_selfcollect_tend, const Spack& qr2qv_evap_tend, const Spack& nr_evap_tend, const Spack& nr_selfcollect_tend,
@@ -128,11 +130,14 @@ void Functions<S,D>
   constexpr Scalar INV_CP = C::INV_CP;
   constexpr Scalar latvap       = C::LatVap;
 
-  qc.set(context, qc + (-qc2qr_accret_tend-qc2qr_autoconv_tend)*dt);
-  qr.set(context, qr + (qc2qr_accret_tend+qc2qr_autoconv_tend-qr2qv_evap_tend)*dt);
+  // Aaron - add qv2qc_conden_tend, qc2qv_evap_tend, qv2qc_nucleat_tend
+  qc.set(context, qc + (-qc2qr_accret_tend-qc2qr_autoconv_tend+qv2qc_nucleat_tend+qv2qc_conden_tend-qc2qv_evap_tend)*dt);
+  // Aaron - add qv2qr_conden_tend
+  qr.set(context, qr + (qc2qr_accret_tend+qc2qr_autoconv_tend+qv2qr_conden_tend-qr2qv_evap_tend)*dt);
 
+  // Aaron - add nc_nuclet_tend
   if (do_predict_nc || do_prescribed_CCN) {
-    nc.set(context, nc + (-nc_accret_tend-nc2nr_autoconv_tend+nc_selfcollect_tend)*dt);
+    nc.set(context, nc + (-nc_accret_tend-nc2nr_autoconv_tend+nc_selfcollect_tend+nc_nuclet_tend)*dt);
   }
   else {
     nc.set(context, NCCNST * inv_rho);
@@ -145,9 +150,11 @@ void Functions<S,D>
     nr.set(context, nr + (ncautr - nr_selfcollect_tend - nr_evap_tend) * dt);
   }
 
-  qv.set(context, qv + qr2qv_evap_tend *dt);
+  // Aaron - add qv2qc_conden_tend, qc2qv_evap_tend, qv2qc_nucleat_tend
+  qv.set(context, qv + (-qv2qc_nucleat_tend - qv2qc_conden_tend - qv2qr_conden_tend + qc2qv_evap_tend + qr2qv_evap_tend) *dt);
 
-  th_atm.set(context, th_atm + inv_exner*(-qr2qv_evap_tend * latvap * INV_CP) * dt);
+  // Aaron - add qv2qc_conden_tend, qc2qv_evap_tend, qv2qc_nucleat_tend, qv2qr_conden_tend
+  th_atm.set(context, th_atm + inv_exner*(qv2qc_nucleat_tend + qv2qc_conden_tend + qv2qr_conden_tend - qc2qv_evap_tend - qr2qv_evap_tend) * latvap * INV_CP * dt);
 }
 
 } // namespace p3
