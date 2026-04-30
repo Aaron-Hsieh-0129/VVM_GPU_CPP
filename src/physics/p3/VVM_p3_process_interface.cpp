@@ -372,6 +372,7 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
     m_p3_postproc.set_variables(m_num_cols, m_num_lev_packs,
         m_th_view, m_pmid_view, m_pmid_dry_view, m_T_atm_view, m_t_prev_view,
         m_pseudo_density_view, m_pseudo_density_dry_view,
+        m_inv_exner_view,
         m_qv_view, m_qc_view, m_nc_view, m_qr_view, m_nr_view,
         m_qi_view, m_qm_view, m_ni_view, m_bm_view, m_qv_prev_view,
         m_diag_eff_radius_qc_view, m_diag_eff_radius_qi_view, 
@@ -701,8 +702,10 @@ void VVM_P3_Interface::preprocessing_and_packing(VVM::Core::State& state) {
 
                         Real T_calc = th_in * pi_val;
                         
-                        Real P_wet_calc = pb_val * (1.0 + qv_in);
-                        Real Rho_wet_calc = dp_val * (1.0 + qv_in);
+                        // Real P_wet_calc = pb_val * (1.0 + qv_in);
+                        // Real Rho_wet_calc = dp_val * (1.0 + qv_in);
+                        Real P_wet_calc = pb_val;
+                        Real Rho_wet_calc = dp_val;
                         
                         Real P_dry_calc = pb_val;
 
@@ -940,6 +943,7 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
     workspace_mgr.reset_internals();
 
 
+    /*
     // Pre-P3 Saturation Adjustment (Emulating qcnuc + qccon)
     // This step creates cloud water (qc) and cloud number (nc) from supersaturation
     // BEFORE P3 runs, acting as the "activation" and "macrophysics" step.
@@ -1004,6 +1008,7 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
         }
     );
     // Kokkos::fence();
+    */
 
     P3F::p3_main(
         m_runtime_options, m_prog_state, m_diag_inputs, m_diag_outputs, m_infrastructure,

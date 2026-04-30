@@ -97,22 +97,22 @@ struct p3_preamble {
         // dz(icol,ipack) = PF::calculate_dz(pseudo_density_pack, pmid_pack, T_atm_pack, qv(icol,ipack));
 
         // Wet to dry mixing ratios
-        qc(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(qc(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
-        nc(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(nc(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
-        qr(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(qr(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
-        nr(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(nr(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
-        qi(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(qi(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
-        ni(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(ni(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
-        qm(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(qm(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
-        bm(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(bm(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
-        qv(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(qv(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
-        qv_prev(icol, ipack) = PF::calculate_drymmr_from_wetmmr_dp_based(qv_prev(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // qc(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(qc(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // nc(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(nc(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // qr(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(qr(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // nr(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(nr(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // qi(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(qi(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // ni(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(ni(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // qm(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(qm(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // bm(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(bm(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // qv(icol, ipack)      = PF::calculate_drymmr_from_wetmmr_dp_based(qv(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // qv_prev(icol, ipack) = PF::calculate_drymmr_from_wetmmr_dp_based(qv_prev(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
 
         // Exner from full pressure
-        const auto& exner = PF::exner_function(pmid_pack);
-        inv_exner(icol,ipack) = 1.0/exner;
+        // const auto& exner = PF::exner_function(pmid_pack);
+        // inv_exner(icol,ipack) = 1.0/exner;
         // Potential temperature, from full pressure
-        th_atm(icol,ipack) = PF::calculate_theta_from_T(T_atm_pack,pmid_pack);
+        // th_atm(icol,ipack) = PF::calculate_theta_from_T(T_atm_pack,pmid_pack);
 
 
         if (runtime_opts.use_separate_ice_liq_frac){
@@ -239,24 +239,25 @@ struct p3_postamble {
         const Spack& pseudo_density_dry_pack(pseudo_density_dry(icol,ipack));
 
         // Update the atmospheric temperature and the previous temperature.
-        {
-          const Spack T_atm_before_p3 = T_atm(icol,ipack);
-          T_atm(icol,ipack)  = (PF::calculate_T_from_theta(th_atm(icol,ipack),pmid(icol,ipack)) - T_atm_before_p3)
-                             * pseudo_density_dry(icol,ipack) / pseudo_density(icol,ipack);
-          T_atm(icol,ipack)  +=  T_atm_before_p3;
-        }
+        // {
+        //   const Spack T_atm_before_p3 = T_atm(icol,ipack);
+        //   T_atm(icol,ipack)  = (PF::calculate_T_from_theta(th_atm(icol,ipack),pmid(icol,ipack)) - T_atm_before_p3)
+        //                      * pseudo_density_dry(icol,ipack) / pseudo_density(icol,ipack);
+        //   T_atm(icol,ipack)  +=  T_atm_before_p3;
+        // }
+        T_atm(icol,ipack) = th_atm(icol,ipack) / inv_exner(icol,ipack);
         T_prev(icol,ipack) = T_atm(icol,ipack); // Update T_prev
 
         // DRY-TO-WET MMRs
-        qc(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(qc(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
-        nc(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(nc(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
-        qr(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(qr(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
-        nr(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(nr(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
-        qi(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(qi(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
-        ni(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(ni(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
-        qm(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(qm(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
-        bm(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(bm(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
-        qv(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(qv(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // qc(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(qc(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // nc(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(nc(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // qr(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(qr(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // nr(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(nr(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // qi(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(qi(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // ni(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(ni(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // qm(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(qm(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // bm(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(bm(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
+        // qv(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(qv(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
         qv_prev(icol,ipack) = qv(icol,ipack); // Update qv_prev
 
         // Rescale effective radius' into microns
@@ -283,6 +284,7 @@ struct p3_postamble {
     view_2d_const pmid_dry;
     view_2d_const pseudo_density;
     view_2d_const pseudo_density_dry;
+    view_2d_const inv_exner;
     view_2d       th_atm; // IN
     view_2d       T_prev; // OUT
     view_2d       qv;     // IN/OUT
@@ -307,6 +309,7 @@ struct p3_postamble {
                     const view_2d& th_atm_, const view_2d_const& pmid_, const view_2d_const& pmid_dry_,
                     const view_2d& T_atm_, const view_2d& T_prev_,
                     const view_2d_const& pseudo_density_, const view_2d_const& pseudo_density_dry_,
+                    const view_2d_const& inv_exner_,
                     const view_2d& qv_, const view_2d& qc_, const view_2d& nc_, const view_2d& qr_, const view_2d& nr_,
                     const view_2d& qi_, const view_2d& qm_, const view_2d& ni_, const view_2d& bm_,
                     const view_2d& qv_prev_, const view_2d& diag_eff_radius_qc_,
@@ -322,6 +325,7 @@ struct p3_postamble {
       pmid_dry = pmid_dry_;
       pseudo_density = pseudo_density_;
       pseudo_density_dry = pseudo_density_dry_;
+      inv_exner = inv_exner_;
       qv = qv_; 
       qc = qc_; 
       nc = nc_; 
