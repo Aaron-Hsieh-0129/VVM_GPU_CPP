@@ -639,7 +639,9 @@ template <typename ScalarT, typename DeviceT> struct Functions {
       Spack &qc2qv_evap_tend, Spack &qv2qc_conden_tend, Spack &qv2qc_nucleat_tend, 
       Spack &qc2qr_autoconv_tend, Spack &qc2qr_accret_tend,
       Spack &qc2qi_collect_tend, Spack &qc2qi_hetero_freeze_tend, Spack &qc2qr_ice_shed_tend,
-      Spack &qc2qi_berg_tend, Spack &qi2qv_sublim_tend, Spack &qv2qi_vapdep_tend, Spack &qcheti_cnt,
+      Spack &qc2qi_berg_tend, Spack &qi2qv_sublim_tend, Spack &qv2qi_vapdep_tend, 
+      Spack &nc2nr_autoconv_tend, Spack &nc_accret_tend, Spack &nc_collect_tend, Spack &nc2ni_immers_freeze_tend,
+      Spack &qcheti_cnt,
       Spack &qicnt, const bool &use_hetfrz_classnuc, const Smask &context = Smask(true),
       const Spack &cld_frac_l = Spack(), const Spack &cld_frac_i = Spack(),
       const P3Runtime &runtime_options = {});
@@ -650,20 +652,23 @@ template <typename ScalarT, typename DeviceT> struct Functions {
                                       const Spack &qc2qr_ice_shed_tend, const Scalar dt,
                                       Spack& qv2qr_conden_tend, Spack &qr2qv_evap_tend, Spack &qr2qi_collect_tend,
                                       Spack &qr2qi_immers_freeze_tend,
+                                      Spack &nr_evap_tend, Spack &nr_collect_tend, Spack &nr2ni_immers_freeze_tend,
                                       const Smask &context = Smask(true));
 
   KOKKOS_FUNCTION
   static void vapor_water_conservation(
     const Spack& qv, const Scalar dt, Spack& qv2qc_conden_tend, Spack& qv2qc_nucleat_tend, Spack& qv2qr_conden_tend, 
     Spack& qv2qi_vapdep_tend, Spack& qv2qi_nucleat_tend, Spack& qc2qv_evap_tend, Spack& qr2qv_evap_tend, 
-    Spack& qi2qv_sublim_tend);
+    Spack& qi2qv_sublim_tend, Spack& ni_nucleat_tend, Spack& nc_nuclet_tend);
 
   KOKKOS_FUNCTION
   static void ice_water_conservation(
       const Spack &qi, const Spack &qv2qi_vapdep_tend, const Spack &qv2qi_nucleat_tend,
       const Spack &qc2qi_berg_tend, const Spack &qr2qi_collect_tend,
       const Spack &qc2qi_collect_tend, const Spack &qr2qi_immers_freeze_tend,
-      const Spack &qc2qi_hetero_freeze_tend, const Scalar dt, Spack &qinuc_cnt, Spack &qcheti_cnt,
+      const Spack &qc2qi_hetero_freeze_tend, const Scalar dt, 
+      Spack& ni_sublim_tend, Spack& ni2nr_melt_tend, 
+      Spack &qinuc_cnt, Spack &qcheti_cnt,
       Spack &qicnt, Spack &qi2qv_sublim_tend, Spack &qi2qr_melt_tend,
       const bool &use_hetfrz_classnuc, const Smask &context = Smask(true));
 

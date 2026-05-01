@@ -14,6 +14,7 @@ void Functions<S,D>
   Spack &qc2qv_evap_tend, Spack &qv2qc_conden_tend, Spack &qv2qc_nucleat_tend, 
   Spack& qc2qr_autoconv_tend, Spack& qc2qr_accret_tend, Spack &qc2qi_collect_tend, Spack& qc2qi_hetero_freeze_tend, 
   Spack& qc2qr_ice_shed_tend, Spack& qc2qi_berg_tend, Spack& qi2qv_sublim_tend, Spack& qv2qi_vapdep_tend,
+  Spack &nc2nr_autoconv_tend, Spack &nc_accret_tend, Spack &nc_collect_tend, Spack &nc2ni_immers_freeze_tend,
   Spack& qcheti_cnt, Spack& qicnt, const bool& use_hetfrz_classnuc, const Smask& context,
   const Spack& cld_frac_l, const Spack& cld_frac_i, const P3Runtime& runtime_options)
 {
@@ -54,6 +55,11 @@ void Functions<S,D>
     }
     qc2qr_ice_shed_tend.set(enforce_conservation, qc2qr_ice_shed_tend*ratio);
     qc2qi_berg_tend.set(enforce_conservation, qc2qi_berg_tend*ratio);
+
+    nc2nr_autoconv_tend.set(enforce_conservation, nc2nr_autoconv_tend*ratio);
+    nc_accret_tend.set(enforce_conservation, nc_accret_tend*ratio);
+    nc_collect_tend.set(enforce_conservation, nc_collect_tend*ratio);
+    nc2ni_immers_freeze_tend.set(enforce_conservation, nc2ni_immers_freeze_tend*ratio);
   }
 
   if(nothing_todo.any()){
@@ -70,6 +76,9 @@ void Functions<S,D>
   // phase cloud. qidep*(1._rtype-ratio)*(il_cldm/cld_frac_i) is the additional
   // vapor depositional growth rate that takes place within the mixed phase cloud
   // after qc is depleted
+  
+  // Aaron - propably not need this in original Fortran P3
+  /*
   enforce_conservation = sources > qtendsmall && context;
   if (enforce_conservation.any()){
     if (runtime_options.use_separate_ice_liq_frac) {
@@ -80,6 +89,7 @@ void Functions<S,D>
       qi2qv_sublim_tend.set(enforce_conservation, qi2qv_sublim_tend*(1-ratio));
     }
   }
+  */
 }
 
 template<typename S, typename D>
@@ -89,6 +99,7 @@ void Functions<S,D>
   const Spack& qr, const Spack& qc2qr_autoconv_tend, const Spack& qc2qr_accret_tend, 
   const Spack& qi2qr_melt_tend, const Spack& qc2qr_ice_shed_tend, const Scalar dt,
   Spack& qv2qr_conden_tend, Spack& qr2qv_evap_tend, Spack& qr2qi_collect_tend, Spack& qr2qi_immers_freeze_tend,
+  Spack& nr_evap_tend, Spack& nr_collect_tend, Spack& nr2ni_immers_freeze_tend,
   const Smask& context)
 {
   const auto sinks   = (qr2qv_evap_tend+qr2qi_collect_tend+qr2qi_immers_freeze_tend)*dt; // Sinks of rain water
@@ -103,6 +114,10 @@ void Functions<S,D>
     qr2qv_evap_tend.set(enforce_conservation, qr2qv_evap_tend*ratio);
     qr2qi_collect_tend.set(enforce_conservation, qr2qi_collect_tend*ratio);
     qr2qi_immers_freeze_tend.set(enforce_conservation, qr2qi_immers_freeze_tend*ratio);
+    
+    nr_evap_tend.set(enforce_conservation, nr_evap_tend*ratio);
+    nr_collect_tend.set(enforce_conservation, nr_collect_tend*ratio);
+    nr2ni_immers_freeze_tend.set(enforce_conservation, nr2ni_immers_freeze_tend*ratio);
   }
 }
 
@@ -112,7 +127,9 @@ void Functions<S,D>
 ::ice_water_conservation(
   const Spack& qi,const Spack& qv2qi_vapdep_tend,const Spack& qv2qi_nucleat_tend,const Spack& qc2qi_berg_tend, 
   const Spack &qr2qi_collect_tend,const Spack &qc2qi_collect_tend,const Spack& qr2qi_immers_freeze_tend,
-  const Spack& qc2qi_hetero_freeze_tend,const Scalar dt, Spack &qinuc_cnt, Spack &qcheti_cnt, Spack &qicnt,
+  const Spack& qc2qi_hetero_freeze_tend,const Scalar dt, 
+  Spack& ni_sublim_tend, Spack& ni2nr_melt_tend, 
+  Spack &qinuc_cnt, Spack &qcheti_cnt, Spack &qicnt,
   Spack& qi2qv_sublim_tend, Spack& qi2qr_melt_tend, const bool& use_hetfrz_classnuc,
   const Smask& context)
 {
@@ -134,6 +151,9 @@ void Functions<S,D>
     ratio.set(enforce_conservation, sources/sinks);
     qi2qv_sublim_tend.set(enforce_conservation, qi2qv_sublim_tend*ratio);
     qi2qr_melt_tend.set(enforce_conservation, qi2qr_melt_tend*ratio);
+
+    ni_sublim_tend.set(enforce_conservation, ni_sublim_tend*ratio);
+    ni2nr_melt_tend.set(enforce_conservation, ni2nr_melt_tend*ratio);
   }
 }
 
@@ -143,7 +163,7 @@ KOKKOS_FUNCTION
 void Functions<S,D>
 ::vapor_water_conservation(
   const Spack& qv, const Scalar dt, Spack& qv2qc_conden_tend, Spack& qv2qc_nucleat_tend, Spack& qv2qr_conden_tend, Spack& qv2qi_vapdep_tend,
-  Spack& qv2qi_nucleat_tend, Spack& qc2qv_evap_tend, Spack& qr2qv_evap_tend, Spack& qi2qv_sublim_tend)
+  Spack& qv2qi_nucleat_tend, Spack& qc2qv_evap_tend, Spack& qr2qv_evap_tend, Spack& qi2qv_sublim_tend, Spack& ni_nucleat_tend, Spack& nc_nuclet_tend)
 {
   const auto sinks = (qv2qc_conden_tend+qv2qr_conden_tend+qv2qc_nucleat_tend+qv2qi_vapdep_tend+qv2qi_nucleat_tend)*dt; // Sinks of vapor water
   const auto sources = qv + (qc2qv_evap_tend+qr2qv_evap_tend+qi2qv_sublim_tend)*dt; // Sources of vapor water
@@ -158,6 +178,9 @@ void Functions<S,D>
     qv2qc_nucleat_tend.set(enforce_conservation, qv2qc_nucleat_tend*ratio);
     qv2qi_vapdep_tend.set(enforce_conservation, qv2qi_vapdep_tend*ratio);
     qv2qi_nucleat_tend.set(enforce_conservation, qv2qi_nucleat_tend*ratio);
+
+    ni_nucleat_tend.set(enforce_conservation, ni_nucleat_tend*ratio);
+    nc_nuclet_tend.set(enforce_conservation, nc_nuclet_tend*ratio);
   }
 }
 

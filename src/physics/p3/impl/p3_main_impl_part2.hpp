@@ -484,32 +484,40 @@ void Functions<S,D>
       // cloud
       cloud_water_conservation(
         qc(k), dt, qc2qv_evap_tend, qv2qc_conden_tend, qv2qc_nucleat_tend,
-        qc2qr_autoconv_tend, qc2qr_accret_tend, qc2qi_collect_tend, qc2qi_hetero_freeze_tend, qc2qr_ice_shed_tend, qc2qi_berg_tend, qi2qv_sublim_tend, qv2qi_vapdep_tend, qcheti_cnt, qicnt, use_hetfrz_classnuc, not_skip_all,
+        qc2qr_autoconv_tend, qc2qr_accret_tend, qc2qi_collect_tend, qc2qi_hetero_freeze_tend, qc2qr_ice_shed_tend, qc2qi_berg_tend, qi2qv_sublim_tend, qv2qi_vapdep_tend, 
+        nc2nr_autoconv_tend, nc_accret_tend, nc_collect_tend, nc2ni_immers_freeze_tend,
+        qcheti_cnt, qicnt, use_hetfrz_classnuc, not_skip_all,
         cld_frac_l(k), cld_frac_i(k), runtime_options);
     } else {
       // cloud
       // Aaron - add qc2qv_evap_tend, qv2qc_conden_tend, qv2qc_nucleat_tend
       cloud_water_conservation(
         qc(k), dt, qc2qv_evap_tend, qv2qc_conden_tend, qv2qc_nucleat_tend,
-        qc2qr_autoconv_tend, qc2qr_accret_tend, qc2qi_collect_tend, qc2qi_hetero_freeze_tend, qc2qr_ice_shed_tend, qc2qi_berg_tend, qi2qv_sublim_tend, qv2qi_vapdep_tend, qcheti_cnt, qicnt, use_hetfrz_classnuc, not_skip_all);
+        qc2qr_autoconv_tend, qc2qr_accret_tend, qc2qi_collect_tend, qc2qi_hetero_freeze_tend, qc2qr_ice_shed_tend, qc2qi_berg_tend, qi2qv_sublim_tend, qv2qi_vapdep_tend, 
+        nc2nr_autoconv_tend, nc_accret_tend, nc_collect_tend, nc2ni_immers_freeze_tend,
+        qcheti_cnt, qicnt, use_hetfrz_classnuc, not_skip_all);
     }
 
     // rain
     // Aaron - add qv2qr_conden_tend
     rain_water_conservation(
       qr(k), qc2qr_autoconv_tend, qc2qr_accret_tend, qi2qr_melt_tend, qc2qr_ice_shed_tend, dt,
-      qv2qr_conden_tend, qr2qv_evap_tend, qr2qi_collect_tend, qr2qi_immers_freeze_tend, not_skip_all);
+      qv2qr_conden_tend, qr2qv_evap_tend, qr2qi_collect_tend, qr2qi_immers_freeze_tend, 
+      nr_evap_tend, nr_collect_tend, nr2ni_immers_freeze_tend,
+      not_skip_all);
 
     // ice
     ice_water_conservation(
       qi(k), qv2qi_vapdep_tend, qv2qi_nucleat_tend, qc2qi_berg_tend, qr2qi_collect_tend,
       qc2qi_collect_tend, qr2qi_immers_freeze_tend, qc2qi_hetero_freeze_tend, dt,
+      ni_sublim_tend, ni2nr_melt_tend, 
       qinuc_cnt, qcheti_cnt, qicnt,
       qi2qv_sublim_tend, qi2qr_melt_tend, use_hetfrz_classnuc, not_skip_all);
 
     vapor_water_conservation(
       qv(k), dt, qv2qc_conden_tend, qv2qc_nucleat_tend, qv2qr_conden_tend, qv2qi_vapdep_tend, qv2qi_nucleat_tend, 
-      qc2qv_evap_tend, qr2qv_evap_tend, qi2qv_sublim_tend);
+      qc2qv_evap_tend, qr2qv_evap_tend, qi2qv_sublim_tend, 
+      ni_nucleat_tend, nc_nuclet_tend);
 
     // Aaron - add nc_nuclet_tend
     nc_conservation(nc(k), nc_selfcollect_tend, dt, nc_nuclet_tend, nc_collect_tend, nc2ni_immers_freeze_tend,
