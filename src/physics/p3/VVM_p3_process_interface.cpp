@@ -608,7 +608,9 @@ void VVM_P3_Interface::preprocessing_and_packing(VVM::Core::State& state) {
     auto ni_3d = state.get_field<3>("ni").get_mutable_device_data();
     auto bm_3d = state.get_field<3>("bm").get_mutable_device_data();
     auto th_3d = state.get_field<3>("th").get_device_data();
+    auto thm_3d = state.get_field<3>("th_m").get_device_data();
     auto qv_3d = state.get_field<3>("qv").get_mutable_device_data();
+    auto qvm_3d = state.get_field<3>("qv_m").get_mutable_device_data();
 
     auto pibar = state.get_field<1>("pibar").get_device_data();
     auto pbar = state.get_field<1>("pbar").get_device_data();
@@ -653,6 +655,7 @@ void VVM_P3_Interface::preprocessing_and_packing(VVM::Core::State& state) {
                 auto& bm_pack = bm_p3(icol, k_pack);
                 auto& th_pack = th_p3(icol, k_pack);
                 auto& qv_pack = qv_p3(icol, k_pack);
+                auto& qv_prev_pack = qv_prev_p3(icol, k_pack);
                 auto& T_pack  = T_p3(icol, k_pack);
                 auto& Tm_pack = Tm_p3(icol, k_pack);
                 auto& P_wet_pack = P_wet_p3(icol, k_pack);
@@ -669,6 +672,9 @@ void VVM_P3_Interface::preprocessing_and_packing(VVM::Core::State& state) {
 
                         Real qv_in = qv_3d(k_vvm, iy_vvm, ix_vvm);
                         if (qv_in < 0) { qv_in = 0; qv_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+
+                        Real qv_prev_in = qvm_3d(k_vvm, iy_vvm, ix_vvm);
+                        if (qv_prev_in < 0) { qv_prev_in = 0; qvm_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
                         
                         Real qc_in = qc_3d(k_vvm, iy_vvm, ix_vvm);
                         if (qc_in < 0) { qc_in = 0; qc_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
@@ -695,12 +701,14 @@ void VVM_P3_Interface::preprocessing_and_packing(VVM::Core::State& state) {
                         if (bm_in < 0) { bm_in = 0; bm_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
 
                         Real th_in = th_3d(k_vvm, iy_vvm, ix_vvm);
+                        Real thm_in = thm_3d(k_vvm, iy_vvm, ix_vvm);
 
                         Real pi_val = pibar(k_vvm);
                         Real pb_val = pbar(k_vvm);
                         Real dp_val = dpbar_mid(k_vvm);
 
                         Real T_calc = th_in * pi_val;
+                        Real Tm_calc = thm_in * pi_val;
                         
                         // Real P_wet_calc = pb_val * (1.0 + qv_in);
                         // Real Rho_wet_calc = dp_val * (1.0 + qv_in);
@@ -719,7 +727,9 @@ void VVM_P3_Interface::preprocessing_and_packing(VVM::Core::State& state) {
                         bm_pack[k_vec] = bm_in;
                         th_pack[k_vec] = th_in;
                         qv_pack[k_vec] = qv_in;
+                        qv_prev_pack[k_vec] = qv_prev_in;
                         T_pack[k_vec] = T_calc;
+                        Tm_pack[k_vec] = Tm_calc;
                         P_wet_pack[k_vec] = P_wet_calc;
                         P_dry_pack[k_vec] = P_dry_calc;
                         Rho_wet_pack[k_vec] = Rho_wet_calc;

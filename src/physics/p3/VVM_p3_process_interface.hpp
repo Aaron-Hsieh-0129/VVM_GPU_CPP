@@ -246,7 +246,7 @@ struct p3_postamble {
         //   T_atm(icol,ipack)  +=  T_atm_before_p3;
         // }
         T_atm(icol,ipack) = th_atm(icol,ipack) / inv_exner(icol,ipack);
-        T_prev(icol,ipack) = T_atm(icol,ipack); // Update T_prev
+        // T_prev(icol,ipack) = T_atm(icol,ipack); // Update T_prev
 
         // DRY-TO-WET MMRs
         // qc(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(qc(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
@@ -258,7 +258,7 @@ struct p3_postamble {
         // qm(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(qm(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
         // bm(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(bm(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
         // qv(icol,ipack) = PF::calculate_wetmmr_from_drymmr_dp_based(qv(icol,ipack),pseudo_density_pack,pseudo_density_dry_pack);
-        qv_prev(icol,ipack) = qv(icol,ipack); // Update qv_prev
+        // qv_prev(icol,ipack) = qv(icol,ipack); // Update qv_prev
 
         // Rescale effective radius' into microns
         diag_eff_radius_qc(icol,ipack) *= 1e6;

@@ -264,7 +264,7 @@ Int Functions<Real,DefaultDevice>
   p3_main_part1_disp(
       nj, nk, infrastructure.predictNc, infrastructure.prescribedCCN, infrastructure.dt,
       pres, dpres, dz, nc_nuceat_tend, nccn_prescribed, inv_exner, exner, inv_cld_frac_l, inv_cld_frac_i,
-      inv_cld_frac_r,
+      inv_cld_frac_r, t_prev, qv_prev,
       T_atm, rho, inv_rho, qv_sat_l, qv_sat_i, qv_supersat_i, rhofacr,
       rhofaci, acn, qv, th, qc, nc, qr, nr, qi, ni, qm,
       bm, qc_incld, qr_incld, qi_incld, qm_incld, nc_incld, nr_incld,
@@ -274,7 +274,7 @@ Int Functions<Real,DefaultDevice>
   // main k-loop (for processes):
 
   p3_main_part2_disp(
-      nj, nk, runtime_options.max_total_ni, infrastructure.predictNc, infrastructure.prescribedCCN, infrastructure.dt, inv_dt,
+      nj, nk, runtime_options.max_total_ni, infrastructure.predictNc, infrastructure.prescribedCCN, infrastructure.dt, infrastructure.it, inv_dt,
       hetfrz_immersion_nucleation_tend, hetfrz_contact_nucleation_tend, hetfrz_deposition_nucleation_tend,
       lookup_tables.dnu_table_vals, lookup_tables.ice_table_vals, lookup_tables.collect_table_vals,
       lookup_tables.revap_table_vals, pres, dpres, dz, nc_nuceat_tend, inv_exner,

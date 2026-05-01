@@ -248,11 +248,12 @@ Int Functions<S,D>
       inv_cld_frac_i, inv_cld_frac_l, inv_cld_frac_r, exner, T_atm, oqv, inv_dz,
       diagnostic_outputs.precip_liq_surf(i), diagnostic_outputs.precip_ice_surf(i), zero_init);
 
+    // Aaron - add qv_prev input to calculate saturation 
     p3_main_part1(
       team, nk, infrastructure.predictNc, infrastructure.prescribedCCN, infrastructure.dt,
       opres, odpres, odz, onc_nuceat_tend, onccn_prescribed, oinv_exner, exner, inv_cld_frac_l, inv_cld_frac_i,
       inv_cld_frac_r,
-      ot_prev, T_atm, rho, inv_rho, qv_sat_l, qv_sat_i, qv_supersat_i, rhofacr,
+      ot_prev, oqv_prev, T_atm, rho, inv_rho, qv_sat_l, qv_sat_i, qv_supersat_i, rhofacr,
       rhofaci, acn, oqv, oth, oqc, onc, oqr, onr, oqi, oni, oqm,
       obm, qc_incld, qr_incld, qi_incld, qm_incld, nc_incld, nr_incld,
       ni_incld, bm_incld, nucleationPossible, hydrometeorsPresent, runtime_options);

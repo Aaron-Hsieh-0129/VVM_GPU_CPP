@@ -35,6 +35,7 @@ void Functions<S,D>
   const uview_1d<const Spack>& inv_cld_frac_i,
   const uview_1d<const Spack>& inv_cld_frac_r,
   const uview_1d<const Spack>& T_prev,
+  const uview_1d<const Spack>& qv_prev,
   const uview_1d<Spack>& T_atm,
   const uview_1d<Spack>& rho,
   const uview_1d<Spack>& inv_rho,
@@ -116,14 +117,16 @@ void Functions<S,D>
     qv_sat_l(k)     = physics::qv_sat_dry(T_prev(k), pres(k), false, range_mask, physics::Polysvp1, "p3::p3_main_part1 (liquid)");
     qv_sat_i(k)     = physics::qv_sat_dry(T_prev(k), pres(k), true,  range_mask, physics::Polysvp1, "p3::p3_main_part1 (ice)");
 
-    qv_supersat_i(k) = qv(k) / qv_sat_i(k) - 1;
+    Spack qv_supersat_l = qv_prev(k) / qv_sat_l(k) - 1;
+    qv_supersat_i(k) = qv_prev(k) / qv_sat_i(k) - 1;
 
     rhofacr(k) = pow(rho_1000mb * inv_rho(k), sp(.54));
     rhofaci(k) = pow(rho_600mb * inv_rho(k), sp(.54));
     Spack dum  = sp(1.496e-6) * pow(T_atm(k), sp(1.5)) / (T_atm(k) + 120); // this is mu
     acn(k)     = g * rho_h2o / (18 * dum); // 'a' parameter for droplet fallspeed (Stokes' law)
 
-    if ( (T_atm(k) < T_zerodegc && qv_supersat_i(k) >= -0.05).any() ) {
+    if ( (T_atm(k) < T_zerodegc && qv_supersat_i(k) >= -0.05).any() ||
+         (T_atm(k) > T_zerodegc && qv_supersat_l >= -0.05).any() ) {
       nucleationPossible = true;
     }
 
