@@ -48,12 +48,12 @@ void Functions<S,D>
   constexpr Scalar clbfact_dep = 1.0;
   constexpr Scalar clbfact_sub = 1.0;
 
-  Spack ssat_r = qv - qv_sat_l;
+  Spack ssat_r = qv_prev - qv_sat_l;
   // Aaron - add supersaturation and related parameters
-  Spack ssat_cld = qv - qv_sat_l;
-  Spack sup_r = qv/qv_sat_l-1.;
-  Spack sup_cld = qv/qv_sat_l-1.;
-  Spack supi_cld = qv/qv_sat_i-1.;
+  Spack ssat_cld = qv_prev - qv_sat_l;
+  Spack sup_r = qv_prev/qv_sat_l-1.;
+  Spack sup_cld = qv_prev/qv_sat_l-1.;
+  Spack supi_cld = qv_prev/qv_sat_i-1.;
 
 
   const Smask is_freezing  = (T_atm < T_zerodegc) && context && do_ice_production;
