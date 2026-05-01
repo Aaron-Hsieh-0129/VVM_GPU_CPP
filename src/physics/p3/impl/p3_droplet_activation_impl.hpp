@@ -14,7 +14,7 @@ KOKKOS_FUNCTION
 void Functions<S,D>
 ::droplet_activation(
     const Spack& T_atm, const Spack& th_atm, const Spack& pres,
-    const Spack& qv, const Spack& qv_sat_l, const Spack& nc_incld,
+    const Spack& qv, const Spack& qv_prev, const Spack& qv_sat_l, const Spack& nc_incld,
     const Spack& cld_frac_l, const Int& it, const Scalar& inv_dt,
     Spack& qv2qc_nucleat_tend, Spack& nc_nuclet_tend, Spack& qv2qc_conden_tend,
     const Smask& context)
@@ -52,7 +52,7 @@ void Functions<S,D>
   Spack dumqvs = physics::qv_sat_dry(T_atm, pres, false, context, physics::Polysvp1, "p3_act");
   Smask act_mask = context && (qv > dumqvs);
 
-  Spack sup_cld = qv / qv_sat_l - 1.0;
+  Spack sup_cld = qv_prev / qv_sat_l - 1.0;
   Smask is_activating = context && (sup_cld > 1.e-6);
 
   if (is_activating.any()) {

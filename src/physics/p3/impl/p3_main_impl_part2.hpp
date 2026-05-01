@@ -430,7 +430,7 @@ void Functions<S,D>
 
     // Aaron - Droplet activation and initial saturation adjustment
     droplet_activation(
-        T_atm(k), th_atm(k), pres(k), qv(k), qv_sat_l(k), nc_incld(k), cld_frac_l(k),
+        T_atm(k), th_atm(k), pres(k), qv(k), qv_prev(k), qv_sat_l(k), nc_incld(k), cld_frac_l(k),
         it, inv_dt, qv2qc_nucleat_tend, nc_nuclet_tend, qv2qc_conden_tend);
 
     // cloud water autoconversion

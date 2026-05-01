@@ -878,7 +878,7 @@ template <typename ScalarT, typename DeviceT> struct Functions {
   KOKKOS_FUNCTION
   static void droplet_activation(
     const Spack& T_atm, const Spack& th_atm, const Spack& pres, 
-    const Spack& qv, const Spack& qv_sat_l,
+    const Spack& qv, const Spack& qv_prev, const Spack& qv_sat_l,
     const Spack& nc_incld, const Spack& cld_frac_l,
     const Int& it, const Scalar& inv_dt, Spack& qv2qc_nucleat_tend,
     Spack& nc_nuclet_tend, Spack& qv2qc_conden_tend, const Smask& context = Smask(true));
