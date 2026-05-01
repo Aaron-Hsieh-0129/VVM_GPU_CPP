@@ -32,7 +32,7 @@ void Functions<S,D>
   Spack qcon_satadj = (qv-dumqvs)/(1.+latvap*latvap*dumqvs/(cp*rv*T_atm*T_atm)) * inv_dt * cld_frac_l;
 
   // Limit total condensation (incl. activation) and evaporation to saturation adjustment
-  Spack total_cond = qv2qc_conden_tend + qv2qc_conden_tend + qv2qc_nucleat_tend; 
+  Spack total_cond = qv2qc_conden_tend + qv2qr_conden_tend + qv2qc_nucleat_tend; 
   Spack total_evap = qc2qv_evap_tend + qr2qv_evap_tend;
 
   Smask mask_kill_cond = (total_cond > 0.0) && (qcon_satadj < 0.0);
