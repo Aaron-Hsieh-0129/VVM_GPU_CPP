@@ -153,7 +153,9 @@ Functions<S,D>::qv_sat_dry(const Spack& t_atm, const Spack& p_atm_dry, const boo
     }
 
   static constexpr  auto ep_2 = C::ep_2;
-  return ep_2 * e_pres / max(p_atm_dry, sp(1.e-3));
+  // return ep_2 * e_pres / max(p_atm_dry, sp(1.e-3));
+  // Aaron - add (-e_pres) to align with original p3
+  return ep_2 * e_pres / max(p_atm_dry - e_pres, sp(1.e-3));
 }
 
 template <typename S, typename D>
