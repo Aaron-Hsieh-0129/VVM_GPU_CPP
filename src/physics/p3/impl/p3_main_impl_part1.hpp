@@ -89,6 +89,7 @@ void Functions<S,D>
   team.team_barrier();
 
   const Int nk_pack = ekat::npack<Spack>(nk);
+  constexpr Scalar rd = C::Rair;
 
   //
   // calculate some time-varying atmospheric variables
@@ -104,7 +105,10 @@ void Functions<S,D>
     const auto range_pack = ekat::range<IntSmallPack>(k*Spack::n);
     const auto range_mask = range_pack < nk;
 
-    rho(k)          = dpres(k)/dz(k) / g;
+    // Aaron - remove the hydrostatic assumption
+    // rho(k)          = dpres(k)/dz(k) / g;
+    rho(k)          = pres(k)/(rd*T_atm(k));
+
     inv_rho(k)      = 1 / rho(k);
     // Aaron - T_prev should be used to calculate qv_sat rather than T_atm
     // qv_sat_l(k)     = physics::qv_sat_dry(T_prev(k), pres(k), false, range_mask, physics::MurphyKoop, "p3::p3_main_part1 (liquid)");
