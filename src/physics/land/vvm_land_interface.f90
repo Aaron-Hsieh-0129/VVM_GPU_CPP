@@ -10,13 +10,14 @@ module vvm_land_interface
 
 contains
 
-    subroutine run_vvm_land_wrapper(nx, ny, nsoil, dt, &
+    subroutine run_vvm_land_wrapper(use_tco_ocean, nx, ny, nsoil, dt, &
         islimsk, vegtype, soiltyp, slopetyp, &
         sigmaf, sfemis, alb, shdmin, shdmax, &
         t1, q1, u1, v1, ps, prcp, swdn, lwdn, hgt, prslki_in, &
         stc, smc, slc, tskin, canopy, snwdph, &
         hflux, qflux, evap, zorl) bind(c, name="run_vvm_land_wrapper")
         
+        integer(c_int), value :: use_tco_ocean
         integer(c_int), value :: nx, ny, nsoil
         real(c_double), value :: dt
         
@@ -163,9 +164,11 @@ contains
                 end do
             end do
             
-            call sfc_ocean_gpu(myim, nx, 1, ncld, psi, u1, v1, t1, q1, &
-                 tg, cd, cdq, prsl1, prslki, islimsk, ddvel, flag_iter, &
-                 qsurf, gfx, qflux, hflux, ep1d, async_id)
+            if (use_tco_ocean == 1) then
+                call sfc_ocean_gpu(myim, nx, 1, ncld, psi, u1, v1, t1, q1, &
+                     tg, cd, cdq, prsl1, prslki, islimsk, ddvel, flag_iter, &
+                     qsurf, gfx, qflux, hflux, ep1d, async_id)
+            end if
                  
             call sfc_drv_gpu(myim, nx, nsoil, 1, ncld, psi, u1, v1, t1, q1, soiltyp, &
                  vegtype, sigmaf, sfemis, lwdn, swdn, swdn, dt, &
@@ -202,10 +205,15 @@ contains
         !$acc parallel loop collapse(2) async(async_id)
         do j = 1, ny
             do i = 1, nx
-                tskin(i,j) = tsurf(i,j)
 
-                hflux(i,j) = hflux(i,j) * ro2(i,j) / ((ps(i,j) / 100000.0D0)**(r/cp))
-                evap(i,j)  = qflux(i,j) * ro2(i,j)
+                if (islimsk(i,j) == 0 .and. use_tco_ocean == 0) then
+                    hflux(i,j) = 0.0D0
+                    evap(i,j)  = 0.0D0
+                else
+                    hflux(i,j) = hflux(i,j) * ro2(i,j) / ((ps(i,j) / 100000.0D0)**(r/cp))
+                    evap(i,j)  = qflux(i,j) * ro2(i,j)
+                    tskin(i,j) = tsurf(i,j)
+                endif
 
                 if (islimsk(i,j) == 0) then
                     ! ocean 

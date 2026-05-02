@@ -10,7 +10,7 @@
 #include <openacc.h>
 
 extern "C" {
-    void run_vvm_land_wrapper(int nx, int ny, int nsoil, double dt,
+    void run_vvm_land_wrapper(int use_tco_ocean, int nx, int ny, int nsoil, double dt,
         int* islimsk, int* vegtype, int* soiltyp, int* slopetyp,
         double* sigmaf, double* sfemis, double* alb, double* shdmin, double* shdmax,
         double* t1, double* q1, double* u1, double* v1, double* ps, 
@@ -28,7 +28,8 @@ public:
                 const Core::Grid& grid, 
                 const Core::Parameters& params, 
                 Core::HaloExchanger& halo_exchanger, 
-                Core::State& state);
+                Core::State& state,
+                std::string ocean_scheme);
     
     ~LandProcess() = default;
 
@@ -58,6 +59,8 @@ private:
 
     int m_halo_x;
     int m_halo_y;
+
+    int m_use_tco_ocean = 0;
 
     using view_2d_ll = Kokkos::View<double**, Kokkos::LayoutLeft>;
     using view_2d_int_ll = Kokkos::View<int**, Kokkos::LayoutLeft>;

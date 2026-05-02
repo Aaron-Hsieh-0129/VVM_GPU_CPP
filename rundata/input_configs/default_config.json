@@ -1,12 +1,12 @@
 {
     "grid": {
-        "nx": 6144,
-        "ny": 1536,
-        "nz": 44,
+        "nx": 128,
+        "ny": 128,
+        "nz": 69,
         "n_halo_cells": 2,
-        "dx": 2000.0,
-        "dy": 2000.0,
-        "dz": 500.0,
+        "dx": 500.0,
+        "dy": 500.0,
+        "dz": 250.0,
         "dz1": 100.0,
         "boundary_condition": {
             "x": "periodic",
@@ -16,19 +16,20 @@
         "fix_lonlat": true
     },
     "simulation": {
-        "total_time_s": 1728000.0,
-        "dt_s": 5.0,
-        "output_interval_s": 3600.0,
+        "total_time_s": 1800.0,
+        "dt_s": 1.0,
+        "output_interval_s": 1.0,
         "idealized_test": "none",
         "__idealized_test": "none, advection_u, advection_v, advection_w, stretching, twisting, 2dbubble"
     },
     "initial_conditions": {
         "format": "txt",
-        "source_file": "../rundata/initial_conditions/profiles/profile_rcemip.txt",
-        "perturbation": "none"
+        "source_file": "../rundata/initial_conditions/profiles/amazon.txt",
+        "perturbation": "3dbubble",
+        "__perturbation": "none, 2dbubble, 3dbubble"
     },
     "netcdf_reader": {
-        "source_file": "../rundata/initial_conditions/spatial/tcvvm.nc",
+        "source_file": "../rundata/initial_conditions/spatial/bubble_amazon.nc",
         "variables_to_read": {
             "2d": [
                 "lon", "lat",
@@ -39,8 +40,8 @@
         }
     },
     "output": {
-        "output_dir": "/raid/mog/tcvvm_new",
-        "engine": "SST",
+        "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/amazon",
+        "engine": "HDF5",
         "queue_limit": 20,
         "data_transport": "",
         "__data_transport": "RDMA (for machines with infinite band), WAN (using network), and empty (for single node auto design by ADIOS2) ",
@@ -52,7 +53,7 @@
             "qv", "qc", "qr", "qi",
             "sw_heating", "lw_heating", "swdn", "lwdn", "lwup", 
             "precip_liq_surf_mass", "precip_ice_surf_mass",
-            "hfx", "le", "Tg", "sfc_flux_th", "sfc_flux_qv"
+            "Tg", "sfc_flux_th", "sfc_flux_qv", "le", "hfx"
         ],
         "output_grid": {
             "x_start": 0,
@@ -67,17 +68,17 @@
         "solver": {
             "w_solver_method": "tridiagonal",
             "_w_solver_method_options": "Choose 'tridiagonal' (original) or 'jacobi' (3D parallel)",
-            "iteration": 100,
-            "WRXMU": 6.25e-8
+            "iteration": 50,
+            "WRXMU": 2.5e-7
         },
         "forcings": {
             "sponge_layer": {
                 "enable": true,
-                "sponge_layer_base": 24800.0,
+                "sponge_layer_base": 17000.0,
                 "inv_CRAD": 3600.0
             },
             "random_perturbation": {
-                "enable": true,
+                "enable": false,
                 "time_s": 200,
                 "amplitude": 0.5,
                 "z_start_m": 0,
@@ -140,7 +141,7 @@
                         "spatial_scheme": "Takacs"
                     },
                     "coriolis": {
-                        "enable": true,
+                        "enable": false,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -169,7 +170,7 @@
                         "spatial_scheme": "Takacs"
                     },
                     "coriolis": {
-                        "enable": true,
+                        "enable": false,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -193,7 +194,7 @@
                         "spatial_scheme": "Takacs"
                     },
                     "coriolis": {
-                        "enable": true,
+                        "enable": false,
                         "temporal_scheme": "AdamsBashforth2",
                         "spatial_scheme": "Takacs"
                     }
@@ -288,13 +289,13 @@
             "make_lookup_table": false,
             "do_predict_nc": true,
             "do_prescribed_ccn": false,
-            "max_total_ni": 740.0e3
+            "max_total_ni": 2000.0e3
         },
         "rrtmgp": {
-            "enable_rrtmgp": true,
+            "enable_rrtmgp": false,
             "column_chunk_size": 12288,
             "__column_chunk_size": "This should be modified according to domain and rank and the larger the faster (costs more memory).",
-            "rad_frequency_step": 24,
+            "rad_frequency_s": 24,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
             "fixed_total_solar_irradiance": 551.58,
             "fixed_solar_zenith_angle": 0.74256,
@@ -304,15 +305,18 @@
         "turbulence": {
             "enable_turbulence": true
         },
-        "surface": {
-            "enable_surface": true,
-            "frequency_step": 24,
-            "mode": "sflux_tc_2d",
-            "__mode": "sflux_2d, sflux_tc_2d" 
-        },
-        "land": {
-            "enable_land": false,
-            "frequency_step": 1
+        "surface_process": {
+            "enable": false,
+            "frequency_s": 12,
+            
+            "land_scheme": "noahlsm",
+            "__land_scheme_options": "none, noahlsm",
+            
+            "ocean_scheme": "sflux_tc_2d",
+            "__ocean_scheme_options": "none, sflux_2d, sflux_tc_2d, tco_ocean",
+
+            "__mode_explaination1": "If noahlsm is turned on, it will call Fortran land model (src/physics/land) with ocean/land/ice model inside.", 
+            "__mode_explaination2": "However, by changing ocean_scheme options to sflux_2d or sflux_tc_2d, it uses the C++ surface flux (original VVM surface flux, src/physics/surface) and the ocean model in LandProcess will be turned off."
         }
     },
     "optimization": {

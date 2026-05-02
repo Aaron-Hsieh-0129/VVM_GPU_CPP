@@ -51,10 +51,12 @@ private:
     std::unique_ptr<Physics::LandProcess> land_;
 
     int rad_freq_in_steps_;
-    int surface_freq_in_steps_;
-    int land_freq_in_steps_;
+    int surface_process_steps_;
+    // int surface_freq_in_steps_;
+    // int land_freq_in_steps_;
 
     bool wind_solver_ = true;
+    bool enable_surface_process_ = false;
 };
 
 }

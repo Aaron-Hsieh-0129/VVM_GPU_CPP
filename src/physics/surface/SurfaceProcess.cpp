@@ -40,7 +40,9 @@ void SurfaceProcess::initialize(Core::State& state) {
     if (!state.has_field("ustar")) state.add_field<2>("ustar", {ny, nx});
     if (!state.has_field("molen")) state.add_field<2>("molen", {ny, nx});
 
-    mode_ = config_.get_value<std::string>("physics.surface.mode", "sflux_2d");
+    if (!state.has_field("sea_land_ice_mask")) state.add_field<2>("sea_land_ice_mask", {ny, nx});
+
+    mode_ = config_.get_value<std::string>("physics.surface_process.ocean_scheme", "none");
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -292,6 +294,7 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
     const auto& Tg = state.get_field<2>("Tg").get_device_data();
     const auto& gwet = state.get_field<2>("gwet").get_device_data();
     const auto& zrough = state.get_field<2>("zrough").get_device_data();
+    const auto& sea_land_ice_mask = state.get_field<2>("sea_land_ice_mask").get_device_data();
 
     auto sfc_flux_th = state.get_field<2>("sfc_flux_th").get_mutable_device_data();
     auto sfc_flux_qv = state.get_field<2>("sfc_flux_qv").get_mutable_device_data();
@@ -321,6 +324,9 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
         Kokkos::parallel_for("SFlux_3D",
             Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
             KOKKOS_LAMBDA(const int j, const int i) {
+                // If not sea, return
+                if (sea_land_ice_mask(j,i) != 0) return;
+
                 // NOTE: Need to check about the difference between original VVM and this
                 int hx1 = hx(j,i);
                 int hxp = hx(j,i)+1;
@@ -361,6 +367,9 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
         Kokkos::parallel_for("SFlux_3D",
             Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
             KOKKOS_LAMBDA(const int j, const int i) {
+                // If not sea, return
+                if (sea_land_ice_mask(j,i) != 0) return;
+
                 // NOTE: Need to check about the difference between original VVM and this
                 int hx1 = hx(j,i);
                 int hxp = hx(j,i)+1;
@@ -407,6 +416,9 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
     Kokkos::parallel_for("SFlux_3D",
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
         KOKKOS_LAMBDA(const int j, const int i) {
+            // If not sea, return
+            if (sea_land_ice_mask(j,i) != 0) return;
+
             int hx1 = hx(j,i);
             int hxp = hx(j,i)+1;
             int hxup = hxu(j,i) + 1;
@@ -422,6 +434,9 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
     Kokkos::parallel_for("SFlux_3D",
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
         KOKKOS_LAMBDA(const int j, const int i) {
+            // If not sea, return
+            if (sea_land_ice_mask(j,i) != 0) return;
+
             int hx1 = hx(j,i)-1;
             int hxu1 = hxu(j,i);
             int hxv1 = hxv(j,i);
@@ -449,12 +464,16 @@ void SurfaceProcess::calculate_tendencies(Core::State& state,
     const auto& hx     = state.get_field<2>("topo").get_device_data();
     const auto& rdz = params_.rdz; 
     const auto& flex_height_coef_mid = params_.flex_height_coef_mid.get_device_data();
+    const auto& sea_land_ice_mask = state.get_field<2>("sea_land_ice_mask").get_device_data();
 
     if (var_name == "th") {
         const auto& flux = state.get_field<2>("sfc_flux_th").get_device_data();
         Kokkos::parallel_for("SfcFlux_Tendency_TH",
             Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
             KOKKOS_LAMBDA(const int j, const int i) {
+                // If not sea, return
+                if (sea_land_ice_mask(j,i) != 0) return;
+
                 int hxp = hx(j,i)+1;
                 tend(hxp, j, i) += flux(j, i) * flex_height_coef_mid(hxp) * rdz() / rhobar(hxp);
             }
@@ -465,6 +484,9 @@ void SurfaceProcess::calculate_tendencies(Core::State& state,
         Kokkos::parallel_for("SfcFlux_Tendency_QV",
             Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
             KOKKOS_LAMBDA(const int j, const int i) {
+                // If not sea, return
+                if (sea_land_ice_mask(j,i) != 0) return;
+
                 int hxp = hx(j,i)+1;
                 tend(hxp, j, i) += flux(j, i) * flex_height_coef_mid(hxp) * rdz() / rhobar(hxp);
             }

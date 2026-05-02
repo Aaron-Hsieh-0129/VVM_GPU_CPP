@@ -15,7 +15,8 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
                          const Core::Grid& grid, 
                          const Core::Parameters& params, 
                          Core::HaloExchanger& halo_exchanger, 
-                         Core::State& state)
+                         Core::State& state, 
+                         std::string ocean_scheme)
     : config_(config), grid_(grid), params_(params), halo_exchanger_(halo_exchanger), state_(state)
 {
     m_nx = grid_.get_local_physical_points_x();
@@ -78,6 +79,8 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
     if (!state.has_field("stc")) state.add_field<3>("stc", {m_nsoil, ny, nx});
     if (!state.has_field("smc")) state.add_field<3>("smc", {m_nsoil, ny, nx});
     if (!state.has_field("slc")) state.add_field<3>("slc", {m_nsoil, ny, nx});
+
+    m_use_tco_ocean = (ocean_scheme == "tco_ocean") ? 1 : 0; // false/true: 0/1 
 }
 
 void LandProcess::init() {
@@ -259,7 +262,7 @@ void LandProcess::run(double dt) {
 //     hipStream_t stream = Kokkos::DefaultExecutionSpace().hip_stream();
 // #endif
 
-    run_vvm_land_wrapper(m_nx, m_ny, m_nsoil, dt,
+    run_vvm_land_wrapper(m_use_tco_ocean, m_nx, m_ny, m_nsoil, dt,
         m_islimsk.data(), m_vegtype.data(), m_soiltype.data(), m_slopetype.data(),
         m_sigmaf.data(), m_sfemis.data(), m_alb.data(), m_shdmin.data(), m_shdmax.data(),
         m_t1.data(), m_q1.data(), m_u1.data(), m_v1.data(), m_ps.data(), 
