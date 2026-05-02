@@ -121,7 +121,8 @@ template <typename ScalarT, typename DeviceT> struct Functions {
     Scalar accretion_qr_exponent                = 1.15;
     Scalar rain_selfcollection_prefactor        = 5.78;
     Scalar rain_selfcollection_breakup_diameter = 0.00028;
-    Scalar constant_mu_rain                     = 1.0;
+    // Aaron - set constant_mu_rain from 1 to 0 to align with Fortran P3 for Marshall-Palmer distribution
+    Scalar constant_mu_rain                     = 0.0;
     Scalar spa_ccn_to_nc_factor                 = 1.0;
     Scalar spa_ccn_to_nc_exponent               = 1.0;
     Scalar cldliq_to_ice_collection_factor      = 0.5;
