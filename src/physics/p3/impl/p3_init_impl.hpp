@@ -117,7 +117,9 @@ void compute_tables(const bool masterproc, MuRT& mu_r_table_vals, VNT& vn_table_
 
   // AaronDonahue: Switching to table ver 4 means switching to a constand mu_r,
   // so this section is commented out.
-  Kokkos::deep_copy(mu_r_table_vals_h, 1); // mu_r_constant =1. In other places, this is runtime_options.constant_mu_rain
+    // Aaron - set this from 1 to 0 to align with Fortran P3 for Marshall-Palmer distribution
+  // Kokkos::deep_copy(mu_r_table_vals_h, 1); // mu_r_constant =1. In other places, this is runtime_options.constant_mu_rain
+  Kokkos::deep_copy(mu_r_table_vals_h, 0.);
 
   static constexpr S thrd = 1./3;
   static constexpr S small = 1.e-30;
@@ -127,7 +129,9 @@ void compute_tables(const bool masterproc, MuRT& mu_r_table_vals, VNT& vn_table_
   // the lookup table is two dimensional as a function of number-weighted mean size
   // proportional to qr/Nr and shape parameter mu_r
   for (ii = 1; ii <= 10; ++ii) {
-    mu_r = 1; // mu_r_constant = 1
+    // Aaron - set this from 1 to 0 to align with Fortran P3 for Marshall-Palmer distribution
+    // mu_r = 1; // mu_r_constant = 1
+    mu_r = 0;
 
     // loop over number-weighted mean size
     for (jj = 1; jj <= 300; ++jj) {
