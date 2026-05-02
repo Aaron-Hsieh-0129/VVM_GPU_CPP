@@ -749,7 +749,7 @@ template <typename ScalarT, typename DeviceT> struct Functions {
 
   // Computes rain self collection process rate
   KOKKOS_FUNCTION
-  static void rain_self_collection(const Spack &rho, const Spack &qr_incld, const Spack &nr_incld,
+  static void rain_self_collection(const Spack &rho, const Spack &qr_incld, Spack &nr_incld,
                                    Spack &nr_selfcollect_tend, const P3Runtime &runtime_options,
                                    const Smask &context = Smask(true));
 

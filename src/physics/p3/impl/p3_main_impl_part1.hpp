@@ -132,7 +132,8 @@ void Functions<S,D>
 
     // apply mass clipping if dry and mass is sufficiently small
     // (implying all mass is expected to evaporate/sublimate in one time step)
-    auto drymass = qc(k) < qsmall;
+    // Aaron - add qr < 1e-8 and supersaturation condition
+    auto drymass = (qc(k) < qsmall) || (qc(k) < 1.e-8 && qv_supersat_l < -0.1);
     auto not_drymass = !drymass && range_mask;
     qv(k).set(drymass, qv(k) + qc(k));
     th_atm(k).set(drymass, th_atm(k) - inv_exner(k) * qc(k) * latvap * inv_cp);
@@ -168,7 +169,8 @@ void Functions<S,D>
       */
     }
 
-    drymass = qr(k) < qsmall;
+    // Aaron - add qr < 1e-8 and supersaturation condition
+    drymass = (qr(k) < qsmall) || (qr(k) < 1.e-8 && qv_supersat_l < -0.1);
     not_drymass = !drymass && range_mask;
     qv(k).set(drymass, qv(k) + qr(k));
     th_atm(k).set(drymass, th_atm(k) - inv_exner(k) * qr(k) * latvap * inv_cp);

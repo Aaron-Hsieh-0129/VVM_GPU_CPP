@@ -520,12 +520,15 @@ void Functions<S,D>
       ni_nucleat_tend, nc_nuclet_tend);
 
     // Aaron - add nc_nuclet_tend
+    // Aaron - move number conservation into mass conservation
+    /*
     nc_conservation(nc(k), nc_selfcollect_tend, dt, nc_nuclet_tend, nc_collect_tend, nc2ni_immers_freeze_tend,
                     nc_accret_tend, nc2nr_autoconv_tend, ncheti_cnt, nicnt, use_hetfrz_classnuc, not_skip_all);
     nr_conservation(nr(k),ni2nr_melt_tend,nr_ice_shed_tend,ncshdc,nc2nr_autoconv_tend,dt,nmltratio,nr_collect_tend,
                     nr2ni_immers_freeze_tend,nr_selfcollect_tend,nr_evap_tend, not_skip_all);
     ni_conservation(ni(k),ni_nucleat_tend,nr2ni_immers_freeze_tend,nc2ni_immers_freeze_tend, ncheti_cnt, nicnt, ninuc_cnt, dt,ni2nr_melt_tend,
                     ni_sublim_tend,ni_selfcollect_tend, use_hetfrz_classnuc, not_skip_all);
+    */
 
     // Aaron - these two functions probably not needed.
     /*
