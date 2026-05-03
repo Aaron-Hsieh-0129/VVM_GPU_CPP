@@ -200,7 +200,8 @@ void Functions<S,D>
     qm(k).set(drymass, 0);
     bm(k).set(drymass, 0);
 
-    T_atm(k) = th_atm(k) * exner(k);
+    // Aaron - T_atm is not updated here in Fortran P3
+    // T_atm(k) = th_atm(k) * exner(k);
 
     calculate_incloud_mixingratios(
       qc(k), qr(k), qi(k), qm(k), nc(k), nr(k), ni(k), bm(k),
