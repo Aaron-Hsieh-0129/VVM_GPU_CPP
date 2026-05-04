@@ -57,5 +57,4 @@ When `simulation.idealized_test` is one of `advection_u`, `advection_v`, `advect
 
 ## Further reading
 
-- RRTMGP upstream docs: `src/physics/rrtmgp/external/README.md`
 - Regression tests: `tests/CMakeLists.txt` and `tests/configs/*.json`

@@ -14,8 +14,8 @@ GVVM is a **C++17** cloud-resolving model using **Kokkos** for on-device paralle
 | `src/io/` | `OutputManager` (ADIOS2), `IOServer` (SST consumer to HDF5) |
 | `src/utils/` | `ConfigurationManager` (JSON via nlohmann), timing and timers |
 | `src/share/` | Shared EAMxx-derived utilities, constants, physics helpers |
-| `externals/ekat/` | EKAT submodule: logging, YAML, testing utilities, Kokkos integration |
-| `rundata/` | Sample `default_config.json`, initial profiles, P3 lookup tables |
+| `externals/ekat/` | EKAT submodule: logging, YAML, testing utilities, Kokkos integration (this only used in EAMxx-related things) |
+| `rundata/` | Sample `default_config.json`, initial profiles, initial fields, P3 lookup tables |
 
 Fortran pieces (e.g. Noah OpenACC) are linked through the physics/land subtree as required by CMake.
 
@@ -35,7 +35,7 @@ Fortran pieces (e.g. Noah OpenACC) are linked through the physics/land subtree a
 - `vvm_io` — ADIOS2 output and I/O server
 - `vvm_utils` — configuration and timing
 - `scream_share` — shared EAMxx code
-- `eamxx_physics` — interface aggregating P3, RRTMGP, turbulence, surface, land
+- `vvm_physics` — interface aggregating P3, RRTMGP, turbulence, surface, land
 
 The executable links `MPI::MPI_CXX`, `Kokkos::kokkos`, and the targets above.
 

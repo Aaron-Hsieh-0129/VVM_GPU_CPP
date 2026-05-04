@@ -44,7 +44,7 @@ export PATH=$INSTALL_DIR/gcc11/bin:$PATH
 export LD_LIBRARY_PATH=$INSTALL_DIR/gcc11/lib64:$INSTALL_DIR/gcc11/lib:$LD_LIBRARY_PATH
 
 ```
-*(Note: If your system has a higher version of GCC but you still want to force CMake to use this GCC 11, you will need to add `-DCMAKE_C_FLAGS="--gcc-toolchain=$INSTALL_DIR/gcc11"` and `-DCMAKE_CXX_FLAGS="--gcc-toolchain=$INSTALL_DIR/gcc11"` during the GVVM CMake configuration step later.)*
+*(Note: If your system has a higher version of GCC but you still want to force CMake to use this GCC 11, you will need to add `-DCMAKE_C_FLAGS="--gcc-toolchain=$INSTALL_DIR/gcc11"` and `-DCMAKE_CXX_FLAGS="--gcc-toolchain=$INSTALL_DIR/gcc11"` during the configuration.)*
 
 ### NVIDIA HPC SDK (NVHPC 24.9)
 Download and install NVHPC 24.9 from the official NVIDIA website. Assuming it is installed at `/path/to/nvhpc_24_9`, export its path so we can use its MPI and CUDA wrappers for the rest of the installation:
@@ -153,32 +153,6 @@ cd ..
 
 ```
 
-### ADIOS2 2.10.0
-
-```bash
-git clone https://github.com/ornladios/ADIOS2.git
-cd ADIOS2
-mkdir build && cd build
-cmake .. \
-    -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR/adios2 \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_COMPILER=mpicc \
-    -DCMAKE_CXX_COMPILER=mpic++ \
-    -DADIOS2_USE_MPI=ON \
-    -DADIOS2_USE_HDF5=ON \
-    -DADIOS2_USE_Kokkos=ON \
-    -DKokkos_ROOT=$INSTALL_DIR/kokkos \
-    -DHDF5_ROOT=$INSTALL_DIR/hdf5
-make -j$(nproc)
-make install
-cd ../..
-
-```
-
----
-
-## 3. Core Frameworks (Kokkos & ADIOS2)
-
 ### Kokkos 4.7.01
 Note: Replace -DKokkos_ARCH_HOPPER90=ON with the appropriate architecture flag for your GPU (e.g., AMPERE80, VOLTA70, ADA89).
 ```bash
@@ -197,6 +171,29 @@ cmake .. \
     -DKokkos_ARCH_HOPPER90=ON \
     -DBUILD_SHARED_LIBS=TRUE \
     -DKokkos_ENABLE_MPI=ON
+make -j$(nproc)
+make install
+cd ../..
+
+```
+
+
+### ADIOS2 2.10.0
+
+```bash
+git clone https://github.com/ornladios/ADIOS2.git
+cd ADIOS2
+mkdir build && cd build
+cmake .. \
+    -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR/adios2 \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_COMPILER=mpicc \
+    -DCMAKE_CXX_COMPILER=mpic++ \
+    -DADIOS2_USE_MPI=ON \
+    -DADIOS2_USE_HDF5=ON \
+    -DADIOS2_USE_Kokkos=ON \
+    -DKokkos_ROOT=$INSTALL_DIR/kokkos \
+    -DHDF5_ROOT=$INSTALL_DIR/hdf5
 make -j$(nproc)
 make install
 cd ../..
