@@ -43,19 +43,27 @@ markdown_extensions:
   - pymdownx.snippets
   - pymdownx.superfences
   - tables
+  - pymdownx.arithmatex:
+      generic: true
 
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
 nav:
   - Home: index.md
   - Quick Start: quick-start.md
   - User Guides:
       - Overview: user-guides/index.md
+      - Environment Installation: user-guides/environment.md
       - Model Configuration: user-guides/configuration.md
       - I/O Management: user-guides/io-management.md
   - Developer Guides:
       - Overview: developer-guides/index.md
       - System Architecture: developer-guides/architecture.md
       - Physics Implementation: developer-guides/physics.md
+      - P3 Modifications: developer-guides/p3-modifications.md
   - Examples:
       - Gallery Overview: examples/index.md
       - Video gallery: examples/gallery.md

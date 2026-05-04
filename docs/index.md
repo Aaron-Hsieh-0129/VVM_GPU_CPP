@@ -5,7 +5,9 @@
 ## Features
 
 - **3D cloud-resolving dynamics** — Vector vorticity formulation with configurable tendencies, sponge layer, and idealized test modes.
-- **Microphysics** — P3 scheme (E3SM EAMxx lineage).
+- **Microphysics: Modified P3 Scheme**
+  Based on the E3SM EAMxx lineage, but **with major architectural restorations**. We have explicitly restored the vapor-cloud water ($q_v \leftrightarrow q_c$) conversion processes (condensation/evaporation/deposition/sublimation) from the original Fortran P3 formulation. 
+  **[Read the details of our P3 modifications here](developer-guides/p3-modifications.md)**.
 - **Radiation** — RRTMGP (E3SM EAMxx lineage, Kokkos-enabled build).
 - **Turbulence and surface** — Subgrid turbulence and surface flux options.
 - **Land** — Noah land surface model (Fortran OpenACC), with contributions from the Central Weather Administration (CWA) of Taiwan.

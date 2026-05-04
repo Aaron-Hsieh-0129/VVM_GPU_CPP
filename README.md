@@ -49,7 +49,7 @@ A GPU-accelerated (Kokkos-based) C++ implementation of the **Vector Vorticity eq
 | **HDF5** | `≥ 1.14.5` | **pnetcdf** | `≥ 1.14.1` |
 | **ADIOS2** | `≥ 2.11.0` | | |
 
-*Please refer to our [Installation Tutorial](link-to-tutorial-here) for detailed instructions on setting up these libraries.*
+*Please refer to our [Installation Tutorial](https://aaron-hsieh-0129.github.io/VVM_GPU_CPP/user-guides/environment/) for detailed instructions on setting up these libraries.*
 
 
 ## Quick Start

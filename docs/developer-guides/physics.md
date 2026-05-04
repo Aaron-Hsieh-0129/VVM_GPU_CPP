@@ -35,6 +35,9 @@ The following order is implemented in `Model::run_step` (abbreviated):
 
 Radiation frequency, surface frequency, and land frequency are controlled by `rad_frequency_step`, `physics.surface.frequency_step`, and `physics.land.frequency_step` (interpreted against the model step index in code).
 
+Crucially, the P3 scheme requires both the previous and current states for its calculations. In the procedure above, var_prev represents the state before the advection update, while var_now represents the state after advection.
+This is why `microphysics_->run` is called after `dycore_->update_thermodynamics(dt)`—this sequence ensures that the original var_now is shifted to var_prev, and the newly advected state becomes the current var_now.
+
 ## P3
 
 The P3 implementation lives under `src/physics/p3/` with EAMxx-style pack-oriented kernels. Lookup tables can be generated or read from `rundata/p3/` depending on `make_lookup_table` and paths in configuration.

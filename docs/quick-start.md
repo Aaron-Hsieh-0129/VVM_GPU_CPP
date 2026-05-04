@@ -16,6 +16,8 @@ This guide covers dependencies, building GVVM, and running the `vvm` executable.
 
 ### Libraries
 
+This guide covers dependencies, building GVVM, and running the `vvm` executable. For detailed instructions on building the full dependency stack from source, please refer to the **[Environment Installation Guide](user-guides/environment.md)**.
+
 | Library | Minimum (tested) | Role |
 | ------- | ------------------ | ---- |
 | CMake | 3.20 | Build |

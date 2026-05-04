@@ -5,7 +5,8 @@ These pages summarize how GVVM is structured in this repository and how major su
 | Guide | Contents |
 | ------ | -------- |
 | [System architecture](architecture.md) | Directories, libraries, main program flow, MPI and Kokkos |
-| [Physics implementation](physics.md) | P3, RRTMGP, turbulence, surface, land, and the driver time step |
+| [Physics implementation](physics.md) | RRTMGP, turbulence, surface, land, and the driver time step |
+| [P3 Microphysics Modifications](p3-modifications.md) | **Details on restoring Fortran P3 $q_v \leftrightarrow q_c$ conversions within the EAMxx C++ framework** |
 
 **Build system:** The root `CMakeLists.txt` configures C++17, CUDA/Kokkos, MPI, EKAT, NetCDF, PnetCDF, HDF5, ADIOS2, and optional NCCL. The main executable target is `vvm`, built from `src/main.cpp` and linked against `vvm_driver`, `vvm_core`, `vvm_io`, `vvm_dynamics`, `scream_share`, and `eamxx_physics`.
 
