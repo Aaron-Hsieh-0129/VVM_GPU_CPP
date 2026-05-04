@@ -20,7 +20,7 @@ A GPU-accelerated (Kokkos-based) C++ implementation of the **Vector Vorticity eq
 
 - **3D Cloud-Resolving Dynamics**: High-performance atmospheric dynamics utilizing the Vector Vorticity formulation.
 - **Advanced Physics Schemes**:
-  - **Microphysics**: P3 microphysics scheme adapted from E3SM EAMxx.
+  - **Microphysics**: P3 microphysics scheme adapted from E3SM EAMxx, with restored vapor-cloud water (qv $\leftrightarrow$ qc) conversion processes based on the original Fortran P3 formulation.
   - **Radiation**: RRTMGP radiation scheme adapted from E3SM EAMxx.
   - **Land Surface Model**: Noah land surface model with GPU acceleration (Fortran OpenACC), provided by the Central Weather Administration (CWA) of Taiwan.
 - **TaiwanVVM Support**: Capable of simulating high-resolution Taiwan topography using generated terrain datasets (example scripts provided).
@@ -116,6 +116,13 @@ mpirun -np 4 ./vvm --io-tasks 2
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+
+## Acknowledgments & References
+
+- **E3SM EAMxx**: The base implementation of the P3 microphysics and RRTMGP radiation schemes were adapted from the E3SM project.
+- **P3 Microphysics**: The explicit condensation and evaporation processes between water vapor and cloud water, which are absent in the EAMxx version, have been re-implemented according to the original P3 formulation (e.g., *Morrison and Milbrandt, 2015*).
+- **CWA Noah LSM**: The GPU-accelerated Noah land surface model is generously provided by the Central Weather Administration (CWA) of Taiwan.
 
 
 ## Contact & Support
