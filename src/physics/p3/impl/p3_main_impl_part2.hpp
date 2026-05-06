@@ -286,8 +286,11 @@ void Functions<S,D>
 
         // adjust Ni if needed to make sure mean size is in bounds (i.e. apply lambda limiters)
         // note that the Nmax and Nmin are normalized and thus need to be multiplied by existing N
-        ni_incld(k).set(qi_gt_small, min(ni_incld(k), table_val_ni_lammax*ni_incld(k)));
-        ni_incld(k).set(qi_gt_small, max(ni_incld(k), table_val_ni_lammin*ni_incld(k)));
+        // ni_incld(k).set(qi_gt_small, min(ni_incld(k), table_val_ni_lammax*ni_incld(k)));
+        // ni_incld(k).set(qi_gt_small, max(ni_incld(k), table_val_ni_lammin*ni_incld(k)));
+        // Aaron - from ni to qi to align with new table and Fortran P3
+        ni_incld(k).set(qi_gt_small, min(ni_incld(k), table_val_ni_lammax*qi_incld(k)));
+        ni_incld(k).set(qi_gt_small, max(ni_incld(k), table_val_ni_lammin*qi_incld(k)));
       }
 
       // ----------------------------------------------------------------------

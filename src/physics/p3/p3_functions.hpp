@@ -27,13 +27,18 @@ template <typename ScalarT, typename DeviceT> struct Functions {
   //
   // ---------- P3 constants ---------
   //
+
+  // Aaron - Change the loaded lookup table from 4.1.1 to v6.4
   struct P3C {
     // Constants for ice lookup tables
     enum {
       densize            = 5,
       rimsize            = 4,
+      liqsize            = 4, // Aaron - Change the loaded lookup table from 4.1.1 to v6.4
       isize              = 50,
-      ice_table_size     = 12, // number of quantities used from lookup table
+      // Aaron - Change the loaded lookup table from 4.1.1 to v6.4
+      // ice_table_size     = 12, // number of quantities used from lookup table
+      ice_table_size     = 19, // number of quantities used from lookup table
       rcollsize          = 30,
       collect_table_size = 2, // number of ice-rain collection  quantities used from lookup table
 
@@ -46,12 +51,15 @@ template <typename ScalarT, typename DeviceT> struct Functions {
     };
 
     static constexpr ScalarT lookup_table_1a_dum1_c =
-        4.135985029041767e+00; // 1.0/(0.1*log10(261.7))
+        // 4.135985029041767e+00; // 1.0/(0.1*log10(261.7))
+        3.444606e+00; // Aaron - aligning with Fortran P3
     // static constexpr const char *p3_lookup_base = SCREAM_DATA_DIR "/tables/p3_lookup_table_1.dat-v";
     static constexpr const char *p3_lookup_base = "../rundata/p3/p3_lookup_table_1.dat-v";
 
     static constexpr const char *p3_version =
-        "4.1.1"; // TODO: Change this so that the table version and table path is a runtime option.
+        // Aaron - Change the loaded lookup table from 4.1.1 to v6.4
+        // "4.1.1"; // TODO: Change this so that the table version and table path is a runtime option.
+        "6.4";
   };
 
   //
