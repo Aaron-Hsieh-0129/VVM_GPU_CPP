@@ -396,6 +396,7 @@ void Initializer::assign_vars() const {
         Kokkos::deep_copy(lat, 23.458);
     }
 
+    // TODO: This is tcvvm setting. It needs to be user friendly.
     double OMEGA = config_.get_value<double>("constants.OMEGA", 7.292e-5);
     double PI = config_.get_value<double>("constants.PI", 3.14159265);
     auto& f = state_.get_field<1>("f").get_mutable_device_data();
@@ -411,6 +412,21 @@ void Initializer::assign_vars() const {
         }
     );
     halo_exchanger_.exchange_halos(state_.get_field<2>("f_2d"));
+
+    // Assign Tg
+    const auto& topo = state_.get_field<2>("topo").get_device_data();
+    const auto& pibar = state_.get_field<1>("pibar").get_device_data();
+    auto& Tg = state_.get_field<2>("Tg").get_mutable_device_data();
+
+    Kokkos::parallel_for("Init_Tg", 
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {ny, nx}),
+        KOKKOS_LAMBDA(const int j, const int i) {
+            // NOTE: Fortran VVM uses hx rather than hxp here
+            int hx = topo(j, i);
+            Tg(j, i) = th(hx, j, i) * pibar(hx);
+        }
+    );
+    halo_exchanger_.exchange_halos(state_.get_field<2>("Tg"));
     return;
 }
 
