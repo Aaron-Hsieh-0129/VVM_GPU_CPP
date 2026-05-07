@@ -51,16 +51,16 @@ void AdvectionTerm::compute_tendency(
         Kokkos::parallel_for("calculate_rhou_for_xi",
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                u_mean_data(k,j,i) = 0.25*(fact1_xi_eta(k) * rhobar(k+1) * ( u(k+1,j,i) + u(k+1,j+1,i))
-                                         + fact2_xi_eta(k) * rhobar(k)   * ( u(k,j,i)   + u(k,j+1,i)  )  );
+                u_mean_data(k,j,i) = real(0.25)*(fact1_xi_eta(k) * rhobar(k+1) * ( u(k+1,j,i) + u(k+1,j+1,i))
+                                               + fact2_xi_eta(k) * rhobar(k)   * ( u(k,j,i)   + u(k,j+1,i)  )  );
             }
         );
 
         Kokkos::parallel_for("calculate_rhov_for_xi",
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                v_mean_data(k,j,i) = 0.25*(fact1_xi_eta(k) * rhobar(k+1) * ( v(k+1,j,i) + v(k+1,j+1,i))
-                                         + fact2_xi_eta(k) * rhobar(k)   * ( v(k,j,i)   + v(k,j+1,i)  )  );
+                v_mean_data(k,j,i) = real(0.25)*(fact1_xi_eta(k) * rhobar(k+1) * ( v(k+1,j,i) + v(k+1,j+1,i))
+                                               + fact2_xi_eta(k) * rhobar(k)   * ( v(k,j,i)   + v(k,j+1,i)  )  );
             }
         );
 
@@ -68,8 +68,8 @@ void AdvectionTerm::compute_tendency(
         Kokkos::parallel_for("calculate_rhow_for_xi",
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1,h,h}, {nz-h-1, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                w_mean_data(k,j,i) = 0.25*(rhobar_up(k+1) * ( w(k+1,j,i) + w(k+1,j+1,i))
-                                         + rhobar_up(k)   * ( w(k,j,i)   + w(k,j+1,i)  )  );
+                w_mean_data(k,j,i) = real(0.25)*(rhobar_up(k+1) * ( w(k+1,j,i) + w(k+1,j+1,i))
+                                               + rhobar_up(k)   * ( w(k,j,i)   + w(k,j+1,i)  )  );
             }
         );
     }
@@ -79,16 +79,16 @@ void AdvectionTerm::compute_tendency(
         Kokkos::parallel_for("calculate_rhou_for_eta",
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                u_mean_data(k,j,i) = 0.25*(fact1_xi_eta(k) * rhobar(k+1) * ( u(k+1,j,i) + u(k+1,j,i+1))
-                                         + fact2_xi_eta(k) * rhobar(k)   * ( u(k,j,i)   + u(k,j,i+1)  )  );
+                u_mean_data(k,j,i) = real(0.25)*(fact1_xi_eta(k) * rhobar(k+1) * ( u(k+1,j,i) + u(k+1,j,i+1))
+                                               + fact2_xi_eta(k) * rhobar(k)   * ( u(k,j,i)   + u(k,j,i+1)  )  );
             }
         );
 
         Kokkos::parallel_for("calculate_rhov_for_eta",
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                v_mean_data(k,j,i) = 0.25*(fact1_xi_eta(k) * rhobar(k+1) * ( v(k+1,j,i) + v(k+1,j,i+1))
-                                         + fact2_xi_eta(k) * rhobar(k)   * ( v(k,j,i)   + v(k,j,i+1)  )  );
+                v_mean_data(k,j,i) = real(0.25)*(fact1_xi_eta(k) * rhobar(k+1) * ( v(k+1,j,i) + v(k+1,j,i+1))
+                                               + fact2_xi_eta(k) * rhobar(k)   * ( v(k,j,i)   + v(k,j,i+1)  )  );
             }
         );
 
@@ -96,8 +96,8 @@ void AdvectionTerm::compute_tendency(
         Kokkos::parallel_for("calculate_rhow_for_eta",
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1,h,h}, {nz-h-1, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                w_mean_data(k,j,i) = 0.25*(rhobar_up(k+1) * ( w(k+1,j,i) + w(k+1,j,i+1))
-                                         + rhobar_up(k)   * ( w(k,j,i)   + w(k,j,i+1)  )  );
+                w_mean_data(k,j,i) = real(0.25)*(rhobar_up(k+1) * ( w(k+1,j,i) + w(k+1,j,i+1))
+                                               + rhobar_up(k)   * ( w(k,j,i)   + w(k,j,i+1)  )  );
             }
         );
     }
@@ -105,16 +105,16 @@ void AdvectionTerm::compute_tendency(
         Kokkos::parallel_for("calculate_rhou_for_zeta",
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({nz-h-1,h,h}, {nz, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                u_mean_data(k,j,i) = 0.25*rhobar(k)*(u(k,j,i)   + u(k,j,i+1)
-                                                   + u(k,j+1,i) + u(k,j+1,i+1)   );
+                u_mean_data(k,j,i) = real(0.25)*rhobar(k)*(u(k,j,i)   + u(k,j,i+1)
+                                                         + u(k,j+1,i) + u(k,j+1,i+1)   );
             }
         );
 
         Kokkos::parallel_for("calculate_rhov_for_zeta",
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({nz-h-1,h,h}, {nz, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                v_mean_data(k,j,i) = 0.25*rhobar(k)*(v(k,j,i)   + v(k,j,i+1)
-                                                   + v(k,j+1,i) + v(k,j+1,i+1)   );
+                v_mean_data(k,j,i) = real(0.25)*rhobar(k)*(v(k,j,i)   + v(k,j,i+1)
+                                                         + v(k,j+1,i) + v(k,j+1,i+1)   );
             }
         );
 
@@ -122,8 +122,8 @@ void AdvectionTerm::compute_tendency(
             // The original code adopts Tackas 3rd order difference for boundary zeta, so it needs two w.
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({nz-h-3,h,h}, {nz-h, ny-h, nx-h}),
             KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                w_mean_data(k,j,i) = 0.25*rhobar_up(k)*(w(k,j,i)   + w(k,j,i+1) 
-                                                      + w(k,j+1,i) + w(k,j+1,i+1));
+                w_mean_data(k,j,i) = real(0.25)*rhobar_up(k)*(w(k,j,i)   + w(k,j,i+1) 
+                                                            + w(k,j+1,i) + w(k,j+1,i+1));
                 // w_mean_data(k,j,i) = w(k,j,i);
             }
         );

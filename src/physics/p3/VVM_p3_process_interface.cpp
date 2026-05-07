@@ -26,7 +26,7 @@ VVM_P3_Interface::VVM_P3_Interface(const VVM::Utils::ConfigurationManager &confi
     // runtime_options.load_runtime_options_from_file(m_params);
     // If someone wants to call this function, the VVM version should be written in p3_function. 
 
-    m_output_interval_s = config_.get_value<double>("simulation.output_interval_s", 600.0);
+    m_output_interval_s = config_.get_value<VVM::Real>("simulation.output_interval_s", 600.0);
 
     m_infrastructure.it = 0;
     m_infrastructure.its = 0;
@@ -241,7 +241,7 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
     // Gather runtime options
     
     // Aaron: This value follows Fortran P3 rather than EAMxx P3
-    m_runtime_options.max_total_ni = config_.get_value<double>("physics.p3.max_total_ni", 2000.e3); 
+    m_runtime_options.max_total_ni = config_.get_value<VVM::Real>("physics.p3.max_total_ni", 2000.e3); 
 
     m_runtime_options.set_cld_frac_l_to_one = true;
     m_runtime_options.set_cld_frac_i_to_one = false;
@@ -487,7 +487,7 @@ void VVM_P3_Interface::initialize_constant_buffers(VVM::Core::State& initial_sta
 }
 
 template<typename VVMViewType, typename P3ViewType>
-void VVM_P3_Interface::pack_3d_to_2d_packed(const VVMViewType& vvm_view, const P3ViewType& p3_view, const double pad_val) {
+void VVM_P3_Interface::pack_3d_to_2d_packed(const VVMViewType& vvm_view, const P3ViewType& p3_view, const VVM::Real pad_val) {
     const int nz_phys = m_num_levs;
     const int ny_phys = grid_.get_local_physical_points_y();
     const int nx_phys = grid_.get_local_physical_points_x();
@@ -919,7 +919,7 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
 }
 
 
-void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
+void VVM_P3_Interface::run(VVM::Core::State &state, const VVM::Real dt) {
     VVM::Utils::Timer p3_timer("P3_timer");
 
     if (m_need_reset_precip) {
@@ -1111,7 +1111,7 @@ void VVM_P3_Interface::compute_time_averaged_precip(VVM::Core::State& state) {
     auto& precip_liq_surf_mass_2d = state.get_field<2>("precip_liq_surf_mass").get_mutable_device_data();
     auto& precip_ice_surf_mass_2d = state.get_field<2>("precip_ice_surf_mass").get_mutable_device_data();
 
-    double total_time = (m_output_interval_s > 0.0) ? m_output_interval_s : 1.0;
+    VVM::Real total_time = (m_output_interval_s > 0.0) ? m_output_interval_s : 1.0;
 
     int ny = grid_.get_local_total_points_y();
     int nx = grid_.get_local_total_points_x();

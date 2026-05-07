@@ -49,14 +49,14 @@ void TxtReader::read_file() {
     std::vector<std::string> headers;
     while (ss_header >> col_name) {
         headers.push_back(col_name);
-        raw_data_[col_name] = std::vector<double>();
+        raw_data_[col_name] = std::vector<VVM::Real>();
     }
 
     // Parse Data
     while (std::getline(infile, line)) {
         if (line.empty()) continue;
         std::stringstream ss_data(line);
-        double val;
+        VVM::Real val;
         for (const auto& h : headers) {
             if (ss_data >> val) raw_data_[h].push_back(val);
         }
@@ -68,34 +68,34 @@ void TxtReader::read_file() {
 }
 
 void TxtReader::calculate_input_heights() {
-    const auto& P_in = raw_data_.at("pbar");
-    const auto& T_in = raw_data_.at("Tbar"); 
+    const auto& P_in  = raw_data_.at("pbar");
+    const auto& T_in  = raw_data_.at("Tbar"); 
     const auto& Qv_in = raw_data_.at("qvbar"); 
     
     size_t n = P_in.size();
     input_z_.resize(n);
 
-    double Rd = config_.get_value<double>("constants.Rd");
-    double Cp = config_.get_value<double>("constants.Cp");
-    double g = config_.get_value<double>("constants.gravity");
-    double P0 = config_.get_value<double>("constants.P0");
-    double RbCp = Rd / Cp;
+    VVM::Real Rd   = config_.get_value<VVM::Real>("constants.Rd");
+    VVM::Real Cp   = config_.get_value<VVM::Real>("constants.Cp");
+    VVM::Real g    = config_.get_value<VVM::Real>("constants.gravity");
+    VVM::Real P0   = config_.get_value<VVM::Real>("constants.P0");
+    VVM::Real RbCp = Rd / Cp;
 
-    std::vector<double> pilog1(n);
-    std::vector<double> tv1(n);
+    std::vector<VVM::Real> pilog1(n);
+    std::vector<VVM::Real> tv1(n);
 
     for (size_t i = 0; i < n; ++i) {
-        double pi = std::pow(P_in[i] / P0, RbCp);
+        VVM::Real pi = std::pow(P_in[i] / P0, RbCp);
         pilog1[i] = std::log(pi);
-        tv1[i] = T_in[i] * (1.0 + 0.608 * Qv_in[i]);
+        tv1[i] = T_in[i] * (real(1.0) + real(0.608) * Qv_in[i]);
     }
 
-    input_z_[0] = 0.0; 
+    input_z_[0] = real(0.0); 
     
     for (size_t k = 1; k < n; ++k) {
-        double d_pilog = pilog1[k] - pilog1[k-1];
-        double tv_sum = tv1[k] + tv1[k-1];
-        double dz = - (Cp / (2.0 * g)) * d_pilog * tv_sum;
+        VVM::Real d_pilog = pilog1[k] - pilog1[k-1];
+        VVM::Real tv_sum = tv1[k] + tv1[k-1];
+        VVM::Real dz = - (Cp / (real(2.0) * g)) * d_pilog * tv_sum;
         
         input_z_[k] = input_z_[k-1] + dz;
     }
@@ -119,17 +119,17 @@ void TxtReader::initialize_thermodynamics(VVM::Core::State& state) {
     auto rhobar = state.get_field<1>("rhobar").get_host_data();
     auto rhobar_up = state.get_field<1>("rhobar_up").get_host_data();
     
-    double P0 = config_.get_value<double>("constants.P0");
-    double Rd = config_.get_value<double>("constants.Rd");
-    double Cp = config_.get_value<double>("constants.Cp");
-    double g = config_.get_value<double>("constants.gravity");
-    double dz = config_.get_value<double>("grid.dz");
-    double RbCp = Rd / Cp;
-    double GDZBCP = 2. * g * dz / Cp;
+    VVM::Real P0 = config_.get_value<VVM::Real>("constants.P0");
+    VVM::Real Rd = config_.get_value<VVM::Real>("constants.Rd");
+    VVM::Real Cp = config_.get_value<VVM::Real>("constants.Cp");
+    VVM::Real g = config_.get_value<VVM::Real>("constants.gravity");
+    VVM::Real dz = config_.get_value<VVM::Real>("grid.dz");
+    VVM::Real RbCp = Rd / Cp;
+    VVM::Real GDZBCP = real(2.) * g * dz / Cp;
     
-    double P_sfc_val = raw_data_.at("pbar")[0];
-    double T_sfc_val = raw_data_.at("Tbar")[0];
-    double Qv_sfc_val = raw_data_.at("qvbar")[0];
+    VVM::Real P_sfc_val = raw_data_.at("pbar")[0];
+    VVM::Real T_sfc_val = raw_data_.at("Tbar")[0];
+    VVM::Real Qv_sfc_val = raw_data_.at("qvbar")[0];
 
     pbar(h-1) = P_sfc_val;
     Tbar(h-1) = T_sfc_val;
@@ -139,21 +139,21 @@ void TxtReader::initialize_thermodynamics(VVM::Core::State& state) {
     const auto& Qv_in = raw_data_.at("qvbar");
 
     for (int k = h; k < nz; ++k) {
-        double z = z_mid(k);
+        VVM::Real z = z_mid(k);
         Tbar(k) = interpolate(z, input_z_, T_in);
         qvbar(k) = interpolate(z, input_z_, Qv_in);
     }
 
-    std::vector<double> pilog(nz);
+    std::vector<VVM::Real> pilog(nz);
     
-    double pi_sfc = std::pow(pbar(h-1) / P0, RbCp);
+    VVM::Real pi_sfc = std::pow(pbar(h-1) / P0, RbCp);
     pibar(h-1) = pi_sfc;
     pilog[h-1] = std::log(pi_sfc);
     pibar_up(h-1) = pi_sfc;
 
     for (int iter = 0; iter < 3; ++iter) {
         for (int k = h-1; k < nz; ++k) {
-            Tvbar(k) = Tbar(k) * (1.0 + 0.608 * qvbar(k));
+            Tvbar(k) = Tbar(k) * (real(1.0) + real(0.608) * qvbar(k));
         }
 
         pilog[h] = pilog[h-1] - GDZBCP / (Tvbar(h-1) + Tvbar(h)) * (z_mid(h)-z_up(h-1)) / dz;
@@ -170,7 +170,7 @@ void TxtReader::initialize_thermodynamics(VVM::Core::State& state) {
     }
 
     for (int k = h; k < nz; k++) {
-        pibar_up(k) = 0.5 * (pibar(k) + pibar(k+1));
+        pibar_up(k) = real(0.5) * (pibar(k) + pibar(k+1));
     }
 
     for (int k = h-1; k < nz; ++k) {
@@ -178,10 +178,10 @@ void TxtReader::initialize_thermodynamics(VVM::Core::State& state) {
     }
     
     for (int k = h-1; k < nz - 1; ++k) {
-        double alpha_k = 1.0 / rhobar(k);
-        double alpha_kp1 = 1.0 / rhobar(k+1);
-        double alpha_w = 0.5 * (alpha_k + alpha_kp1);
-        rhobar_up(k) = 1.0 / alpha_w;
+        VVM::Real alpha_k = real(1.0) / rhobar(k);
+        VVM::Real alpha_kp1 = real(1.0) / rhobar(k+1);
+        VVM::Real alpha_w = real(0.5) * (alpha_k + alpha_kp1);
+        rhobar_up(k) = real(1.0) / alpha_w;
     }
     rhobar_up(h-1) = rhobar(h-1); 
 
@@ -216,8 +216,8 @@ void TxtReader::initialize_forcing(VVM::Core::State& state) {
     bool has_u = raw_data_.count("U");
     bool has_v = raw_data_.count("V");
 
-    Kokkos::View<double*> Q1LS, Q2LS, U, V;
-    Kokkos::View<double*>::HostMirror Q1LS_h, Q2LS_h, U_h, V_h;
+    Kokkos::View<VVM::Real*> Q1LS, Q2LS, U, V;
+    Kokkos::View<VVM::Real*>::HostMirror Q1LS_h, Q2LS_h, U_h, V_h;
 
     if (has_q1) {
         if (!state.has_field("Q1")) state.add_field<1>("Q1", {nz});
@@ -243,25 +243,25 @@ void TxtReader::initialize_forcing(VVM::Core::State& state) {
     auto pibar = state.get_field<1>("pibar").get_host_data();
     const auto& P_in = raw_data_.at("pbar");
 
-    double Cp = config_.get_value<double>("constants.Cp");
-    double Lv = config_.get_value<double>("constants.Lv");
-    double secday = 86400.0;
-    double gamfac = Lv / Cp;
+    VVM::Real Cp = config_.get_value<VVM::Real>("constants.Cp");
+    VVM::Real Lv = config_.get_value<VVM::Real>("constants.Lv");
+    VVM::Real secday = real(86400.0);
+    VVM::Real gamfac = Lv / Cp;
 
     for (int k = h-1; k < nz; ++k) {
-        double p_target = pbar(k);
+        VVM::Real p_target = pbar(k);
 
         if (has_u) U_h(k) = interpolate(p_target, P_in, raw_data_.at("U"), true);
         if (has_v) V_h(k) = interpolate(p_target, P_in, raw_data_.at("V"), true);
 
         // Interpolate Q1, Q2
         if (has_q1) {
-            double q1_val = interpolate(p_target, P_in, raw_data_.at("Q1"), true);
+            VVM::Real q1_val = interpolate(p_target, P_in, raw_data_.at("Q1"), true);
             // Unit Conv: K/day -> K/s (divided by Exner) -> Advective Form
-            Q1LS_h(k) = -1.0 * q1_val / pibar(k) / secday;
+            Q1LS_h(k) = -real(1.0) * q1_val / pibar(k) / secday;
         }
         if (has_q2) {
-            double q2_val = interpolate(p_target, P_in, raw_data_.at("Q2"), true);
+            VVM::Real q2_val = interpolate(p_target, P_in, raw_data_.at("Q2"), true);
             // Unit Conv: K/day -> kg/kg/s
             Q2LS_h(k) = q2_val / (gamfac * secday);
         }
@@ -286,8 +286,8 @@ void TxtReader::initialize_forcing(VVM::Core::State& state) {
     }
 }
 
-double TxtReader::interpolate(double target_x, const std::vector<double>& x_vec, 
-                              const std::vector<double>& y_vec, bool is_pressure_coord) const {
+VVM::Real TxtReader::interpolate(VVM::Real target_x, const std::vector<VVM::Real>& x_vec, 
+                              const std::vector<VVM::Real>& y_vec, bool is_pressure_coord) const {
     size_t n = x_vec.size();
     if (n == 0) return 0.0;
     if (n == 1) return y_vec[0];
@@ -337,11 +337,11 @@ double TxtReader::interpolate(double target_x, const std::vector<double>& x_vec,
             }
         }
     }
-    double X  = target_x;
-    double X1 = x_vec[k1];
-    double X2 = x_vec[k2];
-    double F1 = y_vec[k1];
-    double F2 = y_vec[k2];
+    VVM::Real X  = target_x;
+    VVM::Real X1 = x_vec[k1];
+    VVM::Real X2 = x_vec[k2];
+    VVM::Real F1 = y_vec[k1];
+    VVM::Real F2 = y_vec[k2];
 
     return F1 + (F1 - F2) * (X - X1) / (X1 - X2);
 }

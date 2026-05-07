@@ -34,7 +34,7 @@ public:
     ~LandProcess() = default;
 
     void init();
-    void run(double dt);
+    void run(VVM::Real dt);
     void finalize();
     void prepare_static_data();
     void preprocessing_and_packing();

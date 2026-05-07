@@ -7,6 +7,7 @@
 #include "physics/land/LandProcess.hpp"
 #include "core/Initializer.hpp"
 #include "core/BoundaryConditionManager.hpp"
+#include "core/vvm_types.hpp"
 #include "dynamics/temporal_schemes/TimeIntegrator.hpp"
 #include "dynamics/forcings/SpongeLayer.hpp"
 #include "dynamics/forcings/RandomForcing.hpp"
@@ -25,7 +26,7 @@ public:
           Core::HaloExchanger& halo_exchanger);
 
     void init();
-    void run_step(double dt);
+    void run_step(VVM::Real dt);
     void finalize();
 
 private:

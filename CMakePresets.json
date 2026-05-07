@@ -26,6 +26,7 @@
         "NETCDF_Fortran_DIR": "/home/mog/libs_GPUVVM",
         "PNETCDF_DIR": "/home/mog/libs_GPUVVM",
 
+        "VVM_USE_DOUBLE_PRECISION": "ON",
         "ENABLE_NCCL": "ON",
         "EAMXX_ENABLE_GPU": "ON",
         "Kokkos_ENABLE_CUDA": "ON",
@@ -55,6 +56,7 @@
         "NETCDF_Fortran_DIR": "/work/aaron900129/netcdf-fortran_install",
         "PNETCDF_DIR": "/work/aaron900129/pnetcdf_install",
 
+        "VVM_USE_DOUBLE_PRECISION": "ON",
         "ENABLE_NCCL": "ON",
         "EAMXX_ENABLE_GPU": "ON",
         "Kokkos_ENABLE_CUDA": "ON",
@@ -84,6 +86,7 @@
         "NETCDF_Fortran_DIR": "/home/mog/Aaron/libs_GPUVVM",
         "PNETCDF_DIR": "/home/mog/Aaron/libs_GPUVVM",
 
+        "VVM_USE_DOUBLE_PRECISION": "ON",
         "ENABLE_NCCL": "ON",
         "EAMXX_ENABLE_GPU": "ON",
         "Kokkos_ENABLE_CUDA": "ON",
@@ -113,6 +116,7 @@
         "NETCDF_Fortran_DIR": "/work/aaron900129/netcdf-fortran_install",
         "PNETCDF_DIR": "/work/aaron900129/pnetcdf_install",
 
+        "VVM_USE_DOUBLE_PRECISION": "ON",
         "ENABLE_NCCL": "ON",
         "EAMXX_ENABLE_GPU": "ON",
         "Kokkos_ENABLE_CUDA": "ON",
@@ -142,6 +146,7 @@
         "NETCDF_Fortran_DIR": "/work/aaron900129/netcdf-fortran_install",
         "PNETCDF_DIR": "/work/aaron900129/pnetcdf_install",
 
+        "VVM_USE_DOUBLE_PRECISION": "ON",
         "ENABLE_NCCL": "ON",
         "EAMXX_ENABLE_GPU": "ON",
         "Kokkos_ENABLE_CUDA": "ON",

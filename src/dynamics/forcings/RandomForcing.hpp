@@ -2,6 +2,7 @@
 #include "core/State.hpp"
 #include "core/Grid.hpp"
 #include "core/Parameters.hpp"
+#include "core/vvm_types.hpp"
 #include "utils/ConfigurationManager.hpp"
 #include <Kokkos_Random.hpp>
 
@@ -22,8 +23,8 @@ private:
     const Core::Grid& grid_;
     const Core::Parameters& params_;
     bool enabled_;
-    double end_time_;
-    double amplitude_;
+    VVM::Real end_time_;
+    VVM::Real amplitude_;
     int k_start_;
     int k_end_;
     int seed_;

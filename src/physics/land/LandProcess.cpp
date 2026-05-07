@@ -148,24 +148,24 @@ void LandProcess::prepare_static_data() {
 
             int hx = topo_v(vj, vi);
             int hxp = topo_v(vj, vi) + 1;
-            double dz = z_mid_v(hxp) - z_up_v(hx);
-            m_hgt(i, j) = (dz < 2.0) ? 2.0 : dz;
+            VVM::Real dz = z_mid_v(hxp) - z_up_v(hx);
+            m_hgt(i, j) = (dz < real(2.0)) ? real(2.0) : dz;
 
             m_ps(i, j) = pbar_v(hxp); 
             m_prslki(i, j) = pibar_up_v(hx) / pibar_v(hxp);
 
-            m_sigmaf(i, j) = gvf(vj, vi) / 100.;  // Green Vegetation Fraction
-            m_sfemis(i, j) = 0.98; // Surface Emissivity
-            m_alb(i, j)    = albedo(vj, vi) / 100.;  // Surface albedo
-            m_shdmin(i, j) = shdmin(vj, vi) / 100.; // Minimum Fractional Coverage
-            m_shdmax(i, j) = shdmax(vj, vi) / 100.; // Maximum Fractional Coverage
+            m_sigmaf(i, j) = gvf(vj, vi) / real(100.);  // Green Vegetation Fraction
+            m_sfemis(i, j) = real(0.98); // Surface Emissivity
+            m_alb(i, j)    = albedo(vj, vi) / real(100.);  // Surface albedo
+            m_shdmin(i, j) = shdmin(vj, vi) / real(100.); // Minimum Fractional Coverage
+            m_shdmax(i, j) = shdmax(vj, vi) / real(100.); // Maximum Fractional Coverage
 
             // sea/land/ice, 0/1/2
             m_islimsk(i, j) = sea_land_ice_mask(vj, vi);
             m_vegtype(i, j) = vegtype(vj, vi); // vegetation type 20 types
             m_soiltype(i, j) = soiltype(vj, vi); // soil type 19 types
             m_slopetype(i, j) = slopetype(vj, vi); // slope 9 types
-            m_zorl(i, j) = 0.1; // surface roughness (m)
+            m_zorl(i, j) = real(0.1); // surface roughness (m)
         }
     );
 }
@@ -201,8 +201,8 @@ void LandProcess::preprocessing_and_packing() {
             
 
             m_t1(i, j) = th_v(hxp, vj, vi) * pibar_v(hxp);
-            m_u1(i, j) = 0.5 * (u_v(hxp, vj, vi) + u_v(hxp, vj, vi-1));
-            m_v1(i, j) = 0.5 * (v_v(hxp, vj, vi) + v_v(hxp, vj-1, vi));
+            m_u1(i, j) = real(0.5) * (u_v(hxp, vj, vi) + u_v(hxp, vj, vi-1));
+            m_v1(i, j) = real(0.5) * (v_v(hxp, vj, vi) + v_v(hxp, vj-1, vi));
             // m_u1(i, j) = u_v(hxp, vj, vi);
             // m_v1(i, j) = v_v(hxp, vj, vi);
             m_q1(i, j) = qv_v(hxp, vj, vi);
@@ -250,7 +250,7 @@ void LandProcess::postprocessing_and_unpacking() {
 }
 
 
-void LandProcess::run(double dt) {
+void LandProcess::run(VVM::Real dt) {
     preprocessing_and_packing();
 
     Kokkos::fence();

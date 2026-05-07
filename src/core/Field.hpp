@@ -12,7 +12,7 @@ namespace VVM {
 namespace Core {
 
 // Helper to create Kokkos::View of varying dimensions
-template<size_t Dim, typename ScalarType = double>
+template<size_t Dim, typename ScalarType = VVM::Real>
 struct ViewTypeHelper;
 
 template<typename ScalarType> struct ViewTypeHelper<0, ScalarType> { using type = Kokkos::View<ScalarType>; };
@@ -43,7 +43,7 @@ public:
         else if constexpr (Dim == 3) data_ = ViewType(name_, dims[0], dims[1], dims[2]);
         else if constexpr (Dim == 4) data_ = ViewType(name_, dims[0], dims[1], dims[2], dims[3]);
 
-        Kokkos::deep_copy(data_, 0.0);
+        Kokkos::deep_copy(data_, real(0.0));
         Kokkos::fence();
     }
 
@@ -58,7 +58,7 @@ public:
 
     // Initialize all field values to zero
     void set_to_zero() {
-        Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), data_, 0.0);
+        Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), data_, real(0.0));
     }
 
     // Get a const reference to the Kokkos::View (for device computations)

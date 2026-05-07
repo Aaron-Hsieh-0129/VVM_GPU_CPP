@@ -45,11 +45,11 @@ WindSolver::WindSolver(const Core::Grid& grid, const Utils::ConfigurationManager
         w_solver_method_ = WSolverMethod::JACOBI;
     }
 
-    double h_WRXMU, h_rdx2, h_rdy2;
+    VVM::Real h_WRXMU, h_rdx2, h_rdy2;
     Kokkos::deep_copy(h_WRXMU, params_.WRXMU);
     Kokkos::deep_copy(h_rdx2,  params_.rdx2);
     Kokkos::deep_copy(h_rdy2,  params_.rdy2);
-    h_inv_C0_ = 1.0 / (h_WRXMU + 2.0 * h_rdx2 + 2.0 * h_rdy2);
+    h_inv_C0_ = real(1.0) / (h_WRXMU + real(2.0) * h_rdx2 + real(2.0) * h_rdy2);
 
 }
 
@@ -98,10 +98,10 @@ void WindSolver::solve_w(Core::State& state) {
     auto& W3DNM1 = state.get_field<3>("W3DNM1").get_mutable_device_data();
     Kokkos::parallel_for("W3DNP1", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz,ny,nx}),
         KOKKOS_LAMBDA(int k, int j, int i) {
-            double w_val = w(k,j,i);
+            VVM::Real w_val = w(k,j,i);
             
             if (k >= h && k < nz-h-1) {
-                double w_np1 = 2.0 * w_val - W3DNM1(k,j,i);
+                VVM::Real w_np1 = real(2.0) * w_val - W3DNM1(k,j,i);
                 W3DNM1(k,j,i) = w_val;
                 w(k,j,i) = w_np1;
             }
@@ -183,15 +183,15 @@ void WindSolver::solve_w(Core::State& state) {
 
             Kokkos::parallel_for("jacobi_w_solver", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1,ny-h,nx-h}),
                 KOKKOS_LAMBDA(int k, int j, int i) {
-                    const double horizontal_terms = (W3DN(k,j,i+1)+W3DN(k,j,i-1))*rdx2()
+                    const VVM::Real horizontal_terms = (W3DN(k,j,i+1)+W3DN(k,j,i-1))*rdx2()
                                                   + (W3DN(k,j+1,i)+W3DN(k,j-1,i))*rdy2();
 
-                    const double vertical_terms = -AGAU(k)*W3DN(k-1,j,i)*rhobar_up(k-1)
+                    const VVM::Real vertical_terms = -AGAU(k)*W3DN(k-1,j,i)*rhobar_up(k-1)
                                                   -CGAU(k)*W3DN(k+1,j,i)*rhobar_up(k+1);
 
-                    const double diagonal_term = BGAU(k)*rhobar_up(k) - WRXMU();
+                    const VVM::Real diagonal_term = BGAU(k)*rhobar_up(k) - WRXMU();
                     
-                    if (diagonal_term != 0.0) {
+                    if (diagonal_term != real(0.0)) {
                         w(k,j,i) = (YTEM(k,j,i) + horizontal_terms + vertical_terms) / diagonal_term;
                     }
                 }
@@ -306,10 +306,10 @@ void WindSolver::solve_uv(Core::State& state) {
     // Note: this data clipping is necessary to prevent too small values and this makes CPU and GPU VVM same.
     Kokkos::parallel_for("DataClipZero", 1, KOKKOS_LAMBDA(const int i) {
         if (Kokkos::abs(utopm()) < 1e-15) {
-            utopm() = 0.0;
+            utopm() = real(0.0);
         }
         if (Kokkos::abs(vtopm()) < 1e-15) {
-            vtopm() = 0.0;
+            vtopm() = real(0.0);
         }
     });
 
@@ -374,11 +374,11 @@ void WindSolver::relax_2d(Core::Field<2>& A_field, Core::Field<2>& ANM1_field, C
     const auto& iter_num = params_.solver_iteration;
     const auto& rdx2 = params_.rdx2;
     const auto& rdy2 = params_.rdy2;
-    const double inv_C0 = h_inv_C0_;
+    const VVM::Real inv_C0 = h_inv_C0_;
 
     Kokkos::parallel_for("interpolation", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {ny,nx}),
         KOKKOS_LAMBDA(int j, int i) {
-            AOUT(j,i) = 2.*A(j,i) - ANM1(j,i);
+            AOUT(j,i) = real(2.)*A(j,i) - ANM1(j,i);
         }
     );
 

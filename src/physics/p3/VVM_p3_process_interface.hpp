@@ -10,6 +10,7 @@
 #include "core/State.hpp"
 #include "core/Parameters.hpp"
 #include "core/HaloExchanger.hpp"
+#include "core/vvm_types.hpp"
 #include "utils/ConfigurationManager.hpp"
 
 #include "share/core/eamxx_types.hpp" 
@@ -278,7 +279,7 @@ struct p3_postamble {
     
     // Local variables
     int m_ncol, m_npack;
-    double m_dt;
+    VVM::Real m_dt;
     view_2d       T_atm; // IN/OUT
     view_2d_const pmid;
     view_2d_const pmid_dry;
@@ -362,13 +363,13 @@ public:
     void initialize(VVM::Core::State& state);
     void finalize();
 
-    void run(VVM::Core::State& state, const double dt);
+    void run(VVM::Core::State& state, const VVM::Real dt);
 
     /**
      * @brief Pack: VVM 3D (z,y,x) + halo -> P3 2D (col,lev_packs)
      */
     template<typename VVMViewType, typename P3ViewType>
-    void pack_3d_to_2d_packed(const VVMViewType& vvm_view, const P3ViewType& p3_view, const double pad_val = 0.0);
+    void pack_3d_to_2d_packed(const VVMViewType& vvm_view, const P3ViewType& p3_view, const VVM::Real pad_val = 0.0);
 
     /**
      * @brief Unpack: P3 2D (col,lev_packs) -> VVM 3D (z,y,x) + halo
@@ -488,7 +489,7 @@ protected:
 
     std::unique_ptr<VVM::Core::Field<3>> m_pseudo_density;
 
-    double m_output_interval_s;
+    VVM::Real m_output_interval_s;
     bool m_need_reset_precip = false;
 
 #ifdef SCREAM_P3_SMALL_KERNELS

@@ -17,8 +17,8 @@ Model::Model(const Utils::ConfigurationManager& config,
     std::string x_bc = config.get_value<std::string>("grid.boundary_condition.x", "periodic");
     std::string y_bc = config.get_value<std::string>("grid.boundary_condition.y", "periodic");
     bc_manager_.initialize_bc_types(x_bc, y_bc);
-    double dt_s = params_.get_value_host(params_.dt);
-    double epsilon = 1e-6;
+    VVM::Real dt_s = params_.get_value_host(params_.dt);
+    VVM::Real epsilon = real(1e-6);
 
     std::string mode = config_.get_value<std::string>("simulation.idealized_test", "none");
     std::vector<std::string> no_solver_mode = {"advection_u", "advection_v", "advection_w", "stretching", "twisting"};
@@ -39,8 +39,8 @@ Model::Model(const Utils::ConfigurationManager& config,
     if (config_.get_value<bool>("physics.rrtmgp.enable_rrtmgp", false)) {
         radiation_ = std::make_unique<Physics::RRTMGP::RRTMGPRadiation>(config_, grid_, params_);
 
-        double rad_freq_s = config_.get_value<double>("physics.rrtmgp.rad_frequency_s", 1.0);
-        double remainder = std::fmod(rad_freq_s, dt_s);
+        VVM::Real rad_freq_s = config_.get_value<VVM::Real>("physics.rrtmgp.rad_frequency_s", 1.0);
+        VVM::Real remainder = std::fmod(rad_freq_s, dt_s);
 
         if (remainder > epsilon && (dt_s - remainder) > epsilon) {
             throw std::runtime_error("Error: RRTMGP radiation calling frequency can't be evenly divided by dt.");
@@ -79,9 +79,9 @@ Model::Model(const Utils::ConfigurationManager& config,
             land_ = std::make_unique<Physics::LandProcess>(config_, grid_, params_, halo_exchanger_, state_, ocean_scheme);
         }
 
-        double surface_process_s = config_.get_value<double>("physics.surface_process.frequency_s", 1);
+        VVM::Real surface_process_s = config_.get_value<VVM::Real>("physics.surface_process.frequency_s", 1);
 
-        double remainder = std::fmod(surface_process_s, dt_s);
+        VVM::Real remainder = std::fmod(surface_process_s, dt_s);
 
         if (remainder > epsilon && (dt_s - remainder) > epsilon) {
             throw std::runtime_error("Error: surface process calling frequency can't be evenly divided by dt.");
@@ -117,9 +117,9 @@ void Model::init() {
     if (!state_.has_field("th_perturb")) state_.add_field<3>("th_perturb", {nz, ny, nx});
 }
 
-void Model::run_step(double dt) {
+void Model::run_step(VVM::Real dt) {
     size_t current_step = state_.get_step();
-    double current_time = state_.get_time();
+    VVM::Real current_time = state_.get_time();
 
     if (lateral_boundary_nudging_) {
         lateral_boundary_nudging_->update_large_scale_forcing(state_, current_time);

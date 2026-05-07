@@ -186,9 +186,9 @@ void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
     const int nx = grid_.get_local_total_points_x();
     const int h = grid_.get_halo_cells();
     
-    const double dz = grid_.get_dz();
-    const double dy = grid_.get_dy();
-    const double dx = grid_.get_dx();
+    const VVM::Real dz = grid_.get_dz();
+    const VVM::Real dy = grid_.get_dy();
+    const VVM::Real dx = grid_.get_dx();
     const auto& rdx = params_.rdx;
     const auto& rdy = params_.rdy;
 
@@ -334,10 +334,10 @@ void DynamicalCore::compute_uvtopmn() {
     auto tempvmn = tempvmn_;
     Kokkos::parallel_for("DataClipZero", 1, KOKKOS_LAMBDA(const int i) {
         if (Kokkos::abs(tempumn()) < 1e-15) {
-            tempumn() = 0.0;
+            tempumn() = real(0.0);
         }
         if (Kokkos::abs(tempvmn()) < 1e-15) {
-            tempvmn() = 0.0;
+            tempvmn() = real(0.0);
         }
     });
 
@@ -371,17 +371,17 @@ void DynamicalCore::compute_uvtopmn() {
         auto mean_v_turb = state_.calculate_horizontal_mean(tempv_field);
 #endif
         Kokkos::parallel_for("DataClipZero", 1, KOKKOS_LAMBDA(const int i) {
-            if (Kokkos::abs(mean_u_turb()) < 1e-15) {
-                mean_u_turb() = 0.0;
+            if (Kokkos::abs(mean_u_turb()) < real(1e-15)) {
+                mean_u_turb() = real(0.0);
             }
-            if (Kokkos::abs(mean_v_turb()) < 1e-15) {
-                mean_v_turb() = 0.0;
+            if (Kokkos::abs(mean_v_turb()) < real(1e-15)) {
+                mean_v_turb() = real(0.0);
             }
         });
     }
 
-    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), mean_u_coriolis_, 0.0);
-    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), mean_v_coriolis_, 0.0);
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), mean_u_coriolis_, real(0.0));
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), mean_v_coriolis_, real(0.0));
 
     auto mean_u_coriolis = mean_u_coriolis_;
     auto mean_v_coriolis = mean_v_coriolis_;
@@ -402,11 +402,11 @@ void DynamicalCore::compute_uvtopmn() {
         auto mean_v_coriolis = state_.calculate_horizontal_mean(tempv_field);
 #endif
         Kokkos::parallel_for("DataClipZero", 1, KOKKOS_LAMBDA(const int i) {
-            if (Kokkos::abs(mean_u_coriolis()) < 1e-15) {
-                mean_u_coriolis() = 0.0;
+            if (Kokkos::abs(mean_u_coriolis()) < real(1e-15)) {
+                mean_u_coriolis() = real(0.0);
             }
-            if (Kokkos::abs(mean_v_coriolis()) < 1e-15) {
-                mean_v_coriolis() = 0.0;
+            if (Kokkos::abs(mean_v_coriolis()) < real(1e-15)) {
+                mean_v_coriolis() = real(0.0);
             }
         });
     }
@@ -434,11 +434,11 @@ void DynamicalCore::compute_uvtopmn() {
         Kokkos::parallel_for("Cauculate_uvtopmn", 
             1, 
             KOKKOS_LAMBDA(const int i) {
-                d_utopmn(now_idx) = 0.25 * flex_height_coef_mid(NK2) * tempumn() * rdz() / rhobar(NK2)
-                                   -0.25 * flex_height_coef_mid(NK2) * mean_u_turb() * rdz() / rhobar(NK2)
+                d_utopmn(now_idx) = real(0.25) * flex_height_coef_mid(NK2) * tempumn() * rdz() / rhobar(NK2)
+                                   -real(0.25) * flex_height_coef_mid(NK2) * mean_u_turb() * rdz() / rhobar(NK2)
                                    +mean_u_coriolis();
-                d_vtopmn(now_idx) = 0.25 * flex_height_coef_mid(NK2) * tempvmn() * rdz() / rhobar(NK2)
-                                   -0.25 * flex_height_coef_mid(NK2) * mean_v_turb() * rdz() / rhobar(NK2)
+                d_vtopmn(now_idx) = real(0.25) * flex_height_coef_mid(NK2) * tempvmn() * rdz() / rhobar(NK2)
+                                   -real(0.25) * flex_height_coef_mid(NK2) * mean_v_turb() * rdz() / rhobar(NK2)
                                    -mean_v_coriolis();
 
                 utopmn_new_view() = utopmn_old_view() + dt() * d_utopmn(now_idx);
@@ -450,17 +450,17 @@ void DynamicalCore::compute_uvtopmn() {
         Kokkos::parallel_for("Cauculate_uvtopmn", 
             1, 
             KOKKOS_LAMBDA(const int i) {
-                d_utopmn(now_idx) = 0.25 * flex_height_coef_mid(NK2) * tempumn() * rdz() / rhobar(NK2)
-                                   -0.25 * flex_height_coef_mid(NK2) * mean_u_turb() * rdz() / rhobar(NK2)
+                d_utopmn(now_idx) = real(0.25) * flex_height_coef_mid(NK2) * tempumn() * rdz() / rhobar(NK2)
+                                   -real(0.25) * flex_height_coef_mid(NK2) * mean_u_turb() * rdz() / rhobar(NK2)
                                    +mean_u_coriolis();
-                d_vtopmn(now_idx) = 0.25 * flex_height_coef_mid(NK2) * tempvmn() * rdz() / rhobar(NK2)
-                                   -0.25 * flex_height_coef_mid(NK2) * mean_v_turb() * rdz() / rhobar(NK2)
+                d_vtopmn(now_idx) = real(0.25) * flex_height_coef_mid(NK2) * tempvmn() * rdz() / rhobar(NK2)
+                                   -real(0.25) * flex_height_coef_mid(NK2) * mean_v_turb() * rdz() / rhobar(NK2)
                                    -mean_v_coriolis();
 
                 utopmn_new_view() = utopmn_old_view() 
-                        + dt() * (1.5 * d_utopmn(now_idx) - 0.5 * d_utopmn(prev_idx));
+                        + dt() * (real(1.5) * d_utopmn(now_idx) - real(0.5) * d_utopmn(prev_idx));
                 vtopmn_new_view() = vtopmn_old_view() 
-                        + dt() * (1.5 * d_vtopmn(now_idx) - 0.5 * d_vtopmn(prev_idx));
+                        + dt() * (real(1.5) * d_vtopmn(now_idx) - real(0.5) * d_vtopmn(prev_idx));
             }
         );
     }
@@ -476,7 +476,7 @@ void DynamicalCore::calculate_thermo_tendencies() {
         if (state_.has_field(fe_name)) {
             auto& field = state_.get_field<3>(fe_name);
             auto data = field.get_mutable_device_data();
-            Kokkos::deep_copy(data, 0.0);
+            Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), data, real(0.0));
         }
     }
 
@@ -487,7 +487,7 @@ void DynamicalCore::calculate_thermo_tendencies() {
     }
 }
 
-void DynamicalCore::update_thermodynamics(double dt) {
+void DynamicalCore::update_thermodynamics(VVM::Real dt) {
     const int h = grid_.get_halo_cells();
     const auto& max_topo_idx = params_.max_topo_idx;
     const int nz = grid_.get_local_total_points_z();
@@ -518,7 +518,7 @@ void DynamicalCore::update_thermodynamics(double dt) {
                     Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
                     KOKKOS_LAMBDA(const int k, const int j, const int i) {
                         if (ITYPEW(k,j,i) != 1) {
-                            var(k,j,i) = 0.;
+                            var(k,j,i) = real(0.);
                         }
                     }
                 );
@@ -574,7 +574,7 @@ void DynamicalCore::calculate_vorticity_tendencies() {
     }
 }
 
-void DynamicalCore::update_vorticity(double dt) {
+void DynamicalCore::update_vorticity(VVM::Real dt) {
     const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
     const int nx = grid_.get_local_total_points_x();

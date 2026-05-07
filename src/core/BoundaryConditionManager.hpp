@@ -3,6 +3,7 @@
 
 #include "core/Grid.hpp"
 #include "core/Field.hpp"
+#include "core/vvm_types.hpp"
 
 namespace VVM {
 namespace Core {

@@ -10,6 +10,7 @@
 #include "core/Parameters.hpp"
 #include "core/HaloExchanger.hpp"
 #include "core/Field.hpp"
+#include "core/vvm_types.hpp"
 #include "utils/ConfigurationManager.hpp"
 #include "utils/Timer.hpp"
 #include "utils/TimingManager.hpp"
@@ -58,7 +59,7 @@ struct TerrainMasks {
     }
 
     KOKKOS_INLINE_FUNCTION
-    double val(int k, int j, int i, CoeffID id) const {
+    VVM::Real val(int k, int j, int i, CoeffID id) const {
         return ((data(k, j, i) >> id) & 1) ? 1.0 : 0.0;
     }
 
@@ -80,7 +81,7 @@ public:
                       Core::HaloExchanger& halo_exchanger,
                       Core::State& state);
 
-    void compute_coefficients(Core::State& state, double dt);
+    void compute_coefficients(Core::State& state, VVM::Real dt);
 
     template<size_t Dim>
     void calculate_tendencies(Core::State& state, 
@@ -102,16 +103,16 @@ private:
     std::vector<std::string> dynamics_vars_;
     std::vector<std::string> thermodynamics_vars_;
 
-    double dx_, dy_, dz_;
-    double rdx_, rdy_, rdz_;
-    double rdx2_, rdy2_, rdz2_;
+    VVM::Real dx_, dy_, dz_;
+    VVM::Real rdx_, rdy_, rdz_;
+    VVM::Real rdx2_, rdy2_, rdz2_;
     
-    double deld_;    // Grid scale length
-    double ramd0s_;  // Asymptotic mixing length squared
-    double critmn_;  // Minimum viscosity
+    VVM::Real deld_;    // Grid scale length
+    VVM::Real ramd0s_;  // Asymptotic mixing length squared
+    VVM::Real critmn_;  // Minimum viscosity
     
-    double grav_;
-    double vk_;
+    VVM::Real grav_;
+    VVM::Real vk_;
 
     TerrainMasks masks_;
 };

@@ -3,10 +3,11 @@
 
 #include "SpatialScheme.hpp"
 #include "core/HaloExchanger.hpp"
+#include "core/vvm_types.hpp"
+#include "core/BoundaryConditionManager.hpp"
 #include "utils/ConfigurationManager.hpp"
 #include "utils/Timer.hpp"
 #include "utils/TimingManager.hpp"
-#include "core/BoundaryConditionManager.hpp"
 
 namespace VVM {
 namespace Dynamics {

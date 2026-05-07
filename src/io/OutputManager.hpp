@@ -11,6 +11,7 @@
 #include "core/Grid.hpp"
 #include "core/State.hpp"
 #include "core/Parameters.hpp"
+#include "core/vvm_types.hpp"
 #include "utils/ConfigurationManager.hpp"
 #include "utils/Timer.hpp"
 #include "utils/TimingManager.hpp"
@@ -28,7 +29,7 @@ public:
     OutputManager(OutputManager&&) = delete;
     OutputManager& operator=(OutputManager&&) = delete;
 
-    void write(int step, double time);
+    void write(int step, VVM::Real time);
     void write_static_data();
     void write_static_topo_file();
 
@@ -41,8 +42,8 @@ private:
     std::string filename_prefix_;
     std::vector<std::string> fields_to_output_;
 
-    double output_interval_s_;
-    double total_time_;
+    VVM::Real output_interval_s_;
+    VVM::Real total_time_;
     std::string engine_type_;
 
     int rank_;
@@ -51,14 +52,14 @@ private:
     adios2::ADIOS adios_;
     adios2::IO io_;
     adios2::Engine writer_;
-    std::map<std::string, adios2::Variable<double>> field_variables_;
+    std::map<std::string, adios2::Variable<VVM::Real>> field_variables_;
 
     size_t output_x_start_, output_y_start_, output_z_start_;
     size_t output_x_end_, output_y_end_, output_z_end_;
     // size_t output_x_stride_, output_y_stride_, output_z_stride_;
 
     bool variables_defined_ = false;
-    adios2::Variable<double> var_time_;
+    adios2::Variable<VVM::Real> var_time_;
 
     void define_variables();
     void grads_ctl_file();
@@ -66,10 +67,10 @@ private:
     std::string format_to_six_digits(int number);
 
 
-    std::map<std::string, Kokkos::View<double*, Kokkos::HostSpace>> host_buffers_1d_;
-    std::map<std::string, Kokkos::View<double**, Kokkos::LayoutRight, Kokkos::HostSpace>> host_buffers_2d_;
-    std::map<std::string, Kokkos::View<double***, Kokkos::LayoutRight, Kokkos::HostSpace>> host_buffers_3d_;
-    std::map<std::string, Kokkos::View<double****, Kokkos::LayoutRight, Kokkos::HostSpace>> host_buffers_4d_;
+    std::map<std::string, Kokkos::View<VVM::Real*, Kokkos::HostSpace>> host_buffers_1d_;
+    std::map<std::string, Kokkos::View<VVM::Real**, Kokkos::LayoutRight, Kokkos::HostSpace>> host_buffers_2d_;
+    std::map<std::string, Kokkos::View<VVM::Real***, Kokkos::LayoutRight, Kokkos::HostSpace>> host_buffers_3d_;
+    std::map<std::string, Kokkos::View<VVM::Real****, Kokkos::LayoutRight, Kokkos::HostSpace>> host_buffers_4d_;
 };
 
 } // namespace IO

@@ -51,15 +51,15 @@ void Takacs::calculate_flux_convergence_x(
     // The boundary of u has been processed in advection so the loop contains all grids
     Kokkos::parallel_for("uplus_minus_cal", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,0,0}, {k_end,ny,nx}),
         KOKKOS_LAMBDA(int k, int j, int i) {
-            uplus(k,j,i)  = 0.5*(u(k,j,i)+Kokkos::abs(u(k,j,i)));
-            uminus(k,j,i) = 0.5*(u(k,j,i)-Kokkos::abs(u(k,j,i)));
+            uplus(k,j,i)  = real(0.5)*(u(k,j,i)+Kokkos::abs(u(k,j,i)));
+            uminus(k,j,i) = real(0.5)*(u(k,j,i)-Kokkos::abs(u(k,j,i)));
         }
     );
 
     Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end,ny-h,nx-h}),
         KOKKOS_LAMBDA(int k, int j, int i) {
             flux(k,j,i) = u(k,j,i)*(q(k,j,i+1)+q(k,j,i)) + 
-                      -1./3.*( 
+                      -real(1.)/real(3.)*( 
                          uplus(k,j,i)*(q(k,j,i+1)-q(k,j,i)) - Kokkos::sqrt(uplus(k,j,i))*Kokkos::sqrt(uplus(k,j,i-1))*(q(k,j,i)-q(k,j,i-1)) - 
                         uminus(k,j,i)*(q(k,j,i+1)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(uminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(uminus(k,j,i+1)))*(q(k,j,i+2)-q(k,j,i+1)) 
                       );
@@ -76,7 +76,7 @@ void Takacs::calculate_flux_convergence_x(
     Kokkos::parallel_for("flux_convergence_tendency", 
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            tendency(k,j,i) += -0.5*(flux(k,j,i) - flux(k,j,i-1)) * rdx_view();
+            tendency(k,j,i) += -real(0.5)*(flux(k,j,i) - flux(k,j,i-1)) * rdx_view();
         }
     );
     return;
@@ -125,15 +125,15 @@ void Takacs::calculate_flux_convergence_y(
     // The boundary of v has been processed in advection so the loop contains all grids
     Kokkos::parallel_for("vplus_minus_cal", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,0,0}, {k_end,ny,nx}),
         KOKKOS_LAMBDA(int k, int j, int i) {
-            vplus(k,j,i)  = 0.5*(v(k,j,i)+Kokkos::abs(v(k,j,i)));
-            vminus(k,j,i) = 0.5*(v(k,j,i)-Kokkos::abs(v(k,j,i)));
+            vplus(k,j,i)  = real(0.5)*(v(k,j,i)+Kokkos::abs(v(k,j,i)));
+            vminus(k,j,i) = real(0.5)*(v(k,j,i)-Kokkos::abs(v(k,j,i)));
         }
     );
 
     Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end,ny-h,nx-h}),
         KOKKOS_LAMBDA(int k, int j, int i) {
             flux(k,j,i) = v(k,j,i)*(q(k,j+1,i)+q(k,j,i)) + 
-                          -1./3.*( 
+                          -real(1.)/real(3.)*( 
                              vplus(k,j,i)*(q(k,j+1,i)-q(k,j,i)) - Kokkos::sqrt(vplus(k,j,i))*Kokkos::sqrt(vplus(k,j-1,i))*(q(k,j,i)-q(k,j-1,i)) - 
                             vminus(k,j,i)*(q(k,j+1,i)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(vminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(vminus(k,j+1,i)))*(q(k,j+2,i)-q(k,j+1,i)) 
                           );
@@ -150,7 +150,7 @@ void Takacs::calculate_flux_convergence_y(
     Kokkos::parallel_for("flux_convergence_tendency", 
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start,h,h}, {k_end, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            tendency(k,j,i) += -0.5*(flux(k,j,i) - flux(k,j-1,i)) * rdy_view();
+            tendency(k,j,i) += -real(0.5)*(flux(k,j,i) - flux(k,j-1,i)) * rdy_view();
         }
     );
     return;
@@ -188,8 +188,8 @@ void Takacs::calculate_flux_convergence_z(
     // The boundary of w has been processed in advection so the loop contains all grids
     Kokkos::parallel_for("wplus_minus_cal", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz,ny,nx}),
         KOKKOS_LAMBDA(int k, int j, int i) {
-            wplus(k,j,i)  = 0.5*(w(k,j,i)+Kokkos::abs(w(k,j,i)));
-            wminus(k,j,i) = 0.5*(w(k,j,i)-Kokkos::abs(w(k,j,i)));
+            wplus(k,j,i)  = real(0.5)*(w(k,j,i)+Kokkos::abs(w(k,j,i)));
+            wminus(k,j,i) = real(0.5)*(w(k,j,i)-Kokkos::abs(w(k,j,i)));
         }
     );
 
@@ -202,8 +202,8 @@ void Takacs::calculate_flux_convergence_z(
                 flux(nz-h-2,j,i) = w(nz-h-2,j,i)*(q(nz-h-1,j,i)+q(nz-h-2,j,i));
                 // flux(nz-h-2,j,i) = w(nz-h-2,j,i);
                 // flux(nz-h-2,j,i) = q(nz-h-1,j,i)+q(nz-h-2,j,i);
-                if (w(nz-h-2,j,i) >= 0.) {
-                    flux(nz-h-2,j,i) += -1./3.*(
+                if (w(nz-h-2,j,i) >= real(0.)) {
+                    flux(nz-h-2,j,i) += -real(1.)/real(3.)*(
                             wplus(nz-h-2,j,i)*(q(nz-h-1,j,i)-q(nz-h-2,j,i)) - Kokkos::sqrt(wplus(nz-h-2,j,i))*Kokkos::sqrt(wplus(nz-h-3,j,i))*(q(nz-h-2,j,i)-q(nz-h-3,j,i))
                         );
                 }
@@ -215,21 +215,21 @@ void Takacs::calculate_flux_convergence_z(
             KOKKOS_LAMBDA(int k, int j, int i) {
                 flux(k,j,i) = w(k,j,i)*(q(k+1,j,i)+q(k,j,i));
                 if (k == h-1)  {
-                    if (w(k,j,i) < 0.) {
-                        flux(k,j,i) += -1./3.*( 
+                    if (w(k,j,i) < real(0.)) {
+                        flux(k,j,i) += -real(1.)/real(3.)*( 
                                 -wminus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(wminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(wminus(k+1,j,i)))*(q(k+2,j,i)-q(k+1,j,i)) 
                               );
                     }
                 }
                 else if (k == nz-h-2) {
                     if (w(k,j,i) >= 0.) {
-                        flux(k,j,i) += -1./3.*( 
+                        flux(k,j,i) += -real(1.)/real(3.)*( 
                                  wplus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(wplus(k,j,i))*Kokkos::sqrt(wplus(k-1,j,i))*(q(k,j,i)-q(k-1,j,i)) 
                               );
                     }
                 }
                 else {
-                    flux(k,j,i) += -1./3.*( 
+                    flux(k,j,i) += -real(1.)/real(3.)*( 
                              wplus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(wplus(k,j,i))*Kokkos::sqrt(wplus(k-1,j,i))*(q(k,j,i)-q(k-1,j,i)) - 
                             wminus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(wminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(wminus(k+1,j,i)))*(q(k+2,j,i)-q(k+1,j,i)) 
                           );
@@ -243,20 +243,20 @@ void Takacs::calculate_flux_convergence_z(
                 flux(k,j,i) = w(k,j,i)*(q(k+1,j,i)+q(k,j,i));
                 if (k == h) {
                     if (w(k,j,i) < 0.) {
-                        flux(k,j,i) += -1./3.*(
+                        flux(k,j,i) += -real(1.)/real(3.)*(
                                 -wminus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(wminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(wminus(k+1,j,i)))*(q(k+2,j,i)-q(k+1,j,i)) 
                               );
                     }
                 }
                 else if (k == nz-h-2) {
                     if (w(k,j,i) >= 0.) {
-                        flux(k,j,i) += -1./3.*( 
+                        flux(k,j,i) += -real(1.)/real(3.)*( 
                                  wplus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(wplus(k,j,i))*Kokkos::sqrt(wplus(k-1,j,i))*(q(k,j,i)-q(k-1,j,i)) 
                               );
                     }
                 }
                 else {
-                    flux(k,j,i) += -1./3.*( 
+                    flux(k,j,i) += -real(1.)/real(3.)*( 
                              wplus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(wplus(k,j,i))*Kokkos::sqrt(wplus(k-1,j,i))*(q(k,j,i)-q(k-1,j,i)) - 
                             wminus(k,j,i)*(q(k+1,j,i)-q(k,j,i)) - Kokkos::sqrt(Kokkos::abs(wminus(k,j,i)))*Kokkos::sqrt(Kokkos::abs(wminus(k+1,j,i)))*(q(k+2,j,i)-q(k+1,j,i)) 
                           );
@@ -276,8 +276,8 @@ void Takacs::calculate_flux_convergence_z(
             // This is for vertical periodic boundary
             Kokkos::parallel_for("flux_convergence", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
                 KOKKOS_LAMBDA(int j, int i) {
-                    flux(h-1,j,i) = 0.;
-                    flux(nz-h-1,j,i) = 0.;
+                    flux(h-1,j,i) = real(0.);
+                    flux(nz-h-1,j,i) = real(0.);
                 }
             );
         }
@@ -340,17 +340,17 @@ void Takacs::calculate_stretching_tendency_x(
     Kokkos::parallel_for("stretching_term_xi",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h-1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            const double term_at_j_plus_1 = 
+            const VVM::Real term_at_j_plus_1 = 
                 (xi(k,j,i)+xi(k,j+1,i)) * 
                 (fact1_xi_eta(k) * rhobar(k+1) * (u(k+1, j+1, i) - u(k+1, j+1, i-1)) +
                  fact2_xi_eta(k) * rhobar(k)   * (u(k,   j+1, i) - u(k,   j+1, i-1)) );
 
-            const double term_at_j = 
+            const VVM::Real term_at_j = 
                 (xi(k,j,i)+xi(k,j-1,i)) * 
                 (fact1_xi_eta(k) * rhobar(k+1) * (u(k+1, j, i) - u(k+1, j, i-1)) +
                  fact2_xi_eta(k) * rhobar(k)   * (u(k,   j, i) - u(k,   j, i-1)) );
 
-            tendency(k, j, i) += 0.125 * rdx() * (term_at_j_plus_1 + term_at_j);
+            tendency(k, j, i) += real(0.125) * rdx() * (term_at_j_plus_1 + term_at_j);
         }
     );
     return;
@@ -379,17 +379,17 @@ void Takacs::calculate_stretching_tendency_y(
     Kokkos::parallel_for("stretching_term_eta",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h-1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            const double term_at_i_plus_1 = 
+            const VVM::Real term_at_i_plus_1 = 
                 (eta(k,j,i)+eta(k,j,i+1)) * 
                 (fact1_xi_eta(k) * rhobar(k+1) * (v(k+1, j, i+1) - v(k+1, j-1, i+1)) +
                  fact2_xi_eta(k) * rhobar(k)   * (v(k,   j, i+1) - v(k,   j-1, i+1)) );
 
-            const double term_at_i = 
+            const VVM::Real term_at_i = 
                 (eta(k,j,i)+eta(k,j,i-1)) * 
                 (fact1_xi_eta(k) * rhobar(k+1) * (v(k+1, j, i) - v(k+1, j-1, i)) +
                  fact2_xi_eta(k) * rhobar(k)   * (v(k,   j, i) - v(k,   j-1, i)) );
 
-            tendency(k, j, i) += 0.125 * rdy * (term_at_i_plus_1 + term_at_i);
+            tendency(k, j, i) += real(0.125) * rdy * (term_at_i_plus_1 + term_at_i);
         }
     );
     return;
@@ -414,18 +414,18 @@ void Takacs::calculate_stretching_tendency_z(
     const auto& flex_height_coef_mid = params.flex_height_coef_mid.get_device_data();
     const auto& flex_height_coef_up = params.flex_height_coef_up.get_device_data();
 
-    Kokkos::View<double> fact1("fact1");
-    Kokkos::View<double> fact2("fact2");
+    Kokkos::View<VVM::Real> fact1("fact1");
+    Kokkos::View<VVM::Real> fact2("fact2");
 
     // Implements Eq. (3.27) for [ρ₀ζ(∂w/∂z)] at (i+1/2, j+1/2, k)
     Kokkos::parallel_for("stretching_term_zeta",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({nz-h-1, h, h}, {nz-h, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             // w(nz-h-1,:,:) = 0.
-            const double term_at_i = (zeta(k,j,i-1)+zeta(k,j,i)) * (w(k-1, j, i) + w(k-1, j+1, i));
-            const double term_at_i_plus_1 = (zeta(k,j,i)+zeta(k,j,i+1)) * (w(k-1, j, i+1) + w(k-1, j+1, i+1));
+            const VVM::Real term_at_i = (zeta(k,j,i-1)+zeta(k,j,i)) * (w(k-1, j, i) + w(k-1, j+1, i));
+            const VVM::Real term_at_i_plus_1 = (zeta(k,j,i)+zeta(k,j,i+1)) * (w(k-1, j, i+1) + w(k-1, j+1, i+1));
 
-            tendency(k, j, i) += -0.125 * flex_height_coef_mid(k) * rdz * rhobar(k) * (term_at_i + term_at_i_plus_1);
+            tendency(k, j, i) += -real(0.125) * flex_height_coef_mid(k) * rdz * rhobar(k) * (term_at_i + term_at_i_plus_1);
         }
     );
     return;
@@ -553,19 +553,18 @@ void Takacs::calculate_twisting_tendency_x(
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             // WARNING: The documentation has rho weighted but the VVM code doesn't have. This code follows the VVM code.
-            const double term_etaRzeta = (
+            const VVM::Real term_etaRzeta = (
                 (eta(k,j+1,i  )+eta(k,j,i  )) * (fact2_xi_eta(k)*rhobar(k)*R_zeta(k,j,i  ) + fact1_xi_eta(k)*rhobar(k+1)*R_zeta(k+1,j,i  ))
               + (eta(k,j+1,i-1)+eta(k,j,i-1)) * (fact2_xi_eta(k)*rhobar(k)*R_zeta(k,j,i-1) + fact1_xi_eta(k)*rhobar(k+1)*R_zeta(k+1,j,i-1))
             );
 
-            const double term_zetaReta = (
+            const VVM::Real term_zetaReta = (
                 rhobar_up(k)*(zeta(k,j,i  )+zeta(k+1,j,i  ))*(R_eta(k,j+1,i  )+R_eta(k,j,i  ))
               + rhobar_up(k)*(zeta(k,j,i-1)+zeta(k+1,j,i-1))*(R_eta(k,j+1,i-1)+R_eta(k,j,i-1))
             );
 
             // WARNING: term_etaRzeta has a negative sign in original VVM because the definition of eta in that VVM is negative from this one.
-            // FIXME: Fix the comparison negative sign
-            tendency(k, j, i) += 0.0625 * (-term_etaRzeta + term_zetaReta);
+            tendency(k, j, i) += real(0.0625) * (-term_etaRzeta + term_zetaReta);
         }
     );
     return;
@@ -598,19 +597,18 @@ void Takacs::calculate_twisting_tendency_y(
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             // WARNING: The documentation has rho weighted but the VVM code doesn't have. This code follows the VVM code.
-            const double term_xiRzeta = (
+            const VVM::Real term_xiRzeta = (
                 (xi(k,j  ,i+1)+xi(k,j  ,i)) * (fact2_xi_eta(k)*rhobar(k)*R_zeta(k,j  ,i) + fact1_xi_eta(k)*rhobar(k+1)*R_zeta(k+1,j  ,i))
               + (xi(k,j-1,i+1)+xi(k,j-1,i)) * (fact2_xi_eta(k)*rhobar(k)*R_zeta(k,j-1,i) + fact1_xi_eta(k)*rhobar(k+1)*R_zeta(k+1,j-1,i))
             );
 
-            const double term_zetaRxi = (
+            const VVM::Real term_zetaRxi = (
                 rhobar_up(k)*(zeta(k,j  ,i)+zeta(k+1,j  ,i))*(R_xi(k,j  ,i)+R_xi(k,j  ,i+1))
               + rhobar_up(k)*(zeta(k,j-1,i)+zeta(k+1,j-1,i))*(R_xi(k,j-1,i)+R_xi(k,j-1,i+1))
             );
 
             // WARNING: term_xiRzeta and eter_zetaRxi have negative signs in original VVM because the definition of eta in that VVM is negative from this one.
-            // FIXME: Fix the comparison negative sign
-            tendency(k, j, i) += 0.0625 * -(term_xiRzeta + term_zetaRxi);
+            tendency(k, j, i) += real(0.0625) * -(term_xiRzeta + term_zetaRxi);
         }
     );
     return;
@@ -639,19 +637,18 @@ void Takacs::calculate_twisting_tendency_z(
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({nz-h-1, h, h}, {nz-h, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             // WARNING: The documentation has rho weighted but the VVM code doesn't have. This code follows the VVM code.
-            const double term_xiReta = (
+            const VVM::Real term_xiReta = (
                 fact1()*(xi(k,j,i+1)+xi(k  ,j,i  )) * (R_eta(k  ,j+1,i)+R_eta(k  ,j,i))
               + fact2()*(xi(k-1,j,i)+xi(k-1,j,i+1)) * (R_eta(k-1,j+1,i)+R_eta(k-1,j,i))
             );
 
-            const double term_etaRxi = (
+            const VVM::Real term_etaRxi = (
                 fact1()*(eta(k  ,j+1,i)+eta(k  ,j,i)) * (R_xi(k  ,j,i)+R_xi(k  ,j,i+1))
               + fact2()*(eta(k-1,j+1,i)+eta(k-1,j,i)) * (R_xi(k-1,j,i)+R_xi(k-1,j,i+1))
             );
 
             // WARNING: term_etaRxi has a negative sign in original VVM because the definition of eta in that VVM is negative from this one.
-            // FIXME: Fix the comparison negative sign
-            tendency(k, j, i) += 0.0625 * (term_xiReta - term_etaRxi);
+            tendency(k, j, i) += real(0.0625) * (term_xiReta - term_etaRxi);
         }
     );
     return;
@@ -677,10 +674,9 @@ void Takacs::calculate_vorticity_divergence(
     Kokkos::parallel_for("vorticity_divergence",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz - h, ny - h, nx - h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            const double d_xi_dx = (xi(k, j, i+1) - xi(k, j, i)) * rdx;
-            const double d_eta_dy = (eta(k, j+1, i) - eta(k, j, i)) * rdy;
+            const VVM::Real d_xi_dx = (xi(k, j, i+1) - xi(k, j, i)) * rdx;
+            const VVM::Real d_eta_dy = (eta(k, j+1, i) - eta(k, j, i)) * rdy;
             // WARNING: Original VVM has a negative sign for eta due to different definition
-            // FIXME: Fix the comparison negative sign
             out_data(k, j, i) = -(d_xi_dx - d_eta_dy);
         }
     );
@@ -700,7 +696,7 @@ void Takacs::calculate_buoyancy_tendency_x(
     // To prevent 'if' at each step or #define flags, qp points to a random variables and times a 0 coefficient if P3 is not defined.
     bool has_qp = state.has_field("qp");
     auto qp = has_qp ? state.get_field<3>("qp").get_device_data() : qv;
-    const double qp_coeff = has_qp ? 1.0 : 0.0;
+    const VVM::Real qp_coeff = has_qp ? real(1.0) : real(0.0);
 
     auto& tendency = out_tendency.get_mutable_device_data();
     const auto& rdy = params.rdy;
@@ -714,14 +710,14 @@ void Takacs::calculate_buoyancy_tendency_x(
     Kokkos::parallel_for("buoyancy_tendency_x",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h-1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            const double dB_dy = (th(k  ,j+1,i)-th(k  ,j,i)) / thbar(k)
+            const VVM::Real dB_dy = (th(k  ,j+1,i)-th(k  ,j,i)) / thbar(k)
                                + (th(k+1,j+1,i)-th(k+1,j,i)) / thbar(k+1)
-                               + 0.608*(qv(k,j+1,i)-qv(k,j,i)+qv(k+1,j+1,i)-qv(k+1,j,i))
+                               + real(0.608)*(qv(k,j+1,i)-qv(k,j,i)+qv(k+1,j+1,i)-qv(k+1,j,i))
                                - qp_coeff * (qp(k,j+1,i)-qp(k,j,i)+qp(k+1,j+1,i)-qp(k+1,j,i));
             // const double dB_dy = (th(k  ,j+1,i)-th(k  ,j,i)) / thbar(k)
             //                    + (th(k+1,j+1,i)-th(k+1,j,i)) / thbar(k+1);
 
-            tendency(k, j, i) += gravity() * 0.5 * dB_dy * rdy();
+            tendency(k, j, i) += gravity() * real(0.5) * dB_dy * rdy();
         }
     );
 
@@ -731,7 +727,7 @@ void Takacs::calculate_buoyancy_tendency_x(
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             // Set tendency to 0 if it's topo for v-loc point (ITYPEV = 0)
-            if (ITYPEV(k,j,i) == 0) tendency(k,j,i) = 0.;
+            if (ITYPEV(k,j,i) == 0) tendency(k,j,i) = real(0.);
         }
     );
 }
@@ -748,7 +744,7 @@ void Takacs::calculate_buoyancy_tendency_y(
     // To prevent 'if' at each step or #define flags, qp points to a random variables and times a 0 coefficient if P3 is not defined.
     bool has_qp = state.has_field("qp");
     auto qp = has_qp ? state.get_field<3>("qp").get_device_data() : qv;
-    const double qp_coeff = has_qp ? 1.0 : 0.0;
+    const VVM::Real qp_coeff = has_qp ? real(1.0) : real(0.0);
 
     auto& tendency = out_tendency.get_mutable_device_data();
     auto& rdx = params.rdx;
@@ -762,16 +758,16 @@ void Takacs::calculate_buoyancy_tendency_y(
     Kokkos::parallel_for("buoyancy_tendency_y",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h-1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            const double dB_dx = (th(k  ,j,i+1)-th(k  ,j,i)) / thbar(k)
+            const VVM::Real dB_dx = (th(k  ,j,i+1)-th(k  ,j,i)) / thbar(k)
                                + (th(k+1,j,i+1)-th(k+1,j,i)) / thbar(k+1)
-                               + (0.608*(qv(k,j,i+1)-qv(k,j,i)+qv(k+1,j,i+1)-qv(k+1,j,i)))
+                               + (real(0.608)*(qv(k,j,i+1)-qv(k,j,i)+qv(k+1,j,i+1)-qv(k+1,j,i)))
                                - qp_coeff * (qp(k,j,i+1)-qp(k,j,i)+qp(k+1,j,i+1)-qp(k+1,j,i));
 
-            // const double dB_dx = (th(k  ,j,i+1)-th(k  ,j,i)) / thbar(k)
+            // const VVM::Real dB_dx = (th(k  ,j,i+1)-th(k  ,j,i)) / thbar(k)
             //                    + (th(k+1,j,i+1)-th(k+1,j,i)) / thbar(k+1);
             // WARNING: dB_dy has a negative sign in original VVM because the definition of eta in that VVM is negative from this one.
             // Fix the comparison negative sign
-            tendency(k, j, i) += gravity() * 0.5 * dB_dx * rdx();
+            tendency(k, j, i) += gravity() * real(0.5) * dB_dx * rdx();
         }
     );
 
@@ -781,7 +777,7 @@ void Takacs::calculate_buoyancy_tendency_y(
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {max_topo_idx+1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             // Set tendency to 0 if it's topo for u-loc point (ITYPEU = 0)
-            if (ITYPEU(k,j,i) == 0) tendency(k,j,i) = 0.;
+            if (ITYPEU(k,j,i) == 0) tendency(k,j,i) = real(0.);
         }
     );
 }
@@ -805,7 +801,7 @@ void Takacs::calculate_coriolis_tendency_x(
     Kokkos::parallel_for("coriolis_tendency_x",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h-1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            tendency(k, j, i) += 0.25 * f_2d(j,i) * flex_height_coef_up(k) * rdz() *
+            tendency(k, j, i) += real(0.25) * f_2d(j,i) * flex_height_coef_up(k) * rdz() *
                                  (u(k+1,j,i-1)-u(k,j,i-1)                                           
                                  +u(k+1,j,i  )-u(k,j,i)                                           
                                  +u(k+1,j+1,i  )-u(k,j+1,i  )                                           
@@ -835,7 +831,7 @@ void Takacs::calculate_coriolis_tendency_y(
     Kokkos::parallel_for("coriolis_tendency_y",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h, h, h}, {nz-h-1, ny-h, nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            tendency(k, j, i) += -0.25 * f_2d(j,i) * flex_height_coef_up(k) * rdz() *
+            tendency(k, j, i) += -real(0.25) * f_2d(j,i) * flex_height_coef_up(k) * rdz() *
                                  (v(k+1,j,i+1)-v(k,j,i+1)
                                  +v(k+1,j,i  )-v(k,j,i)
                                  +v(k+1,j-1,i)-v(k,j-1,i)
@@ -868,9 +864,9 @@ void Takacs::calculate_coriolis_tendency_z(
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h, h}, {ny-h, nx-h}),
         KOKKOS_LAMBDA(const int j, const int i) {
             tendency(NK2, j, i) +=
-                -0.25*f_2d(j,i)*(u(NK2,j,i+1)-u(NK2,j,i-1)
+                -real(0.25)*f_2d(j,i)*(u(NK2,j,i+1)-u(NK2,j,i-1)
                            +u(NK2,j+1,i+1)-u(NK2,j+1,i-1)) * rdx()                                         
-                -0.25*f_2d(j,i)*(v(NK2,j+1,i)-v(NK2,j-1,i)
+                -real(0.25)*f_2d(j,i)*(v(NK2,j+1,i)-v(NK2,j-1,i)
                            +v(NK2,j+1,i+1)-v(NK2,j-1,i+1)) * rdy();
         }
     );

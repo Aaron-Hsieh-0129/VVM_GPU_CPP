@@ -19,9 +19,9 @@ Grid::Grid(const VVM::Utils::ConfigurationManager& config, MPI_Comm comm)
         dims_host_mirror_(1).global_size = config.get_value<int>("grid.ny");
         dims_host_mirror_(2).global_size = config.get_value<int>("grid.nx");
 
-        dims_host_mirror_(0).d_coord = config.get_value<double>("grid.dz");
-        dims_host_mirror_(1).d_coord = config.get_value<double>("grid.dy");
-        dims_host_mirror_(2).d_coord = config.get_value<double>("grid.dx");
+        dims_host_mirror_(0).d_coord = config.get_value<VVM::Real>("grid.dz");
+        dims_host_mirror_(1).d_coord = config.get_value<VVM::Real>("grid.dy");
+        dims_host_mirror_(2).d_coord = config.get_value<VVM::Real>("grid.dx");
 
         if (dims_host_mirror_(0).global_size <= 0 || dims_host_mirror_(1).global_size <= 0 || dims_host_mirror_(2).global_size <= 0) {
             throw std::runtime_error("Grid dimensions must be positive integers.");

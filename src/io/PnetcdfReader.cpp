@@ -96,11 +96,14 @@ void PnetcdfReader::read_variable_1d(int ncid, const std::string& var_name, VVM:
     MPI_Offset count[1] = { static_cast<MPI_Offset>(grid_.get_global_points_z()) };
 
     // Create buffers for halo
-    std::vector<double> host_buffer(count[0]);
+    std::vector<VVM::Real> host_buffer(count[0]);
 
     // Every rank get complete 1D array
-    check_ncmpi_error(ncmpi_get_vara_double_all(ncid, varid, start, count, host_buffer.data()),
-                      "Failed to read 1D variable: " + var_name);
+#ifdef VVM_USE_DOUBLE_PRECISION
+    check_ncmpi_error(ncmpi_get_vara_double_all(ncid, varid, start, count, host_buffer.data()), "Failed to read 1D variable");
+#else
+    check_ncmpi_error(ncmpi_get_vara_float_all(ncid, varid, start, count, host_buffer.data()), "Failed to read 1D variable");
+#endif
 
     // Copy to State Field
     auto field_view_dev = field.get_mutable_device_data();
@@ -135,10 +138,13 @@ void PnetcdfReader::read_variable_2d(int ncid, const std::string& var_name, VVM:
     count[1] = grid_.get_local_physical_points_x();
 
     size_t local_read_size = count[0] * count[1];
-    std::vector<double> host_buffer(local_read_size);
+    std::vector<VVM::Real> host_buffer(local_read_size);
 
-    check_ncmpi_error(ncmpi_get_vara_double_all(ncid, varid, start, count, host_buffer.data()),
-                      "Failed to read 2D variable: " + var_name);
+#ifdef VVM_USE_DOUBLE_PRECISION
+    check_ncmpi_error(ncmpi_get_vara_double_all(ncid, varid, start, count, host_buffer.data()), "Failed to read 2D variable");
+#else
+    check_ncmpi_error(ncmpi_get_vara_float_all(ncid, varid, start, count, host_buffer.data()), "Failed to read 2D variable");
+#endif
 
     auto field_view_dev = field.get_mutable_device_data();
     auto field_view_host = Kokkos::create_mirror_view(field_view_dev);
@@ -186,10 +192,13 @@ void PnetcdfReader::read_variable_3d(int ncid, const std::string& var_name, VVM:
     count[2] = grid_.get_local_physical_points_x();
 
     size_t local_read_size = count[0] * count[1] * count[2];
-    std::vector<double> host_buffer(local_read_size);
+    std::vector<VVM::Real> host_buffer(local_read_size);
 
-    check_ncmpi_error(ncmpi_get_vara_double_all(ncid, varid, start, count, host_buffer.data()),
-                      "Failed to read 3D variable: " + var_name);
+#ifdef VVM_USE_DOUBLE_PRECISION
+    check_ncmpi_error(ncmpi_get_vara_double_all(ncid, varid, start, count, host_buffer.data()), "Failed to read 3D variable");
+#else
+    check_ncmpi_error(ncmpi_get_vara_float_all(ncid, varid, start, count, host_buffer.data()), "Failed to read 3D variable");
+#endif
 
     auto field_view_dev = field.get_mutable_device_data();
     auto field_view_host = Kokkos::create_mirror_view(field_view_dev);
