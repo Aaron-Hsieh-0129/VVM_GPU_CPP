@@ -63,7 +63,7 @@ struct Constants
   static constexpr Scalar QSMALL        = 1.e-14;
   static constexpr Scalar QTENDSMALL    = 1e-20;
   static constexpr Scalar BSMALL        = 1.e-15;
-  static constexpr Scalar NSMALL        = 1.e-16;
+  static constexpr Scalar NSMALL        = 1.e-20;
   static constexpr Scalar ZERO          = 0.0;
   static constexpr Scalar ONE           = 1.0;
   static constexpr Scalar P0            = 100000.0;        // reference pressure, Pa

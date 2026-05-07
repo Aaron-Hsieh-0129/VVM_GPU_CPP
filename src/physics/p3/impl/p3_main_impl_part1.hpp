@@ -194,6 +194,8 @@ void Functions<S,D>
 
     drymass = (qi(k) >= qsmall && qi(k) < 1.e-8 && T_atm(k) >= T_zerodegc);
     qr(k).set(drymass, qr(k) + qi(k));
+    // Aaron - add nr to align with Fortran P3
+    nr(k).set(drymass, nr(k) + ni(k));
     th_atm(k).set(drymass, th_atm(k) - inv_exner(k) * qi(k) * latice * inv_cp);
     qi(k).set(drymass, 0);
     ni(k).set(drymass, 0);

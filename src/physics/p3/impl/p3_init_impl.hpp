@@ -378,16 +378,24 @@ typename Functions<S,D>::P3LookupTables Functions<S,D>
   else {
     read_computed_tables(masterproc, dir, lookup_tables.mu_r_table_vals, lookup_tables.vn_table_vals, lookup_tables.vm_table_vals, lookup_tables.revap_table_vals);
   }
-  auto d_ice_table = lookup_tables.ice_table_vals;
-  Kokkos::parallel_for("PrintRawTable", 1, KOKKOS_LAMBDA(const int&) {
-      printf("\n=== C++ RAW TABLE CHECK ===\n");
-      printf("  [0][0][0][1]  (Fall Speed 1)  = %e\n", d_ice_table(0,0,0,1));
-      printf("  [0][0][10][1] (Fall Speed 11) = %e\n", d_ice_table(0,0,10,1));
-      printf("===========================\n\n");
-  });
-  Kokkos::fence();
+  // Aaron - print to check table values
+  // auto d_ice_table = lookup_tables.ice_table_vals;
+  // auto d_collect_table = lookup_tables.collect_table_vals;
+  //
+  // Kokkos::parallel_for("PrintRawTable", 1, KOKKOS_LAMBDA(const int&) {
+  //     printf("\n=== C++ RAW TABLE CHECK ===\n");
+  //     printf("ice_table(0,0,0,0) (First)          = %e\n", d_ice_table(0,0,0,0));
+  //     printf("ice_table(2,1,24,9) (Middle)        = %e\n", d_ice_table(2,1,24,9));
+  //     printf("ice_table(4,3,49,18) (Last)         = %e\n", d_ice_table(4,3,49,18));
+  //     
+  //     printf("collect_table(0,0,0,0,0) (First)    = %e\n", d_collect_table(0,0,0,0,0));
+  //     printf("collect_table(4,3,49,29,1) (Last)   = %e\n", d_collect_table(4,3,49,29,1));
+  //     printf("===========================\n\n");
+  // });
+  // Kokkos::fence();
 
   // dnu is always computed/hardcoded
+  // Aaron - this is only used for iparam = 1
   compute_dnu<S>(lookup_tables.dnu_table_vals);
 
   return lookup_tables;

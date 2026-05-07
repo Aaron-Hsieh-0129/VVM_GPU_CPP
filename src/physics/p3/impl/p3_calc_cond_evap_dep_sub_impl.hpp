@@ -81,8 +81,9 @@ void Functions<S,D>
     const Spack tau_eff = 1.0/eps_eff;
 
     // Aaron - Add qc condensation and qr condensation
-    Spack qccon = (A_c*epsc*tau_eff + (ssat_cld*cld_frac_l - A_c*tau_eff) * inv_dt*epsc*tau_eff * (1.0 - exp(-eps_eff * dt))) / ab;
-    Spack qrcon = (A_c*epsr*tau_eff + (ssat_r*cld_frac_r - A_c*tau_eff) * inv_dt*epsr*tau_eff * (1.0 - exp(-eps_eff * dt))) / ab;
+    Spack qccon(0), qrcon(0);
+    qccon.set(qc_incld > QSMALL, (A_c*epsc*tau_eff + (ssat_cld*cld_frac_l - A_c*tau_eff) * inv_dt*epsc*tau_eff * (1.0 - exp(-eps_eff * dt))) / ab);
+    qrcon.set(qr_incld > QSMALL, (A_c*epsr*tau_eff + (ssat_r*cld_frac_r - A_c*tau_eff) * inv_dt*epsr*tau_eff * (1.0 - exp(-eps_eff * dt))) / ab);
     
     // Aaron - qi
     Spack qidep_base = (A_c*epsi*tau_eff + (ssat_cld*cld_frac_l - A_c*tau_eff) * inv_dt*epsi*tau_eff * (1.0 - exp(-eps_eff * dt))) / abi;
@@ -104,11 +105,13 @@ void Functions<S,D>
     // Cloud tendency
     Smask qc_is_neg = qccon < 0.0;
     qc2qv_evap_tend.set(qc_is_neg, -qccon);
+    qv2qc_conden_tend.set(qc_is_neg, 0.);
     qv2qc_conden_tend.set(!qc_is_neg, min(qccon, qv * inv_dt));
 
     // Rain tendency
     Smask qr_is_neg = qrcon < 0.0;
     qr2qv_evap_tend.set(qr_is_neg, -qrcon);
+    qv2qr_conden_tend.set(qr_is_neg, 0.);
     qv2qr_conden_tend.set(!qr_is_neg, min(qrcon, qv * inv_dt));
     // nr tendency
     Spack inv_qr_incld(0.0);

@@ -136,10 +136,14 @@ void Functions<S,D>
     const auto range_pack = ekat::range<IntSmallPack>(k*Spack::n);
     const auto range_mask = range_pack < nk;
 
+    Spack qv_supersat_l = qv_prev(k) / qv_sat_l(k) - 1.;
+
     // if relatively dry and no hydrometeors at this level, skip to end of k-loop (i.e. skip this level)
+    // Aaron - add liquid condition
     const auto skip_all = ( !range_mask ||
-        (qc(k)<qsmall && qr(k)<qsmall && qi(k)<qsmall &&
-         T_atm(k)<T_zerodegc && qv_supersat_i(k)< -0.05) );
+        (qc(k)<qsmall && qr(k)<qsmall && qi(k)<qsmall) &&
+        ( (T_atm(k)<T_zerodegc && qv_supersat_i(k)< -0.05) || 
+          (T_atm(k)>T_zerodegc && qv_supersat_l< -0.05) ) );
 
     if (skip_all.all()) {
       return; // skip all process rates
