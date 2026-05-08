@@ -1,9 +1,5 @@
 # Video gallery
 
-Short **YouTube** clips for representative GVVM runs. After you upload each recording, edit this page and replace the placeholder in the matching embed URL with your video’s **11-character ID** (from `https://www.youtube.com/watch?v=VIDEO_ID` or `https://youtu.be/VIDEO_ID`).
-
-Placeholders use `PLACEHOLD1` … `PLACEHOLD9` in order below—replace each with the corresponding upload’s ID.
-
 ## Dynamics benchmarks (regression-aligned)
 
 These cases match the **idealized** modes and **automated regression** configs in [`tests/configs/`](idealized.md#automated-regression-tests). They isolate the dynamical core (no full topography or land physics in those tests).
