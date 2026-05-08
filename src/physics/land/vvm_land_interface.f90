@@ -1,8 +1,14 @@
 module vvm_land_interface
-    use iso_c_binding, only: c_double, c_int, c_bool
+    use iso_c_binding, only: c_double, c_float, c_int, c_bool
     use index, only: jlistnum
     use param, only: my_max
     implicit none
+
+#ifdef VVM_USE_DOUBLE_PRECISION
+    integer, parameter :: c_vvm_real = c_double
+#else
+    integer, parameter :: c_vvm_real = c_float
+#endif
     
     integer, parameter :: nxpvs = 7501
     real :: c1xpvs, c2xpvs, tbpvs(nxpvs)
@@ -19,36 +25,36 @@ contains
         
         integer(c_int), value :: use_tco_ocean
         integer(c_int), value :: nx, ny, nsoil
-        real(c_double), value :: dt
+        real(c_vvm_real), value :: dt
         
         integer(c_int), intent(in)    :: islimsk(nx,ny), vegtype(nx,ny), soiltyp(nx,ny), slopetyp(nx,ny)
-        real(c_double), intent(in)    :: t1(nx,ny), q1(nx,ny), u1(nx,ny), v1(nx,ny)
-        real(c_double), intent(in)    :: ps(nx,ny), prcp(nx,ny), swdn(nx,ny), lwdn(nx,ny)
-        real(c_double), intent(in)    :: hgt(nx,ny) ! VVM height (m)
-        real(c_double), intent(in)    :: prslki_in(nx,ny) ! VVM portion (pi(sfc)/pi(air)) 
+        real(c_vvm_real), intent(in)    :: t1(nx,ny), q1(nx,ny), u1(nx,ny), v1(nx,ny)
+        real(c_vvm_real), intent(in)    :: ps(nx,ny), prcp(nx,ny), swdn(nx,ny), lwdn(nx,ny)
+        real(c_vvm_real), intent(in)    :: hgt(nx,ny) ! VVM height (m)
+        real(c_vvm_real), intent(in)    :: prslki_in(nx,ny) ! VVM portion (pi(sfc)/pi(air)) 
 
-        real(c_double), intent(in)    :: sigmaf(nx,ny), sfemis(nx,ny)
-        real(c_double), intent(in)    :: alb(nx,ny), shdmin(nx,ny), shdmax(nx,ny)
+        real(c_vvm_real), intent(in)    :: sigmaf(nx,ny), sfemis(nx,ny)
+        real(c_vvm_real), intent(in)    :: alb(nx,ny), shdmin(nx,ny), shdmax(nx,ny)
 
-        real(c_double), intent(inout) :: stc(nx,nsoil,ny), smc(nx,nsoil,ny), slc(nx,nsoil,ny)
-        real(c_double), intent(inout) :: tskin(nx,ny), canopy(nx,ny), snwdph(nx,ny), zorl(nx,ny)
-        real(c_double), intent(inout) :: hflux(nx,ny), qflux(nx,ny), evap(nx,ny)
+        real(c_vvm_real), intent(inout) :: stc(nx,nsoil,ny), smc(nx,nsoil,ny), slc(nx,nsoil,ny)
+        real(c_vvm_real), intent(inout) :: tskin(nx,ny), canopy(nx,ny), snwdph(nx,ny), zorl(nx,ny)
+        real(c_vvm_real), intent(inout) :: hflux(nx,ny), qflux(nx,ny), evap(nx,ny)
 
-        real(8), parameter :: g = 9.81D0
-        real(8), parameter :: r = 287.04D0
-        real(8), parameter :: cp = 1004.6D0
-        real(8), parameter :: hltm = 2500000.0D0
+        real(8), parameter :: g = 9.806_c_vvm_real
+        real(8), parameter :: r = 287.04_c_vvm_real
+        real(8), parameter :: cp = 1004.5_c_vvm_real
+        real(8), parameter :: hltm = 2500000.0_c_vvm_real
 
         integer(c_int) :: myim(ny)
         integer(c_int) :: i, j, ncld, isot, ivegsrc, async_id, iter, lsm
         real(8)        :: xmin, xmax, xinc, x_val, t_val
         logical        :: redrag, mom4ice
         
-        real(c_double) :: psi(nx,ny), prsl1(nx,ny), prslki(nx,ny)
-        real(c_double) :: tg(nx,ny), z0rl(nx,ny), cd(nx,ny), cdq(nx,ny), rb(nx,ny)
-        real(c_double) :: stress(nx,ny), fm(nx,ny), fh(nx,ny), ustar(nx,ny), sfcw(nx,ny)
-        real(c_double) :: ddvel(nx,ny), fm10(nx,ny), fh2(nx,ny), fh10(nx,ny)
-        real(c_double) :: tsurf(nx,ny)
+        real(c_vvm_real) :: psi(nx,ny), prsl1(nx,ny), prslki(nx,ny)
+        real(c_vvm_real) :: tg(nx,ny), z0rl(nx,ny), cd(nx,ny), cdq(nx,ny), rb(nx,ny)
+        real(c_vvm_real) :: stress(nx,ny), fm(nx,ny), fh(nx,ny), ustar(nx,ny), sfcw(nx,ny)
+        real(c_vvm_real) :: ddvel(nx,ny), fm10(nx,ny), fh2(nx,ny), fh10(nx,ny)
+        real(c_vvm_real) :: tsurf(nx,ny)
         logical        :: flag_iter(nx,ny), flag_guess(nx,ny)
         
         real(c_double) :: qsurf(nx,ny), gfx(nx,ny), ep1d(nx,ny)
@@ -68,15 +74,15 @@ contains
         ivegsrc = 1
         call set_soilveg(isot, ivegsrc)
         
-        xmin = 180.0D0
-        xmax = 330.0D0
+        xmin = 180.0_c_vvm_real
+        xmax = 330.0_c_vvm_real
         xinc = (xmax - xmin) / (nxpvs - 1)
-        c2xpvs = 1.0D0 / xinc
-        c1xpvs = 1.0D0 - xmin * c2xpvs
+        c2xpvs = 1.0_c_vvm_real / xinc
+        c1xpvs = 1.0_c_vvm_real - xmin * c2xpvs
         do i = 1, nxpvs
             x_val = xmin + (i - 1) * xinc
             t_val = x_val
-            tbpvs(i) = 611.2D0 * exp(17.67D0 * (t_val - 273.15D0) / (t_val - 29.65D0))
+            tbpvs(i) = 611.2_c_vvm_real * exp(17.67_c_vvm_real * (t_val - 273.15_c_vvm_real) / (t_val - 29.65_c_vvm_real))
         end do
         
         do j = 1, ny
@@ -108,41 +114,41 @@ contains
                 prsl1(i,j) = ps(i,j)
                 prslki(i,j) = prslki_in(i,j)
 
-                ro2(i,j) = ps(i,j) / (r * t1(i,j) * (1.0D0 + 0.608D0 * q1(i,j)))
+                ro2(i,j) = ps(i,j) / (r * t1(i,j) * (1.0_c_vvm_real + 0.608_c_vvm_real * q1(i,j)))
 
                 flag_iter(i,j) = .true.
                 flag_guess(i,j) = .false.
                 
-                tgclim(i,j) = 285.0D0 
-                snoalb(i,j) = 0.60D0
-                albedo2(i,j) = 0.0D0
-                z0rl(i,j) = zorl(i,j) * 100.0D0  ! NCEP zorl to cm
+                tgclim(i,j) = 285.0_c_vvm_real 
+                snoalb(i,j) = 0.60_c_vvm_real
+                albedo2(i,j) = 0.0_c_vvm_real
+                z0rl(i,j) = zorl(i,j) * 100.0_c_vvm_real  ! NCEP zorl to cm
                 
-                tprcp(i,j) = prcp(i,j) * dt / 1000.0D0  !  mm/s times dt to m
-                sheleg(i,j) = snwdph(i,j) / 10.0D0
+                tprcp(i,j) = prcp(i,j) * dt / 1000.0_c_vvm_real  !  mm/s times dt to m
+                sheleg(i,j) = snwdph(i,j) / 10.0_c_vvm_real
                 
                 ! srflag (rain or snow)
-                if (t1(i,j) <= 273.16D0) then
-                    srflag(i,j) = 1.0D0
+                if (t1(i,j) <= 273.15_c_vvm_real) then
+                    srflag(i,j) = 1.0_c_vvm_real
                 else
-                    srflag(i,j) = 0.0D0
+                    srflag(i,j) = 0.0_c_vvm_real
                 end if
                 
                 tsurf(i,j) = tskin(i,j)
                 tg(i,j) = tskin(i,j)
-                ddvel(i,j) = 0.0D0
-                qsurf(i,j) = 0.0D0
-                gfx(i,j) = 0.0D0
-                drain(i,j) = 0.0D0
-                runof(i,j) = 0.0D0
-                ep1d(i,j) = 0.0D0
-                hflux(i,j) = 0.0D0
-                qflux(i,j) = 0.0D0
-                sncover(i,j) = 0.0D0
-                snomt(i,j) = 0.0D0
-                zice(i,j) = 0.0D0
-                cice(i,j) = 0.0D0
-                xtice(i,j) = 0.0D0
+                ddvel(i,j) = 0.0_c_vvm_real
+                qsurf(i,j) = 0.0_c_vvm_real
+                gfx(i,j) = 0.0_c_vvm_real
+                drain(i,j) = 0.0_c_vvm_real
+                runof(i,j) = 0.0_c_vvm_real
+                ep1d(i,j) = 0.0_c_vvm_real
+                hflux(i,j) = 0.0_c_vvm_real
+                qflux(i,j) = 0.0_c_vvm_real
+                sncover(i,j) = 0.0_c_vvm_real
+                snomt(i,j) = 0.0_c_vvm_real
+                zice(i,j) = 0.0_c_vvm_real
+                cice(i,j) = 0.0_c_vvm_real
+                xtice(i,j) = 0.0_c_vvm_real
             end do
         end do
         
@@ -158,7 +164,7 @@ contains
             !$acc parallel loop collapse(2) async(async_id)
             do j = 1, ny
                 do i = 1, nx
-                    if ((iter == 1) .and. (sfcw(i,j) < 2.0D0)) then
+                    if ((iter == 1) .and. (sfcw(i,j) < 2.0_c_vvm_real)) then
                         flag_guess(i,j) = .true.
                     end if
                 end do
@@ -190,7 +196,7 @@ contains
                     do i = 1, nx
                         flag_iter(i,j) = .false.
                         flag_guess(i,j) = .false.
-                        if ((islimsk(i,j) == 1) .and. (sfcw(i,j) < 2.0D0)) then
+                        if ((islimsk(i,j) == 1) .and. (sfcw(i,j) < 2.0_c_vvm_real)) then
                             flag_iter(i,j) = .true.
                         end if
                     end do
@@ -207,20 +213,20 @@ contains
             do i = 1, nx
 
                 if (islimsk(i,j) == 0 .and. use_tco_ocean == 0) then
-                    hflux(i,j) = 0.0D0
-                    evap(i,j)  = 0.0D0
+                    hflux(i,j) = 0.0_c_vvm_real
+                    evap(i,j)  = 0.0_c_vvm_real
                 else
-                    hflux(i,j) = hflux(i,j) * ro2(i,j) / ((ps(i,j) / 100000.0D0)**(r/cp))
+                    hflux(i,j) = hflux(i,j) * ro2(i,j) / ((ps(i,j) / 100000.0_c_vvm_real)**(r/cp))
                     evap(i,j)  = qflux(i,j) * ro2(i,j)
                     tskin(i,j) = tsurf(i,j)
                 endif
 
                 if (islimsk(i,j) == 0) then
                     ! ocean 
-                    zorl(i,j) = max(ustar(i,j) * ustar(i,j) * 0.014D0 / g, 1.5D-5)
+                    zorl(i,j) = max(ustar(i,j) * ustar(i,j) * 0.014_c_vvm_real / g, 1.5D-5)
                 else
                     ! land 
-                    zorl(i,j) = z0rl(i,j) / 100.0D0 ! cm -> m
+                    zorl(i,j) = z0rl(i,j) / 100.0_c_vvm_real ! cm -> m
                 end if
             end do
         end do
