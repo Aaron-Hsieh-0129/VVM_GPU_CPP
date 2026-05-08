@@ -62,7 +62,7 @@ struct Constants
   static constexpr Scalar CONS7         = 4.*PIOV3*RHOW*1.e-18;
   static constexpr Scalar QSMALL        = 1.e-14;
   static constexpr Scalar QTENDSMALL    = 1e-20;
-  static constexpr Scalar BSMALL        = 1.e-15;
+  static constexpr Scalar BSMALL        = QSMALL * INV_RHO_RIMEMAX;
   static constexpr Scalar NSMALL        = 1.e-20;
   static constexpr Scalar ZERO          = 0.0;
   static constexpr Scalar ONE           = 1.0;

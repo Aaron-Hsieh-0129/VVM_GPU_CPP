@@ -23,6 +23,7 @@ void Functions<S,D>
   const Smask& context)
 {
   constexpr Scalar QSMALL          = C::QSMALL;
+  constexpr Scalar BSMALL          = C::BSMALL;
   constexpr Scalar INV_RHO_RIMEMAX = C::INV_RHO_RIMEMAX;
   constexpr Scalar latvap          = C::LatVap;
   constexpr Scalar latice          = C::LatIce;
@@ -96,6 +97,17 @@ void Functions<S,D>
   //   Alternatively, it can be simplified by tending qm -- qi
   //   and bm such that rho_rim (qm/bm) --> rho_liq during melting.
   // ==
+
+  // Aaron - densify rimed ice during melting (tend rime density towards solid ice [917 kg m-3]) following Fortran P3
+  const auto qi_gt_qsmall = qi > QSMALL;
+  const auto bm_gt_bsmall = bm > BSMALL;
+  const auto qi2qr_melt_tend_gt_0 = qi2qr_melt_tend > sp(0);
+  const auto all_mask = qi_gt_qsmall && bm_gt_bsmall && qi2qr_melt_tend_gt_0;
+  Spack tmp1(0), tmp2(0);
+  tmp1.set(all_mask, qm/bm);
+  tmp2.set(all_mask, qi + qi2qr_melt_tend * dt);
+  bm.set(all_mask, qm/(tmp1+(sp(917.)-tmp1)*qi2qr_melt_tend*dt/tmp2));
+
 
   constexpr Scalar INV_CP = C::INV_CP;
   if(use_hetfrz_classnuc){
