@@ -278,14 +278,6 @@ void Model::run_step(VVM::Real dt) {
         }
     }
 
-    if (turbulence_ || enable_surface_process_) {
-        for (const auto& var_name : (turbulence_ ? turbulence_->get_dynamics_vars() : sfc_dynamics_vars_)) {
-            std::string fe_name = "fe_tendency_" + var_name;
-            auto& fe_tend_field = state_.get_field<3>(fe_name);
-            VVM::Dynamics::TimeIntegrator::apply_forward_update(state_, var_name, grid_, dt, fe_tend_field);
-        }
-    }
-
     if (sponge_layer_) {
         for (const auto& var_name : sponge_layer_->get_dynamics_vars()) {
             if (var_name == "zeta") {
