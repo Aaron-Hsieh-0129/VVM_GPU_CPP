@@ -37,7 +37,8 @@ private:
     Core::BoundaryConditionManager bc_manager_;
     std::vector<std::string> dynamics_vars_;
     std::vector<std::string> thermodynamics_vars_;
-    std::vector<std::string> sfc_vars_;
+    std::vector<std::string> sfc_thermodynamics_vars_;
+    std::vector<std::string> sfc_dynamics_vars_;
 
     Core::State& state_;
 

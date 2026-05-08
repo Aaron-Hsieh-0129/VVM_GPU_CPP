@@ -26,14 +26,12 @@ void SurfaceProcess::initialize(Core::State& state) {
 
     if (!state.has_field("sfc_flux_th")) state.add_field<2>("sfc_flux_th", {ny, nx});
     if (!state.has_field("sfc_flux_qv")) state.add_field<2>("sfc_flux_qv", {ny, nx});
-    // NOTE: sfc_flux_u, sfc_flux_v are not used for now. They are supposed to be used in land model.
     if (!state.has_field("sfc_flux_u"))  state.add_field<2>("sfc_flux_u", {ny, nx});
     if (!state.has_field("sfc_flux_v"))  state.add_field<2>("sfc_flux_v", {ny, nx});
     
     if (!state.has_field("gwet")) state.add_field<2>("gwet", {ny, nx}); // Surface Wetness
     if (!state.has_field("zrough")) state.add_field<2>("zrough", {ny, nx}); // Roughness Length
     if (!state.has_field("VEN2D")) state.add_field<2>("VEN2D", {ny, nx}); // Roughness Length
-    // Kokkos::deep_copy(state.get_field<2>("Tg").get_mutable_device_data(), 305.);
     Kokkos::deep_copy(state.get_field<2>("gwet").get_mutable_device_data(), -1.);
     Kokkos::deep_copy(state.get_field<2>("zrough").get_mutable_device_data(), 2e-4);
     
@@ -406,38 +404,34 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
             }
         );
     }
-    else {
-        std::cout << "A non-existed surface flux mode was given." << std::endl;
-        exit(1);
-    }
-
     halo_exchanger_.exchange_halos(state.get_field<2>("VEN2D"));
 
-    Kokkos::parallel_for("SFlux_3D",
+    bool has_topo = (params_.max_topo_idx > 0);
+    Kokkos::parallel_for("SFlux_uv",
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
         KOKKOS_LAMBDA(const int j, const int i) {
-            // If not sea, return
-            if (sea_land_ice_mask(j,i) != 0) return;
-
             int hx1 = hx(j,i);
             int hxp = hx(j,i)+1;
             int hxup = hxu(j,i) + 1;
             int hxvp = hxv(j,i) + 1;
 
-            if (hxup > 1) sfc_flux_u(j,i) = -VEN2D(j,i+1) * u(hxup,j,i);
-            else sfc_flux_u(j,i) = -VEN2D(j,i) * u(hxp,j,i);
-            if (hxvp > 1) sfc_flux_v(j,i) = -VEN2D(j,i+1) * v(hxvp,j,i);
-            else sfc_flux_v(j,i) = -VEN2D(j+1,i) * v(hxp,j,i);
+            if (has_topo) {
+                if (hxup > 1) sfc_flux_u(j,i) = -VEN2D(j,i+1) * u(hxup,j,i);
+                else sfc_flux_u(j,i) = -VEN2D(j,i) * u(hxp,j,i);
+                if (hxvp > 1) sfc_flux_v(j,i) = -VEN2D(j,i) * v(hxvp,j,i);
+                else sfc_flux_v(j,i) = -VEN2D(j+1,i) * v(hxp,j,i);
+            }
+            else {
+                sfc_flux_u(j,i) = -real(0.5) * (VEN2D(j,i)+VEN2D(j,i+1)) * u(h,j,i);
+                sfc_flux_v(j,i) = -real(0.5) * (VEN2D(j,i)+VEN2D(j+1,i)) * v(h,j,i);
+            }
         }
     );
 
-    Kokkos::parallel_for("SFlux_3D",
+    Kokkos::parallel_for("SFlux_uv",
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
         KOKKOS_LAMBDA(const int j, const int i) {
-            // If not sea, return
-            if (sea_land_ice_mask(j,i) != 0) return;
-
-            int hx1 = hx(j,i)-1;
+            int hx1 = hx(j,i);
             int hxu1 = hxu(j,i);
             int hxv1 = hxv(j,i);
 
@@ -454,16 +448,22 @@ void SurfaceProcess::calculate_tendencies(Core::State& state,
                                           const std::string& var_name, 
                                           Core::Field<Dim>& out_tendency) {
     VVM::Utils::Timer surface_timer("Surface");
-    if (var_name != "th" && var_name != "qv") return;
+    if (var_name != "th" && var_name != "qv" && var_name != "xi" && var_name != "eta") return;
 
     auto tend = out_tendency.get_mutable_device_data();
     int ny = grid_.get_local_total_points_y();
     int nx = grid_.get_local_total_points_x();
+
     int h = grid_.get_halo_cells();
+    const auto& hxu    = state.get_field<2>("topou").get_device_data();
+    const auto& hxv    = state.get_field<2>("topov").get_device_data();
+
     const auto& rhobar = state.get_field<1>("rhobar").get_device_data(); // Density
     const auto& hx     = state.get_field<2>("topo").get_device_data();
     const auto& rdz = params_.rdz; 
+    const auto& rdz2 = params_.rdz2; 
     const auto& flex_height_coef_mid = params_.flex_height_coef_mid.get_device_data();
+    const auto& flex_height_coef_up = params_.flex_height_coef_up.get_device_data();
     const auto& sea_land_ice_mask = state.get_field<2>("sea_land_ice_mask").get_device_data();
 
     if (var_name == "th") {
@@ -489,6 +489,32 @@ void SurfaceProcess::calculate_tendencies(Core::State& state,
 
                 int hxp = hx(j,i)+1;
                 tend(hxp, j, i) += flux(j, i) * flex_height_coef_mid(hxp) * rdz() / rhobar(hxp);
+            }
+        );
+    }
+    else if (var_name == "xi") {
+        const auto& flux = state.get_field<2>("sfc_flux_v").get_device_data();
+        Kokkos::parallel_for("SfcFlux_Tendency_XI",
+            Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
+            KOKKOS_LAMBDA(const int j, const int i) {
+                int hxp = hx(j,i) + 1;
+                int hxvp = hxv(j,i) + 1;
+                int target_k = (hxvp > 1) ? hxvp : hxp;
+                
+                tend(target_k, j, i) += flux(j, i) * flex_height_coef_mid(target_k) * flex_height_coef_up(target_k) * rdz2() / rhobar(target_k);
+            }
+        );
+    }
+    else if (var_name == "eta") {
+        const auto& flux = state.get_field<2>("sfc_flux_u").get_device_data();
+        Kokkos::parallel_for("SfcFlux_Tendency_ETA",
+            Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
+            KOKKOS_LAMBDA(const int j, const int i) {
+                int hxp = hx(j,i) + 1;
+                int hxup = hxu(j,i) + 1;
+                int target_k = (hxup > 1) ? hxup : hxp;
+                
+                tend(target_k, j, i) += flux(j, i) * flex_height_coef_mid(target_k) * flex_height_coef_up(target_k) * rdz2() / rhobar(target_k);
             }
         );
     }
