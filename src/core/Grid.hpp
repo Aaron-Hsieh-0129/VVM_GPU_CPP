@@ -10,6 +10,7 @@
 #include <Kokkos_Core.hpp>
 
 #include "utils/ConfigurationManager.hpp"
+#include "vvm_types.hpp"
 
 namespace VVM {
 namespace Core {
@@ -17,7 +18,7 @@ namespace Core {
 // Define a structure to hold grid dimensions and related information
 struct GridDimension {
     int global_size;    // Global grid size (total number of grid points)
-    double d_coord;     // Grid spacing
+    VVM::Real d_coord;     // Grid spacing
 
     // MPI-related local fields
     int local_physical_start_idx; // Local physical region start index in global
@@ -54,9 +55,9 @@ public:
     int get_global_points_y() const { return dims_host_mirror_(1).global_size; }
     int get_global_points_x() const { return dims_host_mirror_(2).global_size; }
 
-    double get_dz() const { return dims_host_mirror_(0).d_coord; }
-    double get_dy() const { return dims_host_mirror_(1).d_coord; }
-    double get_dx() const { return dims_host_mirror_(2).d_coord; }
+    VVM::Real get_dz() const { return dims_host_mirror_(0).d_coord; }
+    VVM::Real get_dy() const { return dims_host_mirror_(1).d_coord; }
+    VVM::Real get_dx() const { return dims_host_mirror_(2).d_coord; }
 
     int get_local_physical_start_z() const { return dims_host_mirror_(0).local_physical_start_idx; }
     int get_local_physical_end_z() const { return dims_host_mirror_(0).local_physical_end_idx; }

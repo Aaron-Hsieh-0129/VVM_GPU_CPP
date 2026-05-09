@@ -7,6 +7,7 @@
 #include "Field.hpp"
 #include "utils/ConfigurationManager.hpp"
 #include "Parameters.hpp"
+#include "vvm_types.hpp"
 #include <map>
 #include <string>
 #include <memory>
@@ -92,7 +93,7 @@ public:
     template<size_t Dim>
     void calculate_horizontal_mean(
         const Field<Dim>& field, 
-        Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> d_mean_result, 
+        Kokkos::View<VVM::Real, Kokkos::DefaultExecutionSpace::memory_space> d_mean_result, 
         int k_level = -1) const 
     {
         auto view = field.get_device_data();
@@ -102,7 +103,7 @@ public:
         const int h = grid_.get_halo_cells();
         const int gnx = grid_.get_global_points_x();
         const int gny = grid_.get_global_points_y();
-        const double total_points_horizontal = static_cast<double>(gnx) * static_cast<double>(gny);
+        const VVM::Real total_points_horizontal = static_cast<VVM::Real>(gnx) * static_cast<VVM::Real>(gny);
 
         const int nz = grid_.get_local_total_points_z();
         if (k_level == -1) k_level = nz-h-1;
@@ -118,7 +119,7 @@ public:
             return;
         }
 
-        Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> d_local_sum("local_sum");
+        Kokkos::View<VVM::Real, Kokkos::DefaultExecutionSpace::memory_space> d_local_sum("local_sum");
 
         if constexpr (Dim == 3) {
             if (k_level < h || k_level >= grid_.get_local_total_points_z() - h) {
@@ -131,7 +132,7 @@ public:
             else {
                 Kokkos::parallel_reduce("calculate_3d_local_sum",
                     Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h, h}, {ny_local + h, nx_local + h}),
-                    KOKKOS_LAMBDA(const int j, const int i, double& update_sum) {
+                    KOKKOS_LAMBDA(const int j, const int i, VVM::Real& update_sum) {
                         update_sum += view(k_level, j, i);
                     }, d_local_sum);
             }
@@ -139,7 +140,7 @@ public:
         else if constexpr (Dim == 2) {
             Kokkos::parallel_reduce("calculate_2d_local_sum",
                 Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h, h}, {ny_local + h, nx_local + h}),
-                KOKKOS_LAMBDA(const int j, const int i, double& update_sum) {
+                KOKKOS_LAMBDA(const int j, const int i, VVM::Real& update_sum) {
                     update_sum += view(j, i);
                 }, d_local_sum);
         } 
@@ -157,7 +158,7 @@ public:
             d_local_sum.data(), 
             d_mean_result.data(), 
             1, 
-            ncclDouble, 
+            VVM_NCCL_REAL, 
             ncclSum, 
             nccl_comm_, 
             nccl_stream_
@@ -178,8 +179,8 @@ public:
 #endif
 
     template<size_t Dim>
-    Kokkos::View<double> calculate_horizontal_mean(const Field<Dim>& field, int k_level = -1) const {
-        Kokkos::View<double> ans("ans");
+    Kokkos::View<VVM::Real> calculate_horizontal_mean(const Field<Dim>& field, int k_level = -1) const {
+        Kokkos::View<VVM::Real> ans("ans");
         Kokkos::deep_copy(ans, 0);
         auto view = field.get_device_data();
 
@@ -188,13 +189,13 @@ public:
         const int h = grid_.get_halo_cells();
         const int gnx = grid_.get_global_points_x();
         const int gny = grid_.get_global_points_y();
-        const double total_points_horizontal = static_cast<double>(gnx * gny);
+        const VVM::Real total_points_horizontal = static_cast<VVM::Real>(gnx * gny);
 
         if (total_points_horizontal == 0) {
             return ans;
         }
 
-        double local_sum = 0.0;
+        VVM::Real local_sum = 0.0;
 
         if constexpr (Dim == 3) {
             if (k_level < h || k_level >= grid_.get_local_total_points_z() - h) {
@@ -208,7 +209,7 @@ public:
 
             Kokkos::parallel_reduce("calculate_3d_local_sum",
                 Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h, h}, {ny_local + h, nx_local + h}),
-                KOKKOS_LAMBDA(const int j, const int i, double& update_sum) {
+                KOKKOS_LAMBDA(const int j, const int i, VVM::Real& update_sum) {
                     update_sum += view(k_level, j, i);
                 }, local_sum);
 
@@ -216,7 +217,7 @@ public:
         else if constexpr (Dim == 2) {
             Kokkos::parallel_reduce("calculate_2d_local_sum",
                 Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h, h}, {ny_local + h, nx_local + h}),
-                KOKKOS_LAMBDA(const int j, const int i, double& update_sum) {
+                KOKKOS_LAMBDA(const int j, const int i, VVM::Real& update_sum) {
                     update_sum += view(j, i);
                 }, local_sum);
         } 
@@ -229,8 +230,8 @@ public:
             return ans;
         }
 
-        double global_sum = 0.0;
-        MPI_Allreduce(&local_sum, &global_sum, 1, MPI_DOUBLE, MPI_SUM, grid_.get_comm());
+        VVM::Real global_sum = 0.0;
+        MPI_Allreduce(&local_sum, &global_sum, 1, VVM_MPI_REAL, MPI_SUM, grid_.get_comm());
 
         Kokkos::deep_copy(ans, global_sum / total_points_horizontal);
 
@@ -245,8 +246,8 @@ public:
 
     size_t get_step() const { return step_; }
     void increment_step() { step_++; }
-    double get_time() const { return time_; }
-    void advance_time(double dt) { time_ += dt; }
+    VVM::Real get_time() const { return time_; }
+    void advance_time(VVM::Real dt) { time_ += dt; }
 
     bool has_field(const std::string& name) const {
         return fields_.find(name) != fields_.end();
@@ -259,7 +260,7 @@ private:
     std::map<std::string, AnyField> fields_;
 
     size_t step_ = 0;
-    double time_ = 0.0;
+    VVM::Real time_ = 0.0;
 
 #if defined(ENABLE_NCCL)
     ncclComm_t nccl_comm_;

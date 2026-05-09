@@ -10,6 +10,7 @@
 #include "core/Parameters.hpp"
 #include "core/HaloExchanger.hpp"
 #include "core/Field.hpp"
+#include "core/vvm_types.hpp"
 #include "utils/ConfigurationManager.hpp"
 #include "utils/Timer.hpp"
 #include "utils/TimingManager.hpp"
@@ -41,17 +42,17 @@ private:
     Core::HaloExchanger& halo_exchanger_;
 
     static KOKKOS_INLINE_FUNCTION
-    void sflux_2d(double sigmau, double thvm, double thvsm, double speed1, 
-                  double zr, double zrough, 
-                  double& ustar, double ventfc[2], double& molen);
+    void sflux_2d(VVM::Real sigmau, VVM::Real thvm, VVM::Real thvsm, VVM::Real speed1, 
+                  VVM::Real zr, VVM::Real zrough, 
+                  VVM::Real& ustar, VVM::Real ventfc[2], VVM::Real& molen);
 
     static KOKKOS_INLINE_FUNCTION
-    void sflux_tc_2d(double sigmau, double thvm, double thvsm, double speed1, 
-                     double zr, double zrough, 
-                     double& ustar, double ventfc[2], double& molen);
+    void sflux_tc_2d(VVM::Real sigmau, VVM::Real thvm, VVM::Real thvsm, VVM::Real speed1, 
+                     VVM::Real zr, VVM::Real zrough, 
+                     VVM::Real& ustar, VVM::Real ventfc[2], VVM::Real& molen);
 
     static KOKKOS_INLINE_FUNCTION
-    double compute_es(double t);
+    VVM::Real compute_es(VVM::Real t);
 
     std::string mode_;
 };

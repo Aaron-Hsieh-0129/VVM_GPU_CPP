@@ -12,7 +12,7 @@ TimeIntegrator::~TimeIntegrator() = default; void TimeIntegrator::step(
     Core::State& state,
     const Core::Grid& grid,
     const Core::Parameters& params,
-    double dt) const {
+    VVM::Real dt) const {
 
     auto& field_to_update = state.get_field<3>(variable_name_);
     auto& field_new_view = field_to_update.get_mutable_device_data();
@@ -57,7 +57,7 @@ TimeIntegrator::~TimeIntegrator() = default; void TimeIntegrator::step(
                 KOKKOS_LAMBDA(const int t, const int k, const int j, const int i) {
                     // Set tendency to 0 if ITYPEV = 0
                     if (ITYPEV(k,j,i) != 1) {
-                        tendency_history(t,k,j,i) = 0; 
+                        tendency_history(t,k,j,i) = real(0.); 
                     }
                 }
             );
@@ -68,7 +68,7 @@ TimeIntegrator::~TimeIntegrator() = default; void TimeIntegrator::step(
                 KOKKOS_LAMBDA(const int t, const int k, const int j, const int i) {
                     // Set tendency to 0 if ITYPEU = 0
                     if (ITYPEU(k,j,i) != 1) {
-                        tendency_history(t,k,j,i) = 0.;
+                        tendency_history(t,k,j,i) = real(0.);
                     }
                 }
             );
@@ -79,7 +79,7 @@ TimeIntegrator::~TimeIntegrator() = default; void TimeIntegrator::step(
                 KOKKOS_LAMBDA(const int t, const int k, const int j, const int i) {
                     // Set tendency to 0 if ITYPEW = 0
                     if (ITYPEW(k,j,i) != 1) {
-                        tendency_history(t,k,j,i) = 0.;
+                        tendency_history(t,k,j,i) = real(0.);
                     }
                 }
             );
@@ -110,7 +110,7 @@ TimeIntegrator::~TimeIntegrator() = default; void TimeIntegrator::step(
                     Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h, h}, {ny - h, nx - h}),
                     KOKKOS_LAMBDA(const int j, const int i) {
                         field_new_view(nz-h-1, j, i) = field_old_view(nz-h-1, j, i) 
-                                                + dt * (1.5 * tendency_history(now_idx, nz-h-1, j, i) - 0.5 * tendency_history(prev_idx, nz-h-1, j, i));
+                                                + dt * (real(1.5) * tendency_history(now_idx, nz-h-1, j, i) - real(0.5) * tendency_history(prev_idx, nz-h-1, j, i));
                     }
                 );
             }
@@ -119,7 +119,7 @@ TimeIntegrator::~TimeIntegrator() = default; void TimeIntegrator::step(
                     Kokkos::MDRangePolicy<Kokkos::Rank<3>>({k_start, h, h}, {k_end, ny-h, nx-h}),
                     KOKKOS_LAMBDA(const int k, const int j, const int i) {
                         field_new_view(k, j, i) = field_old_view(k, j, i) 
-                                                + dt * (1.5 * tendency_history(now_idx, k, j, i) - 0.5 * tendency_history(prev_idx, k, j, i));
+                                                + dt * (real(1.5) * tendency_history(now_idx, k, j, i) - real(0.5) * tendency_history(prev_idx, k, j, i));
                     }
                 );
             }

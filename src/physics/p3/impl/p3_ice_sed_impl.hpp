@@ -159,8 +159,11 @@ void Functions<S,D>
 
           // impose mean ice size bounds (i.e. apply lambda limiters)
           // note that the Nmax and Nmin are normalized and thus need to be multiplied by existing N
-          ni_incld(pk).set(qi_gt_small, min(ni_incld(pk), table_val_ni_lammax * ni_incld(pk)));
-          ni_incld(pk).set(qi_gt_small, max(ni_incld(pk), table_val_ni_lammin * ni_incld(pk)));
+          // Aaron - from ni to qi to align with new table and Fortran P3
+          // ni_incld(pk).set(qi_gt_small, min(ni_incld(pk), table_val_ni_lammax * ni_incld(pk)));
+          // ni_incld(pk).set(qi_gt_small, max(ni_incld(pk), table_val_ni_lammin * ni_incld(pk)));
+          ni_incld(pk).set(qi_gt_small, min(ni_incld(pk), table_val_ni_lammax * qi_incld(pk)));
+          ni_incld(pk).set(qi_gt_small, max(ni_incld(pk), table_val_ni_lammin * qi_incld(pk)));
           ni(pk).set(qi_gt_small, ni_incld(pk) * cld_frac_i(pk));
 
           V_qit(pk).set(qi_gt_small, ice_sedimentation_factor * table_val_qi_fallspd * rhofaci(pk)); // mass-weighted   fall speed (with density factor)

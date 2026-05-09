@@ -15,7 +15,8 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
                          const Core::Grid& grid, 
                          const Core::Parameters& params, 
                          Core::HaloExchanger& halo_exchanger, 
-                         Core::State& state)
+                         Core::State& state, 
+                         std::string ocean_scheme)
     : config_(config), grid_(grid), params_(params), halo_exchanger_(halo_exchanger), state_(state)
 {
     m_nx = grid_.get_local_physical_points_x();
@@ -78,6 +79,8 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
     if (!state.has_field("stc")) state.add_field<3>("stc", {m_nsoil, ny, nx});
     if (!state.has_field("smc")) state.add_field<3>("smc", {m_nsoil, ny, nx});
     if (!state.has_field("slc")) state.add_field<3>("slc", {m_nsoil, ny, nx});
+
+    m_use_tco_ocean = (ocean_scheme == "tco_ocean") ? 1 : 0; // false/true: 0/1 
 }
 
 void LandProcess::init() {
@@ -145,24 +148,24 @@ void LandProcess::prepare_static_data() {
 
             int hx = topo_v(vj, vi);
             int hxp = topo_v(vj, vi) + 1;
-            double dz = z_mid_v(hxp) - z_up_v(hx);
-            m_hgt(i, j) = (dz < 2.0) ? 2.0 : dz;
+            VVM::Real dz = z_mid_v(hxp) - z_up_v(hx);
+            m_hgt(i, j) = (dz < real(2.0)) ? real(2.0) : dz;
 
             m_ps(i, j) = pbar_v(hxp); 
             m_prslki(i, j) = pibar_up_v(hx) / pibar_v(hxp);
 
-            m_sigmaf(i, j) = gvf(vj, vi) / 100.;  // Green Vegetation Fraction
-            m_sfemis(i, j) = 0.98; // Surface Emissivity
-            m_alb(i, j)    = albedo(vj, vi) / 100.;  // Surface albedo
-            m_shdmin(i, j) = shdmin(vj, vi) / 100.; // Minimum Fractional Coverage
-            m_shdmax(i, j) = shdmax(vj, vi) / 100.; // Maximum Fractional Coverage
+            m_sigmaf(i, j) = gvf(vj, vi) / real(100.);  // Green Vegetation Fraction
+            m_sfemis(i, j) = real(0.98); // Surface Emissivity
+            m_alb(i, j)    = albedo(vj, vi) / real(100.);  // Surface albedo
+            m_shdmin(i, j) = shdmin(vj, vi) / real(100.); // Minimum Fractional Coverage
+            m_shdmax(i, j) = shdmax(vj, vi) / real(100.); // Maximum Fractional Coverage
 
             // sea/land/ice, 0/1/2
             m_islimsk(i, j) = sea_land_ice_mask(vj, vi);
             m_vegtype(i, j) = vegtype(vj, vi); // vegetation type 20 types
             m_soiltype(i, j) = soiltype(vj, vi); // soil type 19 types
             m_slopetype(i, j) = slopetype(vj, vi); // slope 9 types
-            m_zorl(i, j) = 0.1; // surface roughness (m)
+            m_zorl(i, j) = real(0.1); // surface roughness (m)
         }
     );
 }
@@ -184,8 +187,8 @@ void LandProcess::preprocessing_and_packing() {
     auto& stc_v    = state_.get_field<3>("stc").get_device_data();
     auto& smc_v    = state_.get_field<3>("smc").get_device_data();
     auto& slc_v    = state_.get_field<3>("slc").get_device_data();
-    auto& precip_liq_surf_2d = state_.get_field<2>("precip_liq_surf_mass").get_mutable_device_data();
-    auto& precip_ice_surf_2d = state_.get_field<2>("precip_ice_surf_mass").get_mutable_device_data();
+    auto& precip_liq_surf_2d = state_.get_field<2>("precip_liq_surf_flux").get_mutable_device_data();
+    auto& precip_ice_surf_2d = state_.get_field<2>("precip_ice_surf_flux").get_mutable_device_data();
 
     Kokkos::parallel_for("PackToLand", 
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {m_nx, m_ny}),
@@ -198,8 +201,8 @@ void LandProcess::preprocessing_and_packing() {
             
 
             m_t1(i, j) = th_v(hxp, vj, vi) * pibar_v(hxp);
-            m_u1(i, j) = 0.5 * (u_v(hxp, vj, vi) + u_v(hxp, vj, vi-1));
-            m_v1(i, j) = 0.5 * (v_v(hxp, vj, vi) + v_v(hxp, vj-1, vi));
+            m_u1(i, j) = real(0.5) * (u_v(hxp, vj, vi) + u_v(hxp, vj, vi-1));
+            m_v1(i, j) = real(0.5) * (v_v(hxp, vj, vi) + v_v(hxp, vj-1, vi));
             // m_u1(i, j) = u_v(hxp, vj, vi);
             // m_v1(i, j) = v_v(hxp, vj, vi);
             m_q1(i, j) = qv_v(hxp, vj, vi);
@@ -247,7 +250,7 @@ void LandProcess::postprocessing_and_unpacking() {
 }
 
 
-void LandProcess::run(double dt) {
+void LandProcess::run(VVM::Real dt) {
     preprocessing_and_packing();
 
     Kokkos::fence();
@@ -259,7 +262,7 @@ void LandProcess::run(double dt) {
 //     hipStream_t stream = Kokkos::DefaultExecutionSpace().hip_stream();
 // #endif
 
-    run_vvm_land_wrapper(m_nx, m_ny, m_nsoil, dt,
+    run_vvm_land_wrapper(m_use_tco_ocean, m_nx, m_ny, m_nsoil, dt,
         m_islimsk.data(), m_vegtype.data(), m_soiltype.data(), m_slopetype.data(),
         m_sigmaf.data(), m_sfemis.data(), m_alb.data(), m_shdmin.data(), m_shdmax.data(),
         m_t1.data(), m_q1.data(), m_u1.data(), m_v1.data(), m_ps.data(), 

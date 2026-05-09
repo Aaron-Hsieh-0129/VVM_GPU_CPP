@@ -11,7 +11,7 @@ namespace p3 {
 namespace {
 
 template <typename S, typename IceT, typename CollT>
-void read_ice_lookup_tables(const bool masterproc, const char* p3_lookup_base, const char* p3_version, IceT& ice_table_vals, CollT& collect_table_vals, int densize, int rimsize, int isize, int rcollsize)
+void read_ice_lookup_tables(const bool masterproc, const char* p3_lookup_base, const char* p3_version, IceT& ice_table_vals, CollT& collect_table_vals, int densize, int rimsize, int liqsize, int isize, int rcollsize)
 {
   using DeviceIcetable = typename IceT::non_const_type;
   using DeviceColtable = typename CollT::non_const_type;
@@ -33,37 +33,67 @@ void read_ice_lookup_tables(const bool masterproc, const char* p3_lookup_base, c
   }
 
   std::ifstream in(filename);
+  if (!in.is_open()) {
+    printf("ERROR: can't find file or can't open the file, please check：%s\n", filename.c_str());
+    return;
+  }
 
   // read header
   std::string version, version_val;
   in >> version >> version_val;
 
-  EKAT_REQUIRE_MSG(version == "VERSION", "Bad " << filename << ", expected VERSION X.Y.Z header");
-  EKAT_REQUIRE_MSG(version_val == p3_version, "Bad " << filename << ", expected version " << p3_version << ", but got " << version_val);
+  // EKAT_REQUIRE_MSG(version == "VERSION", "Bad " << filename << ", expected VERSION X.Y.Z header");
+  // EKAT_REQUIRE_MSG(version_val == p3_version, "Bad " << filename << ", expected version " << p3_version << ", but got " << version_val);
+
+  // Aaron - Change the loaded lookup table from 4.1.1 to v6.4
+  std::string dum_str;
+  double dum_s, dum_s1, dum_s2;
 
   // read tables
-  double dum_s; int dum_i; // dum_s needs to be double to stream correctly
+  // double dum_s; int dum_i; // dum_s needs to be double to stream correctly
   for (int jj = 0; jj < densize; ++jj) {
     for (int ii = 0; ii < rimsize; ++ii) {
-      for (int i = 0; i < isize; ++i) {
-        in >> dum_i >> dum_i;
-        int j_idx = 0;
-        for (int j = 0; j < 15; ++j) {
-          in >> dum_s;
-          if (j > 1 && j != 10) {
-            ice_table_vals_h(jj, ii, i, j_idx++) = dum_s;
+      // Aaron - Change the loaded lookup table from 4.1.1 to v6.4
+      for (int ll = 0; ll < liqsize; ++ll) {
+        for (int i = 0; i < isize; ++i) {
+          // Aaron - Change the loaded lookup table from 4.1.1 to v6.4
+          /*
+          in >> dum_i >> dum_i;
+          int j_idx = 0;
+          for (int j = 0; j < 15; ++j) {
+            in >> dum_s;
+            if (j > 1 && j != 10) {
+              ice_table_vals_h(jj, ii, i, j_idx++) = dum_s;
+            }
+          }
+          */
+          in >> dum_str >> dum_str >> dum_str >> dum_str;
+          for (int j = 0; j < 19; ++j) {
+            in >> dum_s;
+            if (ll == 0) {
+              ice_table_vals_h(jj, ii, i, j) = dum_s;
+            }
           }
         }
-      }
 
-      for (int i = 0; i < isize; ++i) {
-        for (int j = 0; j < rcollsize; ++j) {
-          in >> dum_i >> dum_i;
-          int k_idx = 0;
-          for (int k = 0; k < 6; ++k) {
-            in >> dum_s;
-            if (k == 3 || k == 4) {
-              collect_table_vals_h(jj, ii, i, j, k_idx++) = std::log10(dum_s);
+        for (int i = 0; i < isize; ++i) {
+          for (int j = 0; j < rcollsize; ++j) {
+            // Aaron - Change the loaded lookup table from 4.1.1 to v6.4
+            /*
+            in >> dum_i >> dum_i;
+            int k_idx = 0;
+            for (int k = 0; k < 6; ++k) {
+              in >> dum_s;
+              if (k == 3 || k == 4) {
+                collect_table_vals_h(jj, ii, i, j, k_idx++) = std::log10(dum_s);
+              }
+            }
+            */
+            in >> dum_str >> dum_str >> dum_str >> dum_str;
+            in >> dum_s1 >> dum_s2;
+            if (ll == 0) {
+              collect_table_vals_h(jj, ii, i, j, 0) = dum_s1;
+              collect_table_vals_h(jj, ii, i, j, 1) = dum_s2;
             }
           }
         }
@@ -117,7 +147,9 @@ void compute_tables(const bool masterproc, MuRT& mu_r_table_vals, VNT& vn_table_
 
   // AaronDonahue: Switching to table ver 4 means switching to a constand mu_r,
   // so this section is commented out.
-  Kokkos::deep_copy(mu_r_table_vals_h, 1); // mu_r_constant =1. In other places, this is runtime_options.constant_mu_rain
+    // Aaron - set this from 1 to 0 to align with Fortran P3 for Marshall-Palmer distribution
+  // Kokkos::deep_copy(mu_r_table_vals_h, 1); // mu_r_constant =1. In other places, this is runtime_options.constant_mu_rain
+  Kokkos::deep_copy(mu_r_table_vals_h, 0.);
 
   static constexpr S thrd = 1./3;
   static constexpr S small = 1.e-30;
@@ -127,7 +159,9 @@ void compute_tables(const bool masterproc, MuRT& mu_r_table_vals, VNT& vn_table_
   // the lookup table is two dimensional as a function of number-weighted mean size
   // proportional to qr/Nr and shape parameter mu_r
   for (ii = 1; ii <= 10; ++ii) {
-    mu_r = 1; // mu_r_constant = 1
+    // Aaron - set this from 1 to 0 to align with Fortran P3 for Marshall-Palmer distribution
+    // mu_r = 1; // mu_r_constant = 1
+    mu_r = 0;
 
     // loop over number-weighted mean size
     for (jj = 1; jj <= 300; ++jj) {
@@ -335,7 +369,7 @@ typename Functions<S,D>::P3LookupTables Functions<S,D>
   // static const char* dir = SCREAM_DATA_DIR "/tables";
   static const char* dir = "../rundata/p3/";
   // p3_init_a (reads ice_table, collect_table)
-  read_ice_lookup_tables<S>(masterproc, p3_lookup_base, version, lookup_tables.ice_table_vals, lookup_tables.collect_table_vals, P3C::densize, P3C::rimsize, P3C::isize, P3C::rcollsize);
+  read_ice_lookup_tables<S>(masterproc, p3_lookup_base, version, lookup_tables.ice_table_vals, lookup_tables.collect_table_vals, P3C::densize, P3C::rimsize, P3C::liqsize, P3C::isize, P3C::rcollsize);
   if (write_tables) {
     //p3_init_b (computes tables mu_r_table, revap_table, vn_table, vm_table)
     compute_tables<S, P3C>(masterproc, lookup_tables.mu_r_table_vals, lookup_tables.vn_table_vals, lookup_tables.vm_table_vals, lookup_tables.revap_table_vals);
@@ -344,7 +378,24 @@ typename Functions<S,D>::P3LookupTables Functions<S,D>
   else {
     read_computed_tables(masterproc, dir, lookup_tables.mu_r_table_vals, lookup_tables.vn_table_vals, lookup_tables.vm_table_vals, lookup_tables.revap_table_vals);
   }
+  // Aaron - print to check table values
+  // auto d_ice_table = lookup_tables.ice_table_vals;
+  // auto d_collect_table = lookup_tables.collect_table_vals;
+  //
+  // Kokkos::parallel_for("PrintRawTable", 1, KOKKOS_LAMBDA(const int&) {
+  //     printf("\n=== C++ RAW TABLE CHECK ===\n");
+  //     printf("ice_table(0,0,0,0) (First)          = %e\n", d_ice_table(0,0,0,0));
+  //     printf("ice_table(2,1,24,9) (Middle)        = %e\n", d_ice_table(2,1,24,9));
+  //     printf("ice_table(4,3,49,18) (Last)         = %e\n", d_ice_table(4,3,49,18));
+  //     
+  //     printf("collect_table(0,0,0,0,0) (First)    = %e\n", d_collect_table(0,0,0,0,0));
+  //     printf("collect_table(4,3,49,29,1) (Last)   = %e\n", d_collect_table(4,3,49,29,1));
+  //     printf("===========================\n\n");
+  // });
+  // Kokkos::fence();
+
   // dnu is always computed/hardcoded
+  // Aaron - this is only used for iparam = 1
   compute_dnu<S>(lookup_tables.dnu_table_vals);
 
   return lookup_tables;

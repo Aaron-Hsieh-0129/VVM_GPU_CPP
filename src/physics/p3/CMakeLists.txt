@@ -1,3 +1,10 @@
+option(SCREAM_P3_SMALL_KERNELS "Enable small kernels for P3 microphysics to reduce memory usage" OFF)
+option(SCREAM_DOUBLE_PRECISION "Use double precision (ON) or single (OFF)" ON)
+option(EAMXX_ENABLE_GPU "Enable GPU kernels" ON)
+
+set(SCREAM_PACK_SIZE 1 CACHE STRING "Size of SIMD packs")
+set(SCREAM_SMALL_PACK_SIZE 1 CACHE STRING "Size of small SIMD packs")
+
 set(P3_SRCS
   # eamxx_p3_process_interface.cpp
   # eamxx_p3_run.cpp
@@ -32,6 +39,8 @@ if (NOT EAMXX_ENABLE_GPU OR Kokkos_ENABLE_CUDA_RELOCATABLE_DEVICE_CODE OR Kokkos
     eti/p3_rain_imm_freezing.cpp
     eti/p3_droplet_self_coll.cpp
     eti/p3_evaporate_rain.cpp
+    eti/p3_calc_cond_evap_dep_sub.cpp
+    eti/p3_droplet_activation.cpp
     eti/p3_impose_max_total_ni.cpp
     eti/p3_calc_liq_relaxation_timescale.cpp
     eti/p3_ice_relaxation_timescale.cpp
@@ -62,25 +71,24 @@ set(P3_SK_SRCS
     disp/p3_main_impl_disp.cpp
     disp/p3_main_impl_part2_disp.cpp
     disp/p3_rain_sed_impl_disp.cpp
-    )
+)
 
-# set(P3_LIBS "p3")
-# if (SCREAM_P3_SMALL_KERNELS)
-#   add_library(p3 ${P3_SRCS} ${P3_SK_SRCS})
-# else()
-#   add_library(p3 ${P3_SRCS})
-#   # If small kernels are ON, we don't need a separate executable to test them.
-#   # Also, we never want to generate baselines with this separate executable
-#   if (NOT SCREAM_LIB_ONLY AND NOT SCREAM_ONLY_GENERATE_BASELINES)
-#     add_library(p3_sk ${P3_SRCS} ${P3_SK_SRCS})
-#     # Always build p3_sk with SCREAM_P3_SMALL_KERNELS on
-#     target_compile_definitions(p3_sk PUBLIC "SCREAM_P3_SMALL_KERNELS")
-#     list(APPEND P3_LIBS "p3_sk")
-#   endif()
-# endif()
-
-add_library(p3 ${P3_SRCS})
 set(P3_LIBS "p3")
+if (SCREAM_P3_SMALL_KERNELS)
+  add_library(p3 ${P3_SRCS} ${P3_SK_SRCS})
+else()
+  add_library(p3 ${P3_SRCS})
+endif()
+
+target_compile_definitions(p3 PUBLIC 
+    EAMXX_HAS_P3
+    $<$<BOOL:${SCREAM_DOUBLE_PRECISION}>:SCREAM_DOUBLE_PRECISION>
+    $<$<BOOL:${EAMXX_ENABLE_GPU}>:EAMXX_ENABLE_GPU>
+    $<$<BOOL:${SCREAM_P3_SMALL_KERNELS}>:SCREAM_P3_SMALL_KERNELS>
+    SCREAM_PACK_SIZE=${SCREAM_PACK_SIZE}
+    SCREAM_SMALL_PACK_SIZE=${SCREAM_SMALL_PACK_SIZE}
+    SCREAM_POSSIBLY_NO_PACK_SIZE=1
+)
 
 target_compile_definitions(p3 PUBLIC EAMXX_HAS_P3)
 

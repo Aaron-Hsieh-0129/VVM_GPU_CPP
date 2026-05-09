@@ -4,6 +4,7 @@
 #include "core/State.hpp"
 #include "core/Grid.hpp"
 #include "core/Parameters.hpp"
+#include "core/vvm_types.hpp"
 #include "dynamics/spatial_schemes/SpatialScheme.hpp"
 #include "utils/ConfigurationManager.hpp"
 #include "utils/Timer.hpp"
@@ -54,7 +55,7 @@ private:
 
     Core::HaloExchanger& halo_exchanger_;
 
-    double h_inv_C0_;
+    VVM::Real h_inv_C0_;
 
 #if defined(ENABLE_NCCL)
     bool solve_w_graph_created_ = false;

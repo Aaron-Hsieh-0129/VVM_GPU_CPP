@@ -11,8 +11,10 @@ template<typename S, typename D>
 KOKKOS_FUNCTION
 void Functions<S,D>
 ::cloud_water_conservation(const Spack& qc, const Scalar dt,
+  Spack &qc2qv_evap_tend, Spack &qv2qc_conden_tend, Spack &qv2qc_nucleat_tend, 
   Spack& qc2qr_autoconv_tend, Spack& qc2qr_accret_tend, Spack &qc2qi_collect_tend, Spack& qc2qi_hetero_freeze_tend, 
   Spack& qc2qr_ice_shed_tend, Spack& qc2qi_berg_tend, Spack& qi2qv_sublim_tend, Spack& qv2qi_vapdep_tend,
+  Spack &nc2nr_autoconv_tend, Spack &nc_accret_tend, Spack &nc_collect_tend, Spack &nc2ni_immers_freeze_tend,
   Spack& qcheti_cnt, Spack& qicnt, const bool& use_hetfrz_classnuc, const Smask& context,
   const Spack& cld_frac_l, const Spack& cld_frac_i, const P3Runtime& runtime_options)
 {
@@ -22,17 +24,17 @@ void Functions<S,D>
     sinks = (qc2qr_autoconv_tend+qc2qr_accret_tend+qc2qi_collect_tend+qcheti_cnt+qc2qr_ice_shed_tend+qc2qi_berg_tend)*dt; // Sinks of cloud water
   }
   else{
-    sinks = (qc2qr_autoconv_tend+qc2qr_accret_tend+qc2qi_collect_tend+qc2qi_hetero_freeze_tend+qc2qr_ice_shed_tend+qc2qi_berg_tend)*dt; // Sinks of cloud water
+    sinks = (qc2qr_autoconv_tend+qc2qr_accret_tend+qc2qi_collect_tend + qc2qv_evap_tend +qc2qi_hetero_freeze_tend+qc2qr_ice_shed_tend+qc2qi_berg_tend)*dt; // Sinks of cloud water
   }
-  const auto sources = qc; // Source of cloud water
+  const auto sources = qc + (qv2qc_conden_tend + qv2qc_nucleat_tend) * dt; // Source of cloud water
   // il_cldm is the intersection of ice and liquid cloud fractions
-  const auto il_cldm = (runtime_options.use_separate_ice_liq_frac)
-                           ? min(cld_frac_i, cld_frac_l)
-                           : Spack(1);
-  const auto cld_frac_glaciated = (runtime_options.use_separate_ice_liq_frac)
-                           ? max(cld_frac_i-il_cldm, 0.0001)
-                           : Spack(1);
-  Spack ratio;
+  // const auto il_cldm = (runtime_options.use_separate_ice_liq_frac)
+  //                          ? min(cld_frac_i, cld_frac_l)
+  //                          : Spack(1);
+  // const auto cld_frac_glaciated = (runtime_options.use_separate_ice_liq_frac)
+  //                          ? max(cld_frac_i-il_cldm, 0.0001)
+  //                          : Spack(1);
+  Spack ratio(0);
 
   constexpr Scalar qtendsmall = C::QTENDSMALL;
   Smask enforce_conservation  = sinks > sources && sinks >= qtendsmall && context;  // determine if  conservation corrction is necessary
@@ -42,6 +44,7 @@ void Functions<S,D>
     ratio.set(enforce_conservation, sources/sinks);
     qc2qr_autoconv_tend.set(enforce_conservation, qc2qr_autoconv_tend*ratio);
     qc2qr_accret_tend.set(enforce_conservation, qc2qr_accret_tend*ratio);
+    qc2qv_evap_tend.set(enforce_conservation, qc2qv_evap_tend*ratio);
     qc2qi_collect_tend.set(enforce_conservation, qc2qi_collect_tend*ratio);
     if(use_hetfrz_classnuc){
          qcheti_cnt.set(enforce_conservation, qcheti_cnt*ratio);
@@ -52,11 +55,16 @@ void Functions<S,D>
     }
     qc2qr_ice_shed_tend.set(enforce_conservation, qc2qr_ice_shed_tend*ratio);
     qc2qi_berg_tend.set(enforce_conservation, qc2qi_berg_tend*ratio);
+
+    nc2nr_autoconv_tend.set(enforce_conservation, nc2nr_autoconv_tend*ratio);
+    nc_accret_tend.set(enforce_conservation, nc_accret_tend*ratio);
+    nc_collect_tend.set(enforce_conservation, nc_collect_tend*ratio);
+    nc2ni_immers_freeze_tend.set(enforce_conservation, nc2ni_immers_freeze_tend*ratio);
   }
 
-  if(nothing_todo.any()){
-    ratio.set(nothing_todo, 1); // If not limiting sinks on qc then most likely did not run out of qc
-  }
+  // if(nothing_todo.any()){
+  //   ratio.set(nothing_todo, 1); // If not limiting sinks on qc then most likely did not run out of qc
+  // }
 
   //PMC: ratio is also frac of step w/ liq. thus we apply qc2qi_berg_tend for
   //"ratio" of timestep and vapor deposition and sublimation  for the
@@ -68,6 +76,9 @@ void Functions<S,D>
   // phase cloud. qidep*(1._rtype-ratio)*(il_cldm/cld_frac_i) is the additional
   // vapor depositional growth rate that takes place within the mixed phase cloud
   // after qc is depleted
+  
+  // Aaron - propably not need this in original Fortran P3
+  /*
   enforce_conservation = sources > qtendsmall && context;
   if (enforce_conservation.any()){
     if (runtime_options.use_separate_ice_liq_frac) {
@@ -78,6 +89,7 @@ void Functions<S,D>
       qi2qv_sublim_tend.set(enforce_conservation, qi2qv_sublim_tend*(1-ratio));
     }
   }
+  */
 }
 
 template<typename S, typename D>
@@ -86,12 +98,13 @@ void Functions<S,D>
 ::rain_water_conservation(
   const Spack& qr, const Spack& qc2qr_autoconv_tend, const Spack& qc2qr_accret_tend, 
   const Spack& qi2qr_melt_tend, const Spack& qc2qr_ice_shed_tend, const Scalar dt,
-  Spack& qr2qv_evap_tend, Spack& qr2qi_collect_tend, Spack& qr2qi_immers_freeze_tend,
+  Spack& qv2qr_conden_tend, Spack& qr2qv_evap_tend, Spack& qr2qi_collect_tend, Spack& qr2qi_immers_freeze_tend,
+  Spack& nr_evap_tend, Spack& nr_collect_tend, Spack& nr2ni_immers_freeze_tend,
   const Smask& context)
 {
   const auto sinks   = (qr2qv_evap_tend+qr2qi_collect_tend+qr2qi_immers_freeze_tend)*dt; // Sinks of rain water
-  const auto sources = qr + (qc2qr_autoconv_tend+qc2qr_accret_tend+qi2qr_melt_tend+qc2qr_ice_shed_tend)*dt; // Sources of rain water
-  Spack ratio;
+  const auto sources = qr + (qv2qr_conden_tend+qc2qr_autoconv_tend+qc2qr_accret_tend+qi2qr_melt_tend+qc2qr_ice_shed_tend)*dt; // Sources of rain water
+  Spack ratio(0);
 
   constexpr Scalar qtendsmall = C::QTENDSMALL;
   Smask enforce_conservation  = sinks > sources && sinks >= qtendsmall && context;  // determine if  conservation corrction is necessary
@@ -101,6 +114,10 @@ void Functions<S,D>
     qr2qv_evap_tend.set(enforce_conservation, qr2qv_evap_tend*ratio);
     qr2qi_collect_tend.set(enforce_conservation, qr2qi_collect_tend*ratio);
     qr2qi_immers_freeze_tend.set(enforce_conservation, qr2qi_immers_freeze_tend*ratio);
+    
+    nr_evap_tend.set(enforce_conservation, nr_evap_tend*ratio);
+    nr_collect_tend.set(enforce_conservation, nr_collect_tend*ratio);
+    nr2ni_immers_freeze_tend.set(enforce_conservation, nr2ni_immers_freeze_tend*ratio);
   }
 }
 
@@ -110,7 +127,9 @@ void Functions<S,D>
 ::ice_water_conservation(
   const Spack& qi,const Spack& qv2qi_vapdep_tend,const Spack& qv2qi_nucleat_tend,const Spack& qc2qi_berg_tend, 
   const Spack &qr2qi_collect_tend,const Spack &qc2qi_collect_tend,const Spack& qr2qi_immers_freeze_tend,
-  const Spack& qc2qi_hetero_freeze_tend,const Scalar dt, Spack &qinuc_cnt, Spack &qcheti_cnt, Spack &qicnt,
+  const Spack& qc2qi_hetero_freeze_tend,const Scalar dt, 
+  Spack& ni_sublim_tend, Spack& ni2nr_melt_tend, 
+  Spack &qinuc_cnt, Spack &qcheti_cnt, Spack &qicnt,
   Spack& qi2qv_sublim_tend, Spack& qi2qr_melt_tend, const bool& use_hetfrz_classnuc,
   const Smask& context)
 {
@@ -125,13 +144,43 @@ void Functions<S,D>
     sources = qi + (qv2qi_vapdep_tend+qv2qi_nucleat_tend+qr2qi_collect_tend+qc2qi_collect_tend
                           + qr2qi_immers_freeze_tend+qc2qi_hetero_freeze_tend+qc2qi_berg_tend)*dt; // Sources of ice water
   }
-  Spack ratio;
+  Spack ratio(0);
   constexpr Scalar qtendsmall = C::QTENDSMALL;
   Smask enforce_conservation  = sinks > sources && sinks >= qtendsmall && context;  // determine if  conservation corrction is necessary
   if(enforce_conservation.any()){
     ratio.set(enforce_conservation, sources/sinks);
     qi2qv_sublim_tend.set(enforce_conservation, qi2qv_sublim_tend*ratio);
     qi2qr_melt_tend.set(enforce_conservation, qi2qr_melt_tend*ratio);
+
+    ni_sublim_tend.set(enforce_conservation, ni_sublim_tend*ratio);
+    ni2nr_melt_tend.set(enforce_conservation, ni2nr_melt_tend*ratio);
+  }
+}
+
+
+template<typename S, typename D>
+KOKKOS_FUNCTION
+void Functions<S,D>
+::vapor_water_conservation(
+  const Spack& qv, const Scalar dt, Spack& qv2qc_conden_tend, Spack& qv2qc_nucleat_tend, Spack& qv2qr_conden_tend, Spack& qv2qi_vapdep_tend,
+  Spack& qv2qi_nucleat_tend, Spack& qc2qv_evap_tend, Spack& qr2qv_evap_tend, Spack& qi2qv_sublim_tend, Spack& ni_nucleat_tend, Spack& nc_nuclet_tend)
+{
+  const auto sinks = (qv2qc_conden_tend+qv2qr_conden_tend+qv2qc_nucleat_tend+qv2qi_vapdep_tend+qv2qi_nucleat_tend)*dt; // Sinks of vapor water
+  const auto sources = qv + (qc2qv_evap_tend+qr2qv_evap_tend+qi2qv_sublim_tend)*dt; // Sources of vapor water
+  Spack ratio(0);
+  constexpr Scalar qtendsmall = C::QTENDSMALL;
+  Smask enforce_conservation  = sinks > sources && sinks >= qtendsmall;  // determine if  conservation corrction is necessary
+  
+  if(enforce_conservation.any()){
+    ratio.set(enforce_conservation, sources/sinks);
+    qv2qc_conden_tend.set(enforce_conservation, qv2qc_conden_tend*ratio);
+    qv2qr_conden_tend.set(enforce_conservation, qv2qr_conden_tend*ratio);
+    qv2qc_nucleat_tend.set(enforce_conservation, qv2qc_nucleat_tend*ratio);
+    qv2qi_vapdep_tend.set(enforce_conservation, qv2qi_vapdep_tend*ratio);
+    qv2qi_nucleat_tend.set(enforce_conservation, qv2qi_nucleat_tend*ratio);
+
+    ni_nucleat_tend.set(enforce_conservation, ni_nucleat_tend*ratio);
+    nc_nuclet_tend.set(enforce_conservation, nc_nuclet_tend*ratio);
   }
 }
 

@@ -10,7 +10,7 @@ template<typename S, typename D>
 KOKKOS_FUNCTION
 void Functions<S,D>
 ::rain_self_collection(
-  const Spack& rho, const Spack& qr_incld, const Spack& nr_incld, Spack& nr_selfcollect_tend,
+  const Spack& rho, const Spack& qr_incld, Spack& nr_incld, Spack& nr_selfcollect_tend,
   const P3Runtime& runtime_options,
   const Smask& context)
 {
@@ -21,6 +21,7 @@ void Functions<S,D>
   constexpr Scalar qsmall   = C::QSMALL;
   constexpr Scalar rho_h2o  = C::RHO_H2O;
   constexpr Scalar pi       = C::Pi;
+  constexpr Scalar nsmall   = C::NSMALL;
 
   const Scalar rain_selfcollection_breakup_diameter =
       runtime_options.rain_selfcollection_breakup_diameter;
@@ -30,6 +31,9 @@ void Functions<S,D>
   const auto qr_incld_not_small = qr_incld >= qsmall && context;
 
   if(qr_incld_not_small.any()) {
+    // Aaron - add nsmall condition like Fortran P3
+    nr_incld = max(nr_incld, nsmall);
+
     // use mass-mean diameter (do this by using
     // the old version of lambda w/o mu dependence)
     // note there should be a factor of 6^(1/3), but we

@@ -10,6 +10,7 @@
 #include "core/Parameters.hpp"
 #include "core/HaloExchanger.hpp"
 #include "core/Field.hpp"
+#include "core/vvm_types.hpp"
 #include "utils/ConfigurationManager.hpp"
 
 namespace VVM {
@@ -29,7 +30,7 @@ public:
                               const std::string& var_name, 
                               Core::Field<Dim>& out_tendency) const;
 
-    void update_large_scale_forcing(Core::State& state, double current_time);
+    void update_large_scale_forcing(Core::State& state, VVM::Real current_time);
 
     const std::vector<std::string>& get_target_vars() const { return target_vars_; }
 
@@ -47,23 +48,23 @@ private:
     std::string file_name_;
     std::string file_prefix_;
 
-    double tau_b_;
-    double inv_tau_b_;
-    double sigma_;
-    double xc_;
+    VVM::Real tau_b_;
+    VVM::Real inv_tau_b_;
+    VVM::Real sigma_;
+    VVM::Real xc_;
     bool   enable_;
-    double offset_;
-    double width_;
-    double radius_;
+    VVM::Real offset_;
+    VVM::Real width_;
+    VVM::Real radius_;
 
     bool nudge_W_; // West  (x = 0)
     bool nudge_E_; // East  (x = xsize)
     bool nudge_S_; // South (y = 0)
     bool nudge_N_; // North (y = ysize)
     
-    double time_T1_;
-    double time_T2_;
-    double update_interval_;
+    VVM::Real time_T1_;
+    VVM::Real time_T2_;
+    VVM::Real update_interval_;
 
     void load_forcing_data(Core::State& state, const std::string& filepath, bool is_constant);
     void check_ncmpi_error(int status, const std::string& msg) const;

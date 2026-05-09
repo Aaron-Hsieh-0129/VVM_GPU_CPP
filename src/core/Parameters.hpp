@@ -13,29 +13,29 @@ namespace Core {
 class Parameters {
 public:
     // Physical constants
-    Kokkos::View<double> gravity;
-    Kokkos::View<double> Rd;
-    Kokkos::View<double> PSFC;
-    Kokkos::View<double> P0;
-    Kokkos::View<double> Cp;
-    Kokkos::View<double> Lv;
+    Kokkos::View<VVM::Real> gravity;
+    Kokkos::View<VVM::Real> Rd;
+    Kokkos::View<VVM::Real> PSFC;
+    Kokkos::View<VVM::Real> P0;
+    Kokkos::View<VVM::Real> Cp;
+    Kokkos::View<VVM::Real> Lv;
     int solver_iteration;
 
     // Grid-derived parameters
-    Kokkos::View<double> nx;
-    Kokkos::View<double> ny;
-    Kokkos::View<double> nz;
-    Kokkos::View<double> dx;
-    Kokkos::View<double> dy;
-    Kokkos::View<double> dz;
-    Kokkos::View<double> dt;
-    Kokkos::View<double> rdx;
-    Kokkos::View<double> rdy;
-    Kokkos::View<double> rdz;
-    Kokkos::View<double> rdx2;
-    Kokkos::View<double> rdy2;
-    Kokkos::View<double> rdz2;
-    Kokkos::View<double> WRXMU;
+    Kokkos::View<VVM::Real> nx;
+    Kokkos::View<VVM::Real> ny;
+    Kokkos::View<VVM::Real> nz;
+    Kokkos::View<VVM::Real> dx;
+    Kokkos::View<VVM::Real> dy;
+    Kokkos::View<VVM::Real> dz;
+    Kokkos::View<VVM::Real> dt;
+    Kokkos::View<VVM::Real> rdx;
+    Kokkos::View<VVM::Real> rdy;
+    Kokkos::View<VVM::Real> rdz;
+    Kokkos::View<VVM::Real> rdx2;
+    Kokkos::View<VVM::Real> rdy2;
+    Kokkos::View<VVM::Real> rdz2;
+    Kokkos::View<VVM::Real> WRXMU;
     int max_topo_idx;
 
     Field<0> fact1_zeta;
@@ -58,7 +58,7 @@ public:
 
     Parameters(const Utils::ConfigurationManager& config, const Grid& grid);
 
-    double get_value_host(const Kokkos::View<double>& device_view) const;
+    VVM::Real get_value_host(const Kokkos::View<VVM::Real>& device_view) const;
 };
 
 } // namespace Core

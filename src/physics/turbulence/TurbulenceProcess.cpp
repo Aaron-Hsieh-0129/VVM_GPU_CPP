@@ -227,7 +227,7 @@ void TurbulenceProcess::init_boundary_masks(Core::State& state) {
     );
 }
 
-void TurbulenceProcess::compute_coefficients(Core::State& state, double dt) 
+void TurbulenceProcess::compute_coefficients(Core::State& state, VVM::Real dt) 
 {
     const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
@@ -251,74 +251,75 @@ void TurbulenceProcess::compute_coefficients(Core::State& state, double dt)
     auto& rkm = state.get_field<3>("RKM").get_mutable_device_data();
     auto& rkh = state.get_field<3>("RKH").get_mutable_device_data();
 
-    const double rdx = rdx_;
-    const double rdy = rdy_;
-    const double rdz = rdz_;
+    const VVM::Real rdx = rdx_;
+    const VVM::Real rdy = rdy_;
+    const VVM::Real rdz = rdz_;
     
-    const double grav = grav_;
-    const double vk = vk_;
-    const double ramd0s = ramd0s_;
-    const double critmn = critmn_;
-    const double critmx = 0.8 * deld_ * deld_ / dt;
+    const VVM::Real grav = grav_;
+    const VVM::Real vk = vk_;
+    const VVM::Real ramd0s = ramd0s_;
+    const VVM::Real critmn = critmn_;
+    const VVM::Real critmx = real(0.8) * deld_ * deld_ / dt;
 
     const auto& masks = masks_;
     Kokkos::parallel_for("ShuttsGray_Coeffs",
         Kokkos::MDRangePolicy<Kokkos::Rank<3>>({{h, h, h}}, {{nz-h, ny-h, nx-h}}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
-            double du_dx = (u(k, j, i) - u(k, j, i-1)) * rdx;
-            double dv_dy = (v(k, j, i) - v(k, j-1, i)) * rdy;
-            double dw_dz = flex_height_coef_mid(k) * (w(k, j, i) - w(k-1, j, i)) * rdz;
+            VVM::Real du_dx = (u(k, j, i) - u(k, j, i-1)) * rdx;
+            VVM::Real dv_dy = (v(k, j, i) - v(k, j-1, i)) * rdy;
+            VVM::Real dw_dz = flex_height_coef_mid(k) * (w(k, j, i) - w(k-1, j, i)) * rdz;
 
-            double TERM1 =  Kokkos::pow(R_zeta(k,j-1,i-1), 2.) + Kokkos::pow(R_zeta(k,j,i-1), 2.)
-                          + Kokkos::pow(R_zeta(k,j-1,  i), 2.) + Kokkos::pow(R_zeta(k,j,  i), 2.)
-                          + Kokkos::pow(R_eta(k,  j,i-1), 2.) + Kokkos::pow(R_eta(k,  j,i), 2.)
-                          + Kokkos::pow(R_eta(k-1,j,i-1), 2.) + Kokkos::pow(R_eta(k-1,j,i), 2.)
-                          + Kokkos::pow(R_xi(k,  j-1,i), 2.) + Kokkos::pow(R_xi(k,  j,i), 2.)
-                          + Kokkos::pow(R_xi(k-1,j-1,i), 2.) + Kokkos::pow(R_xi(k-1,j,i), 2.);
-            TERM1 = 0.25 * TERM1 + 2.0 * (du_dx*du_dx + dv_dy*dv_dy + dw_dz*dw_dz);
+            VVM::Real TERM1 =  Kokkos::pow(R_zeta(k,j-1,i-1), real(2.)) + Kokkos::pow(R_zeta(k,j,i-1), real(2.))
+                             + Kokkos::pow(R_zeta(k,j-1,  i), real(2.)) + Kokkos::pow(R_zeta(k,j,  i), real(2.))
+                             + Kokkos::pow(R_eta(k,   j,i-1), real(2.)) + Kokkos::pow(R_eta(k,  j,i), real(2.))
+                             + Kokkos::pow(R_eta(k-1, j,i-1), real(2.)) + Kokkos::pow(R_eta(k-1,j,i), real(2.))
+                             + Kokkos::pow(R_xi(k,  j-1,i), real(2.)) + Kokkos::pow(R_xi(k,  j,i), real(2.))
+                             + Kokkos::pow(R_xi(k-1,j-1,i), real(2.)) + Kokkos::pow(R_xi(k-1,j,i), real(2.));
+                             
+            TERM1 = real(0.25) * TERM1 + real(2.0) * (du_dx*du_dx + dv_dy*dv_dy + dw_dz*dw_dz);
             
-            if (ITYPEW(k,j,i) != 1) TERM1 = 0.;
+            if (ITYPEW(k,j,i) != 1) TERM1 = real(0.);
 
 
             // N^2
-            double DDY_top = grav*flex_height_coef_up(k) * (th(k+1,j,i)-th(k,j,i)) * rdz
+            VVM::Real DDY_top = grav*flex_height_coef_up(k) * (th(k+1,j,i)-th(k,j,i)) * rdz
                          / (th(k+1,j,i)+th(k,j,i)) * masks.val(k,j,i,WW1);
 
-            double DDY_bot = grav*flex_height_coef_up(k-1) * (th(k,j,i)-th(k-1,j,i)) * rdz
+            VVM::Real DDY_bot = grav*flex_height_coef_up(k-1) * (th(k,j,i)-th(k-1,j,i)) * rdz
                          / (th(k,j,i)+th(k-1,j,i)) * masks.val(k,j,i,WW2);
 
-            double DDY = DDY_top + DDY_bot;
+            VVM::Real DDY = DDY_top + DDY_bot;
 
 
             // Mixing Length
-            double z = z_mid(k);
-            double ZROUGH = 2e-4;
-            double DDX = (ramd0s * vk*vk*Kokkos::pow(z+ZROUGH, 2.)) / (ramd0s + vk*vk*Kokkos::pow(z+ZROUGH, 2.));
+            VVM::Real z = z_mid(k);
+            VVM::Real ZROUGH = real(2e-4);
+            VVM::Real DDX = (ramd0s * vk*vk*Kokkos::pow(z+ZROUGH, real(2.))) / (ramd0s + vk*vk*Kokkos::pow(z+ZROUGH, real(2.)));
 
             // Richardson Number
-            double Ri = DDY / TERM1;
+            VVM::Real Ri = DDY / TERM1;
 
             // E. Km, Kh
-            double rkm_val = 0.0;
-            double rkh_val = 0.0;
-            double sqrt_TERM1 = Kokkos::sqrt(TERM1);
+            VVM::Real rkm_val = real(0.0);
+            VVM::Real rkh_val = real(0.0);
+            VVM::Real sqrt_TERM1 = Kokkos::sqrt(TERM1);
 
-            if (TERM1 == 0.) {
-                rkm_val = 0.;
-                rkh_val = 0.;
+            if (TERM1 == real(0.)) {
+                rkm_val = real(0.);
+                rkh_val = real(0.);
             }
             else {
-                if (Ri < 0.0) { 
-                    rkm_val = sqrt_TERM1 * DDX * Kokkos::sqrt(1.0 - 16.0 * Ri);
-                    rkh_val = sqrt_TERM1 * DDX * 1.4 * Kokkos::sqrt(1.0 - 40.0 * Ri);
+                if (Ri < real(0.0)) { 
+                    rkm_val = sqrt_TERM1 * DDX * Kokkos::sqrt(real(1.0) - real(16.0) * Ri);
+                    rkh_val = sqrt_TERM1 * DDX * real(1.4) * Kokkos::sqrt(real(1.0) - real(40.0) * Ri);
                 } 
-                else if (Ri < 0.25) { 
-                    rkm_val = sqrt_TERM1 * DDX * Kokkos::pow(1.-4.*Ri, 4.);
-                    rkh_val = sqrt_TERM1 * DDX * 1.4 * (1.0 - 1.2 * Ri) * Kokkos::pow(1.-4.*Ri, 4.); 
+                else if (Ri < real(0.25)) { 
+                    rkm_val = sqrt_TERM1 * DDX * Kokkos::pow(real(1.)-real(4.)*Ri, real(4.));
+                    rkh_val = sqrt_TERM1 * DDX * real(1.4) * (real(1.0) - real(1.2) * Ri) * Kokkos::pow(real(1.)-real(4.)*Ri, real(4.)); 
                 } 
                 else { 
-                    rkm_val = 0.0;
-                    rkh_val = 0.0;
+                    rkm_val = real(0.0);
+                    rkh_val = real(0.0);
                 }
             }
 
@@ -329,8 +330,8 @@ void TurbulenceProcess::compute_coefficients(Core::State& state, double dt)
             rkh_val = Kokkos::min(rkh_val, critmx);
 
             if (ITYPEW(k,j,i) != 1) {
-                rkh_val = 0.; 
-                rkm_val = 0.; 
+                rkh_val = real(0.); 
+                rkm_val = real(0.); 
             }
 
             rkm(k, j, i) = rkm_val;
@@ -364,9 +365,9 @@ void TurbulenceProcess::calculate_tendencies(Core::State& state,
     const int nx = grid_.get_local_total_points_x();
     const int h = grid_.get_halo_cells();
     
-    const double rdx2 = rdx2_;
-    const double rdy2 = rdy2_;
-    const double rdz2 = rdz2_;
+    const VVM::Real rdx2 = rdx2_;
+    const VVM::Real rdy2 = rdy2_;
+    const VVM::Real rdz2 = rdz2_;
 
     const auto masks = masks_;
 
@@ -379,23 +380,23 @@ void TurbulenceProcess::calculate_tendencies(Core::State& state,
             Kokkos::parallel_for("Compute_Diff_Tendency_" + var_name,
                 Kokkos::MDRangePolicy<Kokkos::Rank<3>>({{h, h, h}}, {{nz-h-1, ny-h, nx-h}}),
                 KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                    double d2dx2 = ((RKM(k,  j,i)+RKM(k,  j,i+1)+RKM(k,  j+1,i)+RKM(k,  j+1,i+1)
+                    VVM::Real d2dx2 = ((RKM(k,  j,i)+RKM(k,  j,i+1)+RKM(k,  j+1,i)+RKM(k,  j+1,i+1)
                                     +RKM(k+1,j,i)+RKM(k+1,j,i+1)+RKM(k+1,j+1,i)+RKM(k+1,j+1,i+1))
                                         *(var(k,j,i+1)-var(k,j,i))*masks.val(k, j, i, VU1) -
                                     (RKM(k,  j,i-1)+RKM(k,  j,i)+RKM(k,j+1,i-1)+RKM(k,j+1,i)
                                     +RKM(k+1,j,i-1)+RKM(k+1,j,i)+RKM(k+1,j+1,i-1)+RKM(k+1,j+1,i)) 
                                         *(var(k,j,i)-var(k,j,i-1))*masks.val(k, j, i, VU2) )
-                                    * 0.125 * rdx2;
+                                    * real(0.125) * rdx2;
                     
-                    double d2dy2 = ((RKM(k,j+1,i)+RKM(k+1,j+1,i))*(var(k,j+1,i)-var(k,j,  i))*masks.val(k, j, i, VV1)
+                    VVM::Real d2dy2 = ((RKM(k,j+1,i)+RKM(k+1,j+1,i))*(var(k,j+1,i)-var(k,j,  i))*masks.val(k, j, i, VV1)
                                    -(RKM(k,j,  i)+RKM(k+1,j,  i))*(var(k,j,  i)-var(k,j-1,i))*masks.val(k, j, i, VV2))
-                                    * 0.5*rdy2;
+                                    * real(0.5)*rdy2;
 
-                    double d2dz2 = (flex_height_coef_mid(k+1)*rhobar(k+1)*(RKM(k+1,j,i)+RKM(k+1,j+1,i))
+                    VVM::Real d2dz2 = (flex_height_coef_mid(k+1)*rhobar(k+1)*(RKM(k+1,j,i)+RKM(k+1,j+1,i))
                                         *(var(k+1,j,i)-var(k,  j,i))*masks.val(k, j, i, VW1)
                                   - flex_height_coef_mid(k)*rhobar(k)*(RKM(k,j,i)+RKM(k,j+1,i))
                                         *(var(k,  j,i)-var(k-1,j,i))*masks.val(k, j, i, VW2))
-                                    *0.5 * rdz2 / (rhobar_up(k))*flex_height_coef_up(k);
+                                    *real(0.5) * rdz2 / (rhobar_up(k))*flex_height_coef_up(k);
 
                     tend(k,j,i) = d2dx2 + d2dy2 + d2dz2;
                 }
@@ -405,24 +406,24 @@ void TurbulenceProcess::calculate_tendencies(Core::State& state,
             Kokkos::parallel_for("Compute_Diff_Tendency_" + var_name,
                 Kokkos::MDRangePolicy<Kokkos::Rank<3>>({{h, h, h}}, {{nz-h-1, ny-h, nx-h}}),
                 KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                    double d2dx2 = ((RKM(k,j,i+1)+RKM(k+1,j,i+1))*(var(k,j,i+1)-var(k,j,i  )) * masks.val(k, j, i, UU1)
+                    VVM::Real d2dx2 = ((RKM(k,j,i+1)+RKM(k+1,j,i+1))*(var(k,j,i+1)-var(k,j,i  )) * masks.val(k, j, i, UU1)
                                    -(RKM(k,j,i  )+RKM(k+1,j,i  ))*(var(k,j,i  )-var(k,j,i-1)) * masks.val(k, j, i, UU2))
-                                    * 0.5 * rdx2;
+                                    * real(0.5) * rdx2;
 
-                    double d2dy2 = ((RKM(k,j,i)+RKM(k,j,i+1)+RKM(k,j+1,i)+RKM(k,j+1,i+1) 
+                    VVM::Real d2dy2 = ((RKM(k,j,i)+RKM(k,j,i+1)+RKM(k,j+1,i)+RKM(k,j+1,i+1) 
                                     +RKM(k+1,j,i)+RKM(k+1,j,i+1)+RKM(k+1,j+1,i)+RKM(k+1,j+1,i+1))
                                                 *(var(k,j+1,i)-var(k,j,i))*masks.val(k, j, i, UV1) -      
                                     (RKM(k,j-1,i)+RKM(k,j-1,i+1)+RKM(k,j,i)+RKM(k,j,i+1) 
                                     +RKM(k+1,j-1,i)+RKM(k+1,j-1,i+1)+RKM(k+1,j,i)+RKM(k+1,j,i+1))
                                                 *(var(k,j,i)-var(k,j-1,i))*masks.val(k, j, i, UV2))
-                                    * 0.125 * rdy2;
+                                    * real(0.125) * rdy2;
 
 
-                    double d2dz2 = (flex_height_coef_mid(k+1)*rhobar(k+1)*(RKM(k+1,j,i)+RKM(k+1,j,i+1))  
+                    VVM::Real d2dz2 = (flex_height_coef_mid(k+1)*rhobar(k+1)*(RKM(k+1,j,i)+RKM(k+1,j,i+1))  
                                        *(var(k+1,j,i)-var(k,  j,i))*masks.val(k, j, i, UW1)
                                    -flex_height_coef_mid(k)*rhobar(k)*(RKM(k,j,i)+RKM(k,j,i+1))
                                        *(var(k,  j,i)-var(k-1,j,i))*masks.val(k, j, i, UW2))
-                                    * 0.5 * rdz2 / rhobar_up(k) * flex_height_coef_up(k);
+                                    * real(0.5) * rdz2 / rhobar_up(k) * flex_height_coef_up(k);
 
                     tend(k,j,i) = d2dx2 + d2dy2 + d2dz2;
                 }
@@ -432,24 +433,24 @@ void TurbulenceProcess::calculate_tendencies(Core::State& state,
             Kokkos::parallel_for("Compute_Diff_Tendency_" + var_name,
                 Kokkos::MDRangePolicy<Kokkos::Rank<3>>({{h, h, h}}, {{nz-h, ny-h, nx-h}}),
                 KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                    double d2dx2 = 0.5*( (RKH(k,j,i+1)+RKH(k,j,i))
+                    VVM::Real d2dx2 = real(0.5)*( (RKH(k,j,i+1)+RKH(k,j,i))
                                             *(var(k,j,i+1)-var(k,j,i))*masks.val(k, j, i, WU1)
                                        - (RKH(k,j,i)+RKH(k,j,i-1))
                                             *(var(k,j,i)-var(k,j,i-1))*masks.val(k, j, i, WU2) ) * rdx2;
 
-                    double d2dy2 = 0.5*( (RKH(k,j+1,i)+RKH(k,j,i))
+                    VVM::Real d2dy2 = real(0.5)*( (RKH(k,j+1,i)+RKH(k,j,i))
                                             *(var(k,j+1,i)-var(k,j  ,i))*masks.val(k, j, i, WV1)
                                        - (RKH(k,j,i)+RKH(k,j-1,i))
                                             *(var(k,j  ,i)-var(k,j-1,i))*masks.val(k, j, i, WV2) ) * rdy2;
                      
-                    double d2dz2 = 0.;
+                    VVM::Real d2dz2 = real(0.);
 
                     if (k == nz-h-1) {
-                        d2dz2 = -0.5*flex_height_coef_mid(NK2)*(flex_height_coef_up(NK1)*rhobar_up(NK1)*(RKH(NK2,j,i)+RKH(NK1,j,i))
+                        d2dz2 = -real(0.5)*flex_height_coef_mid(NK2)*(flex_height_coef_up(NK1)*rhobar_up(NK1)*(RKH(NK2,j,i)+RKH(NK1,j,i))
                                     *(var(NK2,j,i)-var(NK1,j,i))) / rhobar(NK2) * rdz2; 
                     }
                     else {
-                        d2dz2 =  0.5 * flex_height_coef_mid(k)*(
+                        d2dz2 =  real(0.5) * flex_height_coef_mid(k)*(
                                        flex_height_coef_up(k)*rhobar_up(k)*(RKH(k+1,j,i)+RKH(k,j,i))
                                             *(var(k+1,j,i)-var(k,j,i))*masks.val(k, j, i, WW1)
                                       -flex_height_coef_up(k-1)*rhobar_up(k-1)*(RKH(k,j,i)+RKH(k-1,j,i))
@@ -466,18 +467,18 @@ void TurbulenceProcess::calculate_tendencies(Core::State& state,
                 Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
                 KOKKOS_LAMBDA(const int j, const int i) {
                 
-                    double d2dx2 = ((RKM(NK2,j,i+1)+RKM(NK2,j+1,i+1))*(var(NK2,j,i+1)-var(NK2,j,i  ))
+                    VVM::Real d2dx2 = ((RKM(NK2,j,i+1)+RKM(NK2,j+1,i+1))*(var(NK2,j,i+1)-var(NK2,j,i  ))
                                    -(RKM(NK2,j,i  )+RKM(NK2,j+1,i  ))*(var(NK2,j,i  )-var(NK2,j,i-1)))  
-                                    * 0.5 * rdx2;
+                                    * real(0.5) * rdx2;
 
-                    double d2dy2 = ((RKM(NK2,j+1,i)+RKM(NK2,j+1,i+1))*(var(NK2,j+1,i)-var(NK2,j,  i))
+                    VVM::Real d2dy2 = ((RKM(NK2,j+1,i)+RKM(NK2,j+1,i+1))*(var(NK2,j+1,i)-var(NK2,j,  i))
                                    -(RKM(NK2,j  ,i)+RKM(NK2,j,  i+1))*(var(NK2,j  ,i)-var(NK2,j-1,i)))
-                                    * 0.5 * rdy2;
+                                    * real(0.5) * rdy2;
 
-                    double d2dz2 = -(flex_height_coef_up(NK1)*rhobar_up(NK1)*
+                    VVM::Real d2dz2 = -(flex_height_coef_up(NK1)*rhobar_up(NK1)*
                                      (RKM(NK2,j,i)+RKM(NK2,j,i+1)+RKM(NK2,j+1,i)+RKM(NK2,j+1,i+1) 
                                      +RKM(NK1,j,i)+RKM(NK1,j,i+1)+RKM(NK1,j+1,i)+RKM(NK1,j+1,i+1))
-                                    *(var(NK2,j,i)-var(NK1,j,i))) * 0.125 * rdz2 / rhobar(NK2) * flex_height_coef_mid(NK2); 
+                                    *(var(NK2,j,i)-var(NK1,j,i))) * real(0.125) * rdz2 / rhobar(NK2) * flex_height_coef_mid(NK2); 
 
                     tend(j,i) = d2dx2 + d2dy2 + d2dz2;
                 }

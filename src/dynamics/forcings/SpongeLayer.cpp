@@ -48,8 +48,8 @@ void SpongeLayer::initialize(Core::State& state) {
     if (!state.has_field("CGR_vort")) state.add_field<1>("CGR_vort", {nz});
 
     auto& CRAD = CRAD_;
-    CRAD = 1. / config_.get_value<double>("dynamics.forcings.sponge_layer.inv_CRAD", -1.);
-    double sponge_layer_base = config_.get_value<double>("dynamics.forcings.sponge_layer.sponge_layer_base", -1);
+    CRAD = real(1.) / config_.get_value<VVM::Real>("dynamics.forcings.sponge_layer.inv_CRAD", real(-1.));
+    VVM::Real sponge_layer_base = config_.get_value<VVM::Real>("dynamics.forcings.sponge_layer.sponge_layer_base", -1);
 
     auto& k_start_thermo = k_start_thermo_;
     for (int k = nz-h; k > h; k--) {
@@ -83,7 +83,7 @@ void SpongeLayer::initialize(Core::State& state) {
     );
     
     auto& CGR_vort = state.get_field<1>("CGR_vort").get_mutable_device_data();
-    Kokkos::parallel_for("assign_coefficient", Kokkos::RangePolicy<>(k_start_vort, nz-h-1),
+    Kokkos::parallel_for("assign_coefficient", Kokkos::RangePolicy<>(k_start_vort, nz-h),
         KOKKOS_LAMBDA(const int k) {
             // CGR_vort(k) = CRAD*(z_up(k)-z_mid(k_start_vort-1))/(z_mid(nz-h-1)-z_mid(k_start_vort-1));
             // FIXME: This follows original VVM now, but I think the ratio should be considered carefully.

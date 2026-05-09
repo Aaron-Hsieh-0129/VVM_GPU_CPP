@@ -38,30 +38,30 @@ Parameters::Parameters(const Utils::ConfigurationManager& config, const Grid& gr
     bn_new("bn_new", {grid.get_local_total_points_z()}),
     cn_new("cn_new", {grid.get_local_total_points_z()})
 {
-    Kokkos::deep_copy(gravity, config.get_value<double>("constants.gravity"));
-    Kokkos::deep_copy(Rd, config.get_value<double>("constants.Rd"));
-    Kokkos::deep_copy(P0, config.get_value<double>("constants.P0"));
-    Kokkos::deep_copy(Cp, config.get_value<double>("constants.Cp"));
+    Kokkos::deep_copy(gravity, config.get_value<VVM::Real>("constants.gravity"));
+    Kokkos::deep_copy(Rd, config.get_value<VVM::Real>("constants.Rd"));
+    Kokkos::deep_copy(P0, config.get_value<VVM::Real>("constants.P0"));
+    Kokkos::deep_copy(Cp, config.get_value<VVM::Real>("constants.Cp"));
 
-    double dx_val = config.get_value<double>("grid.dx");
-    double dy_val = config.get_value<double>("grid.dy");
-    double dz_val = config.get_value<double>("grid.dz");
-    double dt_val = config.get_value<double>("simulation.dt_s");
+    VVM::Real dx_val = config.get_value<VVM::Real>("grid.dx");
+    VVM::Real dy_val = config.get_value<VVM::Real>("grid.dy");
+    VVM::Real dz_val = config.get_value<VVM::Real>("grid.dz");
+    VVM::Real dt_val = config.get_value<VVM::Real>("simulation.dt_s");
 
     Kokkos::deep_copy(dx, dx_val);
     Kokkos::deep_copy(dy, dy_val);
     Kokkos::deep_copy(dz, dz_val);
     Kokkos::deep_copy(dt, dt_val);
 
-    Kokkos::deep_copy(rdx, 1.0 / dx_val);
-    Kokkos::deep_copy(rdy, 1.0 / dy_val);
-    Kokkos::deep_copy(rdz, 1.0 / dz_val);
+    Kokkos::deep_copy(rdx, real(1.0) / dx_val);
+    Kokkos::deep_copy(rdy, real(1.0) / dy_val);
+    Kokkos::deep_copy(rdz, real(1.0) / dz_val);
     
-    Kokkos::deep_copy(rdx2, 1.0 / (dx_val * dx_val));
-    Kokkos::deep_copy(rdy2, 1.0 / (dy_val * dy_val));
-    Kokkos::deep_copy(rdz2, 1.0 / (dz_val * dz_val));
+    Kokkos::deep_copy(rdx2, real(1.0) / (dx_val * dx_val));
+    Kokkos::deep_copy(rdy2, real(1.0) / (dy_val * dy_val));
+    Kokkos::deep_copy(rdz2, real(1.0) / (dz_val * dz_val));
 
-    double WRXMU_val = config.get_value<double>("dynamics.solver.WRXMU");
+    VVM::Real WRXMU_val = config.get_value<VVM::Real>("dynamics.solver.WRXMU");
     Kokkos::deep_copy(WRXMU, WRXMU_val);
 
     solver_iteration = config.get_value<int>("dynamics.solver.iteration");
@@ -69,8 +69,8 @@ Parameters::Parameters(const Utils::ConfigurationManager& config, const Grid& gr
     Kokkos::fence();
 }
 
-double Parameters::get_value_host(const Kokkos::View<double>& device_view) const {
-    double host_value;
+VVM::Real Parameters::get_value_host(const Kokkos::View<VVM::Real>& device_view) const {
+    VVM::Real host_value;
     Kokkos::deep_copy(host_value, device_view);
     return host_value;
 }

@@ -17,7 +17,7 @@ public:
         Core::State& state,
         const Core::Grid& grid,
         const Core::Parameters& params,
-        double dt
+        VVM::Real dt
     ) const override;
 
     std::vector<std::string> get_required_state_suffixes() const override {
@@ -29,7 +29,7 @@ public:
     // This method is designed for update State in any physical process that can be called directly to do integration.
     // These process generally uses forward Euler.
     template<size_t Dim> 
-    static void apply_forward_update(Core::State& state,const std::string var_name, const Core::Grid& grid, double dt, Core::Field<Dim>& tend_field) {
+    static void apply_forward_update(Core::State& state,const std::string var_name, const Core::Grid& grid, VVM::Real dt, Core::Field<Dim>& tend_field) {
         const int nz = grid.get_local_total_points_z();
         const int ny = grid.get_local_total_points_y();
         const int nx = grid.get_local_total_points_x();

@@ -5,8 +5,9 @@
 #include "core/Grid.hpp"
 #include "core/State.hpp"
 #include "core/Parameters.hpp"
-#include "utils/ConfigurationManager.hpp"
+#include "core/vvm_types.hpp"
 #include "core/HaloExchanger.hpp"
+#include "utils/ConfigurationManager.hpp"
 
 #include <string>
 #include <map>

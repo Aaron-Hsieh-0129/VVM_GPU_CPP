@@ -5,18 +5,19 @@
 #include "core/State.hpp"
 #include "core/Parameters.hpp"
 #include "core/HaloExchanger.hpp"
+#include "core/vvm_types.hpp"
 #include "utils/ConfigurationManager.hpp"
 #include <Kokkos_Core.hpp>
 #include <openacc.h>
 
 extern "C" {
-    void run_vvm_land_wrapper(int nx, int ny, int nsoil, double dt,
+    void run_vvm_land_wrapper(int use_tco_ocean, int nx, int ny, int nsoil, VVM::Real dt,
         int* islimsk, int* vegtype, int* soiltyp, int* slopetyp,
-        double* sigmaf, double* sfemis, double* alb, double* shdmin, double* shdmax,
-        double* t1, double* q1, double* u1, double* v1, double* ps, 
-        double* prcp, double* swdn, double* lwdn, double* hgt, double* prslki_in,
-        double* stc, double* smc, double* slc, double* tskin, double* canopy, double* snwdph,
-        double* hflux, double* qflux, double* evap, double* zorl);
+        VVM::Real* sigmaf, VVM::Real* sfemis, VVM::Real* alb, VVM::Real* shdmin, VVM::Real* shdmax,
+        VVM::Real* t1, VVM::Real* q1, VVM::Real* u1, VVM::Real* v1, VVM::Real* ps, 
+        VVM::Real* prcp, VVM::Real* swdn, VVM::Real* lwdn, VVM::Real* hgt, VVM::Real* prslki_in,
+        VVM::Real* stc, VVM::Real* smc, VVM::Real* slc, VVM::Real* tskin, VVM::Real* canopy, VVM::Real* snwdph,
+        VVM::Real* hflux, VVM::Real* qflux, VVM::Real* evap, VVM::Real* zorl);
 }
 
 namespace VVM {
@@ -28,12 +29,13 @@ public:
                 const Core::Grid& grid, 
                 const Core::Parameters& params, 
                 Core::HaloExchanger& halo_exchanger, 
-                Core::State& state);
+                Core::State& state,
+                std::string ocean_scheme);
     
     ~LandProcess() = default;
 
     void init();
-    void run(double dt);
+    void run(VVM::Real dt);
     void finalize();
     void prepare_static_data();
     void preprocessing_and_packing();
@@ -59,9 +61,11 @@ private:
     int m_halo_x;
     int m_halo_y;
 
-    using view_2d_ll = Kokkos::View<double**, Kokkos::LayoutLeft>;
+    int m_use_tco_ocean = 0;
+
+    using view_2d_ll = Kokkos::View<VVM::Real**, Kokkos::LayoutLeft>;
     using view_2d_int_ll = Kokkos::View<int**, Kokkos::LayoutLeft>;
-    using view_3d_ll = Kokkos::View<double***, Kokkos::LayoutLeft>;
+    using view_3d_ll = Kokkos::View<VVM::Real***, Kokkos::LayoutLeft>;
 
     view_2d_int_ll m_islimsk, m_vegtype, m_soiltype, m_slopetype;
 

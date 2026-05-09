@@ -25,6 +25,7 @@ void Functions<S,D>
   const bool& predictNc,
   const bool& do_prescribed_CCN,
   const Scalar& dt,
+  const Scalar& it,
   const Scalar& inv_dt,
   const uview_1d<const Spack>& hetfrz_immersion_nucleation_tend,
   const uview_1d<const Spack>& hetfrz_contact_nucleation_tend,
@@ -135,10 +136,14 @@ void Functions<S,D>
     const auto range_pack = ekat::range<IntSmallPack>(k*Spack::n);
     const auto range_mask = range_pack < nk;
 
+    Spack qv_supersat_l = qv_prev(k) / qv_sat_l(k) - 1.;
+
     // if relatively dry and no hydrometeors at this level, skip to end of k-loop (i.e. skip this level)
+    // Aaron - add liquid condition
     const auto skip_all = ( !range_mask ||
-        (qc(k)<qsmall && qr(k)<qsmall && qi(k)<qsmall &&
-         T_atm(k)<T_zerodegc && qv_supersat_i(k)< -0.05) );
+        (qc(k)<qsmall && qr(k)<qsmall && qi(k)<qsmall) &&
+        ( (T_atm(k)<T_zerodegc && qv_supersat_i(k)< -0.05) || 
+          (T_atm(k)>T_zerodegc && qv_supersat_l< -0.05) ) );
 
     if (skip_all.all()) {
       return; // skip all process rates
@@ -151,6 +156,14 @@ void Functions<S,D>
       // initialize warm-phase process rates
       qc2qr_accret_tend   (0), // cloud droplet accretion by rain
       qr2qv_evap_tend   (0), // rain evaporation
+
+      // Aaron - add tendency for saturation adjustment
+      qv2qc_conden_tend   (0), // cloud condensation tendency
+      qc2qv_evap_tend     (0), // cloud evaporation tendency
+      qv2qc_nucleat_tend  (0), // cloud nucleation tendency
+      nc_nuclet_tend      (0), // cloud number nucleation tendency
+      qv2qr_conden_tend   (0), // rain condensation tendency
+
       qc2qr_autoconv_tend   (0), // cloud droplet autoconversion to rain
       nc_accret_tend   (0), // change in cloud droplet number from accretion by rain
       nc_selfcollect_tend   (0), // change in cloud droplet number from self-collection  (Not in paper?)
@@ -277,8 +290,11 @@ void Functions<S,D>
 
         // adjust Ni if needed to make sure mean size is in bounds (i.e. apply lambda limiters)
         // note that the Nmax and Nmin are normalized and thus need to be multiplied by existing N
-        ni_incld(k).set(qi_gt_small, min(ni_incld(k), table_val_ni_lammax*ni_incld(k)));
-        ni_incld(k).set(qi_gt_small, max(ni_incld(k), table_val_ni_lammin*ni_incld(k)));
+        // ni_incld(k).set(qi_gt_small, min(ni_incld(k), table_val_ni_lammax*ni_incld(k)));
+        // ni_incld(k).set(qi_gt_small, max(ni_incld(k), table_val_ni_lammin*ni_incld(k)));
+        // Aaron - from ni to qi to align with new table and Fortran P3
+        ni_incld(k).set(qi_gt_small, min(ni_incld(k), table_val_ni_lammax*qi_incld(k)));
+        ni_incld(k).set(qi_gt_small, max(ni_incld(k), table_val_ni_lammin*qi_incld(k)));
       }
 
       // ----------------------------------------------------------------------
@@ -380,6 +396,8 @@ void Functions<S,D>
         revap_table_vals, rho(k), f1r, f2r, dv, mu, sc, mu_r(k), lamr(k), cdistr(k), cdist(k), qr_incld(k), qc_incld(k),
         epsr, epsc, not_skip_micro);
 
+      // Aaron - evporation/condensation/deposition/sublimation might need to be combined together in a way that can compete esp together.
+      /*
       evaporate_rain(qr_incld(k),qc_incld(k),nr_incld(k),qi_incld(k),
 		     cld_frac_l(k),cld_frac_r(k),qv(k),qv_prev(k),qv_sat_l(k),qv_sat_i(k),
 		     ab,abi,epsr,epsi_tot,T_atm(k),t_prev(k),dqsdt,dt,
@@ -391,7 +409,22 @@ void Functions<S,D>
             abi, qv(k), inv_dt, qv2qi_vapdep_tend, qi2qv_sublim_tend,
             ni_sublim_tend, qc2qi_berg_tend, not_skip_micro);
       }
+      */
 
+      // Aaron - combine evporation/condensation/deposition/sublimation like Fortran P3
+      calc_cond_evap_dep_sub(
+        qc_incld(k), qr_incld(k), qi_incld(k), nr_incld(k), ni_incld(k),
+        cld_frac_l(k), cld_frac_r(k), cld_frac_i(k),
+        qv(k), qv_prev(k), qv_sat_l(k), qv_sat_i(k),
+        ab, abi, epsc, epsr, epsi, epsi_tot,
+        T_atm(k), t_prev(k), dqsdt,
+        dt, inv_dt,
+        do_ice_production,
+        qv2qc_conden_tend, qc2qv_evap_tend,
+        qv2qr_conden_tend, qr2qv_evap_tend, nr_evap_tend,
+        qv2qi_vapdep_tend, qi2qv_sublim_tend, ni_sublim_tend, qc2qi_berg_tend,
+        not_skip_micro
+      );
     }
 
     // deposition/condensation-freezing nucleation
@@ -401,6 +434,11 @@ void Functions<S,D>
                      qv2qi_nucleat_tend, ni_nucleat_tend, runtime_options,
                      not_skip_all);
     }
+
+    // Aaron - Droplet activation and initial saturation adjustment
+    droplet_activation(
+        T_atm(k), th_atm(k), pres(k), qv(k), qv_prev(k), qv_sat_l(k), nc_incld(k), cld_frac_l(k),
+        it, inv_dt, qv2qc_nucleat_tend, nc_nuclet_tend, qv2qc_conden_tend);
 
     // cloud water autoconversion
     // NOTE: cloud_water_autoconversion must be called before droplet_self_collection
@@ -434,6 +472,12 @@ void Functions<S,D>
       qv2qi_vapdep_tend, nr2ni_immers_freeze_tend, ni_sublim_tend, qv2qi_nucleat_tend, ni_nucleat_tend, qc2qi_berg_tend, 
       ncheti_cnt, qcheti_cnt, nicnt, qicnt, ninuc_cnt, qinuc_cnt, not_skip_all, runtime_options);
 
+    // Aaron - Limit total condensation (incl. activation), evaporation, deposition (incl. nucleation) and sublimation to saturation adjustment
+    limit_cond_evap_dep_sub(T_atm(k), pres(k), qv(k), cld_frac_l(k), dt, inv_dt, 
+                            qv2qc_conden_tend, nc_nuclet_tend, qv2qr_conden_tend, qv2qc_nucleat_tend, qc2qv_evap_tend, 
+                            qr2qv_evap_tend, nr_evap_tend, qv2qi_vapdep_tend, qv2qi_nucleat_tend, ni_nucleat_tend, 
+                            qi2qv_sublim_tend, ni_sublim_tend, not_skip_all);
+
     //
     // conservation of water
     //
@@ -446,35 +490,55 @@ void Functions<S,D>
     if (use_separate_ice_liq_frac) {
       // cloud
       cloud_water_conservation(
-        qc(k), dt,
-        qc2qr_autoconv_tend, qc2qr_accret_tend, qc2qi_collect_tend, qc2qi_hetero_freeze_tend, qc2qr_ice_shed_tend, qc2qi_berg_tend, qi2qv_sublim_tend, qv2qi_vapdep_tend, qcheti_cnt, qicnt, use_hetfrz_classnuc, not_skip_all,
+        qc(k), dt, qc2qv_evap_tend, qv2qc_conden_tend, qv2qc_nucleat_tend,
+        qc2qr_autoconv_tend, qc2qr_accret_tend, qc2qi_collect_tend, qc2qi_hetero_freeze_tend, qc2qr_ice_shed_tend, qc2qi_berg_tend, qi2qv_sublim_tend, qv2qi_vapdep_tend, 
+        nc2nr_autoconv_tend, nc_accret_tend, nc_collect_tend, nc2ni_immers_freeze_tend,
+        qcheti_cnt, qicnt, use_hetfrz_classnuc, not_skip_all,
         cld_frac_l(k), cld_frac_i(k), runtime_options);
     } else {
       // cloud
+      // Aaron - add qc2qv_evap_tend, qv2qc_conden_tend, qv2qc_nucleat_tend
       cloud_water_conservation(
-        qc(k), dt,
-        qc2qr_autoconv_tend, qc2qr_accret_tend, qc2qi_collect_tend, qc2qi_hetero_freeze_tend, qc2qr_ice_shed_tend, qc2qi_berg_tend, qi2qv_sublim_tend, qv2qi_vapdep_tend, qcheti_cnt, qicnt, use_hetfrz_classnuc, not_skip_all);
+        qc(k), dt, qc2qv_evap_tend, qv2qc_conden_tend, qv2qc_nucleat_tend,
+        qc2qr_autoconv_tend, qc2qr_accret_tend, qc2qi_collect_tend, qc2qi_hetero_freeze_tend, qc2qr_ice_shed_tend, qc2qi_berg_tend, qi2qv_sublim_tend, qv2qi_vapdep_tend, 
+        nc2nr_autoconv_tend, nc_accret_tend, nc_collect_tend, nc2ni_immers_freeze_tend,
+        qcheti_cnt, qicnt, use_hetfrz_classnuc, not_skip_all);
     }
 
     // rain
+    // Aaron - add qv2qr_conden_tend
     rain_water_conservation(
       qr(k), qc2qr_autoconv_tend, qc2qr_accret_tend, qi2qr_melt_tend, qc2qr_ice_shed_tend, dt,
-      qr2qv_evap_tend, qr2qi_collect_tend, qr2qi_immers_freeze_tend, not_skip_all);
+      qv2qr_conden_tend, qr2qv_evap_tend, qr2qi_collect_tend, qr2qi_immers_freeze_tend, 
+      nr_evap_tend, nr_collect_tend, nr2ni_immers_freeze_tend,
+      not_skip_all);
 
     // ice
     ice_water_conservation(
       qi(k), qv2qi_vapdep_tend, qv2qi_nucleat_tend, qc2qi_berg_tend, qr2qi_collect_tend,
       qc2qi_collect_tend, qr2qi_immers_freeze_tend, qc2qi_hetero_freeze_tend, dt,
+      ni_sublim_tend, ni2nr_melt_tend, 
       qinuc_cnt, qcheti_cnt, qicnt,
       qi2qv_sublim_tend, qi2qr_melt_tend, use_hetfrz_classnuc, not_skip_all);
 
-    nc_conservation(nc(k), nc_selfcollect_tend, dt, nc_collect_tend, nc2ni_immers_freeze_tend,
+    vapor_water_conservation(
+      qv(k), dt, qv2qc_conden_tend, qv2qc_nucleat_tend, qv2qr_conden_tend, qv2qi_vapdep_tend, qv2qi_nucleat_tend, 
+      qc2qv_evap_tend, qr2qv_evap_tend, qi2qv_sublim_tend, 
+      ni_nucleat_tend, nc_nuclet_tend);
+
+    // Aaron - add nc_nuclet_tend
+    // Aaron - move number conservation into mass conservation
+    /*
+    nc_conservation(nc(k), nc_selfcollect_tend, dt, nc_nuclet_tend, nc_collect_tend, nc2ni_immers_freeze_tend,
                     nc_accret_tend, nc2nr_autoconv_tend, ncheti_cnt, nicnt, use_hetfrz_classnuc, not_skip_all);
     nr_conservation(nr(k),ni2nr_melt_tend,nr_ice_shed_tend,ncshdc,nc2nr_autoconv_tend,dt,nmltratio,nr_collect_tend,
                     nr2ni_immers_freeze_tend,nr_selfcollect_tend,nr_evap_tend, not_skip_all);
     ni_conservation(ni(k),ni_nucleat_tend,nr2ni_immers_freeze_tend,nc2ni_immers_freeze_tend, ncheti_cnt, nicnt, ninuc_cnt, dt,ni2nr_melt_tend,
                     ni_sublim_tend,ni_selfcollect_tend, use_hetfrz_classnuc, not_skip_all);
+    */
 
+    // Aaron - these two functions probably not needed.
+    /*
     // make sure procs don't inappropriately push qv beyond ice saturation
     ice_supersat_conservation(qv2qi_vapdep_tend,qv2qi_nucleat_tend,qinuc_cnt,cld_frac_i(k),qv(k),qv_sat_i(k),
 			                        th_atm(k)/inv_exner(k),dt,qi2qv_sublim_tend,qr2qv_evap_tend, use_hetfrz_classnuc, not_skip_all);
@@ -482,6 +546,7 @@ void Functions<S,D>
     prevent_liq_supersaturation(pres(k), T_atm(k), qv(k), dt,
 				qv2qi_vapdep_tend, qv2qi_nucleat_tend, qi2qv_sublim_tend,qr2qv_evap_tend,
 				not_skip_all);
+    */
 
     //---------------------------------------------------------------------------------
     // update prognostic microphysics and thermodynamics variables
@@ -497,6 +562,8 @@ void Functions<S,D>
 
     //-- warm-phase only processes:
     update_prognostic_liquid(
+      qv2qc_nucleat_tend, qv2qc_conden_tend, qc2qv_evap_tend, 
+      qv2qr_conden_tend, nc_nuclet_tend, 
       qc2qr_accret_tend, nc_accret_tend, qc2qr_autoconv_tend, nc2nr_autoconv_tend, ncautr, nc_selfcollect_tend, qr2qv_evap_tend, nr_evap_tend, nr_selfcollect_tend,
       predictNc, do_prescribed_CCN, inv_rho(k), inv_exner(k), dt, th_atm(k), qv(k), qc(k), nc(k),
       qr(k), nr(k), not_skip_all);

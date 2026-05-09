@@ -42,6 +42,7 @@ State::State(const Utils::ConfigurationManager& config, const Parameters& params
     add_field<2>("lon", {ny_total, nx_total});
     add_field<2>("lat", {ny_total, nx_total});
     add_field<1>("f", {ny_total});
+    add_field<2>("f_2d", {ny_total, nx_total});
 
     // 2D field
     add_field<2>("psi", {ny_total, nx_total});

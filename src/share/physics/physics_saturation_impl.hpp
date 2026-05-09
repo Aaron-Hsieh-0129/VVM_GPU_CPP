@@ -81,6 +81,91 @@ Functions<S,D>::MurphyKoop_svp(const Spack& t_atm, const bool ice, const Smask& 
   return result;
 }
 
+
+// Aaron - align with Fortran P3 
+template <typename S, typename D>
+KOKKOS_FUNCTION
+typename Functions<S,D>::Spack
+Functions<S,D>::polysvp1(const Spack& t, const bool ice, const Smask& range_mask, const char* caller)
+{
+  // REPLACE GOFF-GRATCH WITH FASTER FORMULATION FROM FLATAU ET AL. 1992, TABLE 4 (RIGHT-HAND COLUMN)
+
+  //First check if the temperature is legitimate or not
+  check_temperature(t, caller ? caller : "polysvp1", range_mask);
+
+  const Spack dt = t - sp(273.15);
+  Spack result;
+  static constexpr  auto tmelt = C::Tmelt;
+  const Smask ice_mask = (t < tmelt) && ice;
+  const Smask liq_mask = !ice_mask;
+
+  // -------------------------------------------
+
+  if (ice_mask.any()) {
+    // ice
+    static constexpr Scalar ai[] = {
+      6.11147274,     0.503160820,     0.188439774e-1,
+      0.420895665e-3, 0.615021634e-5,  0.602588177e-7,
+      0.385852041e-9, 0.146898966e-11, 0.252751365e-14};
+    
+    Spack ice_result(0.0);
+
+    // Flatau formulation for T >= 195.8 K
+    const Smask flatau_mask = ice_mask && (t >= sp(195.8));
+    if (flatau_mask.any()) {
+      Spack flatau_res = (ai[0] + dt*(ai[1]+dt*(ai[2]+dt*(ai[3]+dt*(ai[4]+dt*(ai[5]+dt*(ai[6]+dt*(ai[7]+ai[8]*dt))))))))*100;
+      ice_result.set(flatau_mask, flatau_res);
+    }
+
+    // Goff-Gratch formulation for T < 195.8 K
+    const Smask gg_mask = ice_mask && (t < sp(195.8));
+    if (gg_mask.any()) {
+      Spack t0 = sp(273.16);
+      Spack exponent = sp(-9.09718) * (t0/t - sp(1.0)) 
+                     - sp(3.56654) * log10(t0/t) 
+                     + sp(0.876793) * (sp(1.0) - t/t0) 
+                     + log10(sp(6.1071));
+      ice_result.set(gg_mask, pow(sp(10.0), exponent) * 100);
+    }
+
+    result.set(ice_mask, ice_result);
+  }
+
+  if (liq_mask.any()) {
+    // liquid, V1.7
+    static constexpr Scalar a[] = {
+      6.11239921,      0.443987641,     0.142986287e-1,
+      0.264847430e-3,  0.302950461e-5,  0.206739458e-7,
+      0.640689451e-10,-0.952447341e-13,-0.976195544e-15};
+
+    Spack liq_result(0.0);
+
+    // Flatau formulation for T >= 202.0 K
+    const Smask flatau_mask = liq_mask && (t >= sp(202.0));
+    if (flatau_mask.any()) {
+      Spack flatau_res = (a[0] + dt*(a[1]+dt*(a[2]+dt*(a[3]+dt*(a[4]+dt*(a[5]+dt*(a[6]+dt*(a[7]+a[8]*dt))))))))*100;
+      liq_result.set(flatau_mask, flatau_res);
+    }
+
+    // Goff-Gratch formulation for T < 202.0 K
+    const Smask gg_mask = liq_mask && (t < sp(202.0));
+    if (gg_mask.any()) {
+      Spack t1 = sp(373.16);
+      Spack exponent = sp(-7.90298) * (t1/t - sp(1.0)) 
+                     + sp(5.02808) * log10(t1/t) 
+                     - sp(1.3816e-7) * (pow(sp(10.0), sp(11.344)*(sp(1.0) - t/t1)) - sp(1.0)) 
+                     + sp(8.1328e-3) * (pow(sp(10.0), sp(-3.49149)*(t1/t - sp(1.0))) - sp(1.0)) 
+                     + log10(sp(1013.246));
+      liq_result.set(gg_mask, pow(sp(10.0), exponent) * 100);
+    }
+
+    result.set(liq_mask, liq_result);
+  }
+
+  return result;
+}
+
+/*
 template <typename S, typename D>
 KOKKOS_FUNCTION
 typename Functions<S,D>::Spack
@@ -123,6 +208,7 @@ Functions<S,D>::polysvp1(const Spack& t, const bool ice, const Smask& range_mask
 
   return result;
 }
+*/
 
 template <typename S, typename D>
 KOKKOS_FUNCTION
@@ -153,7 +239,9 @@ Functions<S,D>::qv_sat_dry(const Spack& t_atm, const Spack& p_atm_dry, const boo
     }
 
   static constexpr  auto ep_2 = C::ep_2;
-  return ep_2 * e_pres / max(p_atm_dry, sp(1.e-3));
+  // return ep_2 * e_pres / max(p_atm_dry, sp(1.e-3));
+  // Aaron - add (-e_pres) to align with original p3
+  return ep_2 * e_pres / max(p_atm_dry - e_pres, sp(1.e-3));
 }
 
 template <typename S, typename D>

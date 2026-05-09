@@ -19,9 +19,9 @@ void BoundaryConditionManager::apply_dirichlet_zero(Field<Dim>& field) const {
         Kokkos::parallel_for("bc_dirichlet_0_1d", Kokkos::RangePolicy<>(0, h),
             KOKKOS_LAMBDA(const int k) {
                 // Bottom Halo
-                data(k) = 0.0;
+                data(k) = real(0.0);
                 // Top Halo
-                data(nz-1-k) = 0.0;
+                data(nz-1-k) = real(0.0);
             }
         );
     }
@@ -33,9 +33,9 @@ void BoundaryConditionManager::apply_dirichlet_zero(Field<Dim>& field) const {
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {h, ny, nx}),
             KOKKOS_LAMBDA(int k, int j, int i) {
                 // Bottom Halo
-                data(k, j, i) = 0.0;
+                data(k, j, i) = real(0.0);
                 // Top Halo
-                data(nz-1-k, j, i) = 0.0;
+                data(nz-1-k, j, i) = real(0.0);
             }
         );
     }
@@ -48,9 +48,9 @@ void BoundaryConditionManager::apply_dirichlet_zero(Field<Dim>& field) const {
             Kokkos::MDRangePolicy<Kokkos::Rank<4>>({0, 0, 0, 0}, {N, h, ny, nx}),
             KOKKOS_LAMBDA(int n, int k, int j, int i) {
                 // Bottom Halo
-                data(n, k, j, i) = 0.0;
+                data(n, k, j, i) = real(0.0);
                 // Top Halo
-                data(n, nz-1-k, j, i) = 0.0;
+                data(n, nz-1-k, j, i) = real(0.0);
             }
         );
     }
@@ -74,8 +74,8 @@ void BoundaryConditionManager::apply_vorticity_bc(Field<Dim>& field) const {
         Kokkos::parallel_for("bc_vorticity_special_3d", 
             Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, nx}),
             KOKKOS_LAMBDA(int j, int i) {
-                data(h-1, j, i) = 0.0;
-                data(nz-h-1, j, i) = 0.0;
+                data(h-1, j, i) = real(0.0);
+                data(nz-h-1, j, i) = real(0.0);
             }
         );
     }
@@ -221,7 +221,7 @@ void BoundaryConditionManager::apply_zero_gradient_bottom_zero_top(Field<Dim>& f
                 // Bottom: Copy from h (Zero Gradient)
                 data(k) = data(h);
                 // Top: Set to 0 (Zero Value)
-                data(nz - 1 - k) = 0.0;
+                data(nz - 1 - k) = real(0.0);
             }
         );
     }
@@ -234,7 +234,7 @@ void BoundaryConditionManager::apply_zero_gradient_bottom_zero_top(Field<Dim>& f
                 // Bottom: Copy from h (Zero Gradient)
                 data(k, j, i) = data(h, j, i);
                 // Top: Set to 0 (Zero Value)
-                data(nz - 1 - k, j, i) = 0.0;
+                data(nz - 1 - k, j, i) = real(0.0);
             }
         );
     }
@@ -248,7 +248,7 @@ void BoundaryConditionManager::apply_zero_gradient_bottom_zero_top(Field<Dim>& f
                 // Bottom
                 data(n, k, j, i) = data(n, h, j, i);
                 // Top
-                data(n, nz-1-k, j, i) = 0.0;
+                data(n, nz-1-k, j, i) = real(0.0);
             }
         );
     }

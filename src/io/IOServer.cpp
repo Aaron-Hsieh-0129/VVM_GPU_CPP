@@ -67,20 +67,20 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
 
         int step = reader.CurrentStep();
         const auto& varTypeMap = inIO.AvailableVariables();
-        std::map<std::string, std::vector<double>> data_buffers;
+        std::map<std::string, std::vector<VVM::Real>> data_buffers;
         std::vector<std::string> current_step_vars; 
 
         for (const auto& varPair : varTypeMap) {
             std::string name = varPair.first;
             std::string type = varPair.second.at("Type");
-            if (type != "double") continue;
+            if (type != "double" || type != "float") continue;
 
-            auto varIn = inIO.InquireVariable<double>(name);
+            auto varIn = inIO.InquireVariable<VVM::Real>(name);
             auto shape = varIn.Shape();
             current_step_vars.push_back(name);
 
-            if (!outIO.InquireVariable<double>(name)) {
-                outIO.DefineVariable<double>(name, shape);
+            if (!outIO.InquireVariable<VVM::Real>(name)) {
+                outIO.DefineVariable<VVM::Real>(name, shape);
             }
 
             size_t my_start, my_count;
@@ -114,7 +114,7 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
         std::sort(current_step_vars.begin(), current_step_vars.end());
 
         for (const auto& name : current_step_vars) {
-            auto varOut = outIO.InquireVariable<double>(name);
+            auto varOut = outIO.InquireVariable<VVM::Real>(name);
             if (!varOut) continue;
 
             if (data_buffers.count(name)) {

@@ -23,6 +23,7 @@ void Functions<Real,DefaultDevice>
   const bool& predictNc,
   const bool& do_prescribed_CCN,
   const Scalar& dt,
+  const Scalar& it,
   const Scalar& inv_dt,
   const uview_2d<const Spack>& hetfrz_immersion_nucleation_tend,
   const uview_2d<const Spack>& hetfrz_contact_nucleation_tend,
@@ -128,7 +129,7 @@ void Functions<Real,DefaultDevice>
     // ------------------------------------------------------------------------------------------
     // main k-loop (for processes):
     p3_main_part2(
-      team, nk_pack, max_total_ni, predictNc, do_prescribed_CCN, dt, inv_dt,
+      team, nk_pack, max_total_ni, predictNc, do_prescribed_CCN, dt, it, inv_dt,
       ekat::subview(hetfrz_immersion_nucleation_tend, i),
       ekat::subview(hetfrz_contact_nucleation_tend, i),ekat::subview(hetfrz_deposition_nucleation_tend, i),
       dnu_table_vals, ice_table_vals, collect_table_vals, revap_table_vals,

@@ -2,6 +2,7 @@
 #define VVM_IO_IOSERVER_HPP
 #include <mpi.h>
 #include "utils/ConfigurationManager.hpp"
+#include "core/vvm_types.hpp"
 
 namespace VVM {
 namespace IO {

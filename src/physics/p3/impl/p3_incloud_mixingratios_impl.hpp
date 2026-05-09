@@ -57,13 +57,14 @@ void Functions<S,D>
    qr_incld.set(not_qr_ge_qsmall, 0);
    nr_incld.set(not_qr_ge_qsmall, 0);
 
-   const auto any_gt_limit =
-     (qc_incld > incloud_limit || qi_incld > incloud_limit || qr_incld > precip_limit || bm_incld > incloud_limit) && context;
-
-   qc_incld.set(any_gt_limit, min(qc_incld, incloud_limit));
-   qi_incld.set(any_gt_limit, min(qi_incld, incloud_limit));
-   bm_incld.set(any_gt_limit, min(bm_incld, incloud_limit));
-   qr_incld.set(any_gt_limit, min(qr_incld, precip_limit));
+   // Aaron - remove limit to align with Fortran P3
+   // const auto any_gt_limit =
+   //   (qc_incld > incloud_limit || qi_incld > incloud_limit || qr_incld > precip_limit || bm_incld > incloud_limit) && context;
+   //
+   // qc_incld.set(any_gt_limit, min(qc_incld, incloud_limit));
+   // qi_incld.set(any_gt_limit, min(qi_incld, incloud_limit));
+   // bm_incld.set(any_gt_limit, min(bm_incld, incloud_limit));
+   // qr_incld.set(any_gt_limit, min(qr_incld, precip_limit));
 }
 
 } // namespace p3

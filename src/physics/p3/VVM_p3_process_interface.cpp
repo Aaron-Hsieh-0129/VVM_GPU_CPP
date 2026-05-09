@@ -24,6 +24,9 @@ VVM_P3_Interface::VVM_P3_Interface(const VVM::Utils::ConfigurationManager &confi
 
     // Note that users can use runtime)options to load some configuration related to p3
     // runtime_options.load_runtime_options_from_file(m_params);
+    // If someone wants to call this function, the VVM version should be written in p3_function. 
+
+    m_output_interval_s = config_.get_value<VVM::Real>("simulation.output_interval_s", 600.0);
 
     m_infrastructure.it = 0;
     m_infrastructure.its = 0;
@@ -32,13 +35,35 @@ VVM_P3_Interface::VVM_P3_Interface(const VVM::Utils::ConfigurationManager &confi
     m_infrastructure.kte = m_num_levs - 1;
     // Get runtime options from config (mimicking m_params.get)
     m_infrastructure.predictNc = config_.get_value<bool>("physics.p3.do_predict_nc", true);
-    m_infrastructure.prescribedCCN = config_.get_value<bool>("physics.p3.do_prescribed_ccn", true);
+    m_infrastructure.prescribedCCN = config_.get_value<bool>("physics.p3.do_prescribed_ccn", false);
 
     // Set Kokkos execution policy
+    // Aaron: a safe team size mode is turned on.
     using TPF = ekat::TeamPolicyFactory<KT::ExeSpace>;
-    m_policy = TPF::get_default_team_policy(m_num_cols, m_num_lev_packs);
+    auto default_policy = TPF::get_default_team_policy(m_num_cols, m_num_lev_packs);
+    int safe_team_size = default_policy.team_size();
+    
+    long long max_int32 = 2147483647LL;
+#ifdef SCREAM_P3_SMALL_KERNELS
+    long long num_wsm_vars = 6LL; 
+#else
+    long long num_wsm_vars = 64LL; 
+#endif
+    long long multiplier = num_wsm_vars * static_cast<long long>(m_num_cols) * static_cast<long long>(ekat::npack<Spack>(m_num_levs+1));
+    
+    if (multiplier * safe_team_size >= max_int32) {
+        if (grid_.get_mpi_rank() == 0) std::cout << "P3 note: the register memory size becomes too small because of large domain, so it's recommended to turn on SCREAM_P3_SMALL_KERNELS option when compiling to reduce memory allocation and append team size." << std::endl;
+        safe_team_size = max_int32 / multiplier;
+        if (safe_team_size < 1) safe_team_size = 1;
+    }
+    
+    m_policy = TeamPolicy(m_num_cols, safe_team_size, Spack::n);
     m_team_size = m_policy.team_size();
 
+    if (grid_.get_mpi_rank() == 0) {
+        std::cout << "p3 team size = " << m_team_size << std::endl;
+        std::cout << "p3 Spack n = " << Spack::n << std::endl;
+    }
     allocate_p3_buffers();
 }
 
@@ -108,14 +133,86 @@ void VVM_P3_Interface::allocate_p3_buffers() {
     Kokkos::deep_copy(m_unused, 0.0);                                                                                
     Kokkos::deep_copy(m_dummy_input, 0.0);   
 
-    const int num_wsm_vars = 64;
+#ifdef SCREAM_P3_SMALL_KERNELS
+    const int num_wsm_vars = 6; 
+#else
+    const int num_wsm_vars = 64; 
+#endif
 
-    const size_t wsm_size_in_bytes = WSM::get_total_bytes_needed(nk_pack_p1, num_wsm_vars, m_policy);
+    // const size_t wsm_size_in_bytes = WSM::get_total_bytes_needed(nk_pack_p1, num_wsm_vars, m_policy);
+    const size_t wsm_size_in_bytes = num_wsm_vars * static_cast<size_t>(nk_pack_p1) * static_cast<size_t>(m_policy.league_size()) * static_cast<size_t>(m_policy.team_size()) * sizeof(Spack);
     const size_t wsm_size_in_spacks = (wsm_size_in_bytes + sizeof(Spack) - 1) / sizeof(Spack);
     m_wsm_view_storage = Kokkos::View<Spack*>("P3 WSM Storage", wsm_size_in_spacks);
     m_wsm_data = m_wsm_view_storage.data();
     if (m_wsm_data == nullptr) std::cerr << "ERROR: FAILED TO ALLOCATE WORKSPACE MANAGER MEMORY FOR P3." << std::endl;
 
+#ifdef SCREAM_P3_SMALL_KERNELS
+    m_temporaries.mu_r = view_2d("mu_r", m_num_cols, m_num_lev_packs);
+    m_temporaries.T_atm = view_2d("T_atm_temp", m_num_cols, m_num_lev_packs);
+    m_temporaries.lamr = view_2d("lamr", m_num_cols, m_num_lev_packs);
+    m_temporaries.logn0r = view_2d("logn0r", m_num_cols, m_num_lev_packs);
+    m_temporaries.nu = view_2d("nu", m_num_cols, m_num_lev_packs);
+    m_temporaries.cdist = view_2d("cdist", m_num_cols, m_num_lev_packs);
+    m_temporaries.cdist1 = view_2d("cdist1", m_num_cols, m_num_lev_packs);
+    m_temporaries.cdistr = view_2d("cdistr", m_num_cols, m_num_lev_packs);
+    
+    m_temporaries.inv_cld_frac_i = view_2d("inv_cld_frac_i", m_num_cols, m_num_lev_packs);
+    m_temporaries.inv_cld_frac_l = view_2d("inv_cld_frac_l", m_num_cols, m_num_lev_packs);
+    m_temporaries.inv_cld_frac_r = view_2d("inv_cld_frac_r", m_num_cols, m_num_lev_packs);
+    
+    m_temporaries.qc_incld = view_2d("qc_incld", m_num_cols, m_num_lev_packs);
+    m_temporaries.qr_incld = view_2d("qr_incld", m_num_cols, m_num_lev_packs);
+    m_temporaries.qi_incld = view_2d("qi_incld", m_num_cols, m_num_lev_packs);
+    m_temporaries.qm_incld = view_2d("qm_incld", m_num_cols, m_num_lev_packs);
+    m_temporaries.nc_incld = view_2d("nc_incld", m_num_cols, m_num_lev_packs);
+    m_temporaries.nr_incld = view_2d("nr_incld", m_num_cols, m_num_lev_packs);
+    m_temporaries.ni_incld = view_2d("ni_incld", m_num_cols, m_num_lev_packs);
+    m_temporaries.bm_incld = view_2d("bm_incld", m_num_cols, m_num_lev_packs);
+    
+    m_temporaries.inv_dz = view_2d("inv_dz", m_num_cols, m_num_lev_packs);
+    m_temporaries.inv_rho = view_2d("inv_rho", m_num_cols, m_num_lev_packs);
+    m_temporaries.ze_ice = view_2d("ze_ice", m_num_cols, m_num_lev_packs);
+    m_temporaries.ze_rain = view_2d("ze_rain", m_num_cols, m_num_lev_packs);
+    m_temporaries.prec = view_2d("prec", m_num_cols, m_num_lev_packs);
+    m_temporaries.rho = view_2d("rho_temp", m_num_cols, m_num_lev_packs);
+    m_temporaries.rhofacr = view_2d("rhofacr", m_num_cols, m_num_lev_packs);
+    m_temporaries.rhofaci = view_2d("rhofaci", m_num_cols, m_num_lev_packs);
+    m_temporaries.acn = view_2d("acn", m_num_cols, m_num_lev_packs);
+    m_temporaries.qv_sat_l = view_2d("qv_sat_l", m_num_cols, m_num_lev_packs);
+    m_temporaries.qv_sat_i = view_2d("qv_sat_i", m_num_cols, m_num_lev_packs);
+    m_temporaries.sup = view_2d("sup", m_num_cols, m_num_lev_packs);
+    m_temporaries.qv_supersat_i = view_2d("qv_supersat_i", m_num_cols, m_num_lev_packs);
+    m_temporaries.tmparr2 = view_2d("tmparr2", m_num_cols, m_num_lev_packs);
+    m_temporaries.exner = view_2d("exner_temp", m_num_cols, m_num_lev_packs);
+    m_temporaries.diag_vm_qi = view_2d("diag_vm_qi", m_num_cols, m_num_lev_packs);
+    m_temporaries.diag_diam_qi = view_2d("diag_diam_qi", m_num_cols, m_num_lev_packs);
+    m_temporaries.pratot = view_2d("pratot", m_num_cols, m_num_lev_packs);
+    m_temporaries.prctot = view_2d("prctot", m_num_cols, m_num_lev_packs);
+    
+    m_temporaries.qtend_ignore = view_2d("qtend_ignore", m_num_cols, m_num_lev_packs);
+    m_temporaries.ntend_ignore = view_2d("ntend_ignore", m_num_cols, m_num_lev_packs);
+    m_temporaries.mu_c = view_2d("mu_c", m_num_cols, m_num_lev_packs);
+    m_temporaries.lamc = view_2d("lamc", m_num_cols, m_num_lev_packs);
+    m_temporaries.qr_evap_tend = view_2d("qr_evap_tend", m_num_cols, m_num_lev_packs);
+    
+    // Cloud sedimentation
+    m_temporaries.v_qc = view_2d("v_qc", m_num_cols, m_num_lev_packs);
+    m_temporaries.v_nc = view_2d("v_nc", m_num_cols, m_num_lev_packs);
+    m_temporaries.flux_qx = view_2d("flux_qx", m_num_cols, m_num_lev_packs);
+    m_temporaries.flux_nx = view_2d("flux_nx", m_num_cols, m_num_lev_packs);
+    
+    // Ice sedimentation
+    m_temporaries.v_qit = view_2d("v_qit", m_num_cols, m_num_lev_packs);
+    m_temporaries.v_nit = view_2d("v_nit", m_num_cols, m_num_lev_packs);
+    m_temporaries.flux_nit = view_2d("flux_nit", m_num_cols, m_num_lev_packs);
+    m_temporaries.flux_bir = view_2d("flux_bir", m_num_cols, m_num_lev_packs);
+    m_temporaries.flux_qir = view_2d("flux_qir", m_num_cols, m_num_lev_packs);
+    m_temporaries.flux_qit = view_2d("flux_qit", m_num_cols, m_num_lev_packs);
+    
+    // Rain sedimentation
+    m_temporaries.v_qr = view_2d("v_qr", m_num_cols, m_num_lev_packs);
+    m_temporaries.v_nr = view_2d("v_nr", m_num_cols, m_num_lev_packs);
+#endif
 }
 
 void VVM_P3_Interface::initialize(VVM::Core::State& state) {
@@ -142,7 +239,13 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
     if (!state.has_field("P_wet")) state.add_field<3>("P_wet", {nz_total, ny_total, nx_total});
 
     // Gather runtime options
-    m_runtime_options.max_total_ni = config_.get_value<double>("physics.p3.max_total_ni"); 
+    
+    // Aaron: This value follows Fortran P3 rather than EAMxx P3
+    m_runtime_options.max_total_ni = config_.get_value<VVM::Real>("physics.p3.max_total_ni", 2000.e3); 
+
+    m_runtime_options.set_cld_frac_l_to_one = true;
+    m_runtime_options.set_cld_frac_i_to_one = false;
+    m_runtime_options.set_cld_frac_r_to_one = false;
 
     // Note: P3 can tune some constants from the namelist
     // VVM didn't implement this but one can find it in p3/share/physics_constants.hpp
@@ -269,6 +372,7 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
     m_p3_postproc.set_variables(m_num_cols, m_num_lev_packs,
         m_th_view, m_pmid_view, m_pmid_dry_view, m_T_atm_view, m_t_prev_view,
         m_pseudo_density_view, m_pseudo_density_dry_view,
+        m_inv_exner_view,
         m_qv_view, m_qc_view, m_nc_view, m_qr_view, m_nr_view,
         m_qi_view, m_qm_view, m_ni_view, m_bm_view, m_qv_prev_view,
         m_diag_eff_radius_qc_view, m_diag_eff_radius_qi_view, 
@@ -277,8 +381,13 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
         m_precip_liq_surf_mass_view, m_precip_ice_surf_mass_view
     );
     
+#ifdef SCREAM_P3_SMALL_KERNELS
+    const int num_wsm_vars = 6;
+#else
+    const int num_wsm_vars = 64;
+#endif
     const int nk_pack_p1 = ekat::npack<Spack>(m_num_levs+1);
-    workspace_mgr.setup(m_wsm_data, nk_pack_p1, 64, m_policy);
+    workspace_mgr.setup(m_wsm_data, nk_pack_p1, num_wsm_vars, m_policy);
 
     this->initialize_constant_buffers(state);
 }
@@ -325,15 +434,15 @@ void VVM_P3_Interface::initialize_constant_buffers(VVM::Core::State& initial_sta
             T(k,j,i) = th(k,j,i) * pibar(k);
         }
     );
-    pack_3d_to_2d_packed(dz_mid_3d, m_dz_view);
+    pack_3d_to_2d_packed(dz_mid_3d, m_dz_view, 100.);
     // pack_3d_to_2d_packed(pbar_3d, m_pmid_view);
     // pack_3d_to_2d_packed(dpbar_mid_3d, m_pseudo_density_dry_view);
-    pack_3d_to_2d_packed(p_dry_3d, m_pmid_dry_view);
-    pack_3d_to_2d_packed(dp_dry_3d, m_pseudo_density_dry_view);
+    pack_3d_to_2d_packed(p_dry_3d, m_pmid_dry_view, 100000.0);
+    pack_3d_to_2d_packed(dp_dry_3d, m_pseudo_density_dry_view, 1000.0);
 
-    pack_3d_to_2d_packed(inv_pibar_3d, m_inv_exner_view);
-    pack_3d_to_2d_packed(initial_state.get_field<3>("T").get_device_data(), m_t_prev_view);
-    pack_3d_to_2d_packed(initial_state.get_field<3>("qv").get_device_data(), m_qv_prev_view);
+    pack_3d_to_2d_packed(inv_pibar_3d, m_inv_exner_view, 1.0);
+    pack_3d_to_2d_packed(initial_state.get_field<3>("T").get_device_data(), m_t_prev_view, 300.0);
+    pack_3d_to_2d_packed(initial_state.get_field<3>("qv").get_device_data(), m_qv_prev_view, 0.01);
     
     const Real nccn_val     = 2.0e8; // #/kg
     const Real cld_frac_val = 1.0;   // 100%
@@ -378,7 +487,7 @@ void VVM_P3_Interface::initialize_constant_buffers(VVM::Core::State& initial_sta
 }
 
 template<typename VVMViewType, typename P3ViewType>
-void VVM_P3_Interface::pack_3d_to_2d_packed(const VVMViewType& vvm_view, const P3ViewType& p3_view) {
+void VVM_P3_Interface::pack_3d_to_2d_packed(const VVMViewType& vvm_view, const P3ViewType& p3_view, const VVM::Real pad_val) {
     const int nz_phys = m_num_levs;
     const int ny_phys = grid_.get_local_physical_points_y();
     const int nx_phys = grid_.get_local_physical_points_x();
@@ -407,7 +516,7 @@ void VVM_P3_Interface::pack_3d_to_2d_packed(const VVMViewType& vvm_view, const P
                                                        iy_phys + halo_offset, 
                                                        ix_phys + halo_offset);
                             } else {
-                                pack[k_vec] = 0.0; 
+                                pack[k_vec] = pad_val; 
                             }
                         });
                 });
@@ -499,12 +608,10 @@ void VVM_P3_Interface::preprocessing_and_packing(VVM::Core::State& state) {
     auto ni_3d = state.get_field<3>("ni").get_mutable_device_data();
     auto bm_3d = state.get_field<3>("bm").get_mutable_device_data();
     auto th_3d = state.get_field<3>("th").get_device_data();
+    auto thm_3d = state.get_field<3>("th_m").get_device_data();
     auto qv_3d = state.get_field<3>("qv").get_mutable_device_data();
+    auto qvm_3d = state.get_field<3>("qv_m").get_mutable_device_data();
 
-    auto th_m_3d = state.get_field<3>("th_m").get_device_data();
-    auto qv_m_3d = state.get_field<3>("qv_m").get_device_data();
-
-    
     auto pibar = state.get_field<1>("pibar").get_device_data();
     auto pbar = state.get_field<1>("pbar").get_device_data();
     auto dpbar_mid = state.get_field<1>("dpbar_mid").get_device_data();
@@ -538,8 +645,22 @@ void VVM_P3_Interface::preprocessing_and_packing(VVM::Core::State& state) {
             const int iy_vvm = iy + halo;
 
             Kokkos::parallel_for(Kokkos::TeamThreadRange(team, nlev_packs), [&](const int k_pack) {
-                Spack qc_val, nc_val, qr_val, nr_val, qi_val, qm_val, ni_val, bm_val, th_val, qv_val;
-                Spack T_val, Tm_val, P_wet_val, P_dry_val, Rho_wet_val, qv_prev_val;
+                auto& qc_pack = qc_p3(icol, k_pack);
+                auto& nc_pack = nc_p3(icol, k_pack);
+                auto& qr_pack = qr_p3(icol, k_pack);
+                auto& nr_pack = nr_p3(icol, k_pack);
+                auto& qi_pack = qi_p3(icol, k_pack);
+                auto& qm_pack = qm_p3(icol, k_pack);
+                auto& ni_pack = ni_p3(icol, k_pack);
+                auto& bm_pack = bm_p3(icol, k_pack);
+                auto& th_pack = th_p3(icol, k_pack);
+                auto& qv_pack = qv_p3(icol, k_pack);
+                auto& qv_prev_pack = qv_prev_p3(icol, k_pack);
+                auto& T_pack  = T_p3(icol, k_pack);
+                auto& Tm_pack = Tm_p3(icol, k_pack);
+                auto& P_wet_pack = P_wet_p3(icol, k_pack);
+                auto& P_dry_pack = P_dry_p3(icol, k_pack);
+                auto& Rho_wet_pack = Rho_wet_p3(icol, k_pack);
 
                 const int k_offset = k_pack * Spack::n;
 
@@ -551,6 +672,9 @@ void VVM_P3_Interface::preprocessing_and_packing(VVM::Core::State& state) {
 
                         Real qv_in = qv_3d(k_vvm, iy_vvm, ix_vvm);
                         if (qv_in < 0) { qv_in = 0; qv_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+
+                        Real qv_prev_in = qvm_3d(k_vvm, iy_vvm, ix_vvm);
+                        if (qv_prev_in < 0) { qv_prev_in = 0; qvm_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
                         
                         Real qc_in = qc_3d(k_vvm, iy_vvm, ix_vvm);
                         if (qc_in < 0) { qc_in = 0; qc_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
@@ -571,72 +695,57 @@ void VVM_P3_Interface::preprocessing_and_packing(VVM::Core::State& state) {
                         if (nr_in < 0) { nr_in = 0; nr_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
 
                         Real qm_in = qm_3d(k_vvm, iy_vvm, ix_vvm);
+                        if (qm_in < 0) { qm_in = 0; qm_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+
                         Real bm_in = bm_3d(k_vvm, iy_vvm, ix_vvm);
+                        if (bm_in < 0) { bm_in = 0; bm_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+
                         Real th_in = th_3d(k_vvm, iy_vvm, ix_vvm);
-                        Real th_m_in = th_m_3d(k_vvm, iy_vvm, ix_vvm);
-                        Real qv_m_in = qv_m_3d(k_vvm, iy_vvm, ix_vvm);
+                        Real thm_in = thm_3d(k_vvm, iy_vvm, ix_vvm);
 
                         Real pi_val = pibar(k_vvm);
                         Real pb_val = pbar(k_vvm);
                         Real dp_val = dpbar_mid(k_vvm);
 
                         Real T_calc = th_in * pi_val;
-                        Real Tm_calc = th_m_in * pi_val;
+                        Real Tm_calc = thm_in * pi_val;
                         
-                        Real P_wet_calc = pb_val * (1.0 + qv_in);
-                        Real Rho_wet_calc = dp_val * (1.0 + qv_in);
+                        // Real P_wet_calc = pb_val * (1.0 + qv_in);
+                        // Real Rho_wet_calc = dp_val * (1.0 + qv_in);
+                        Real P_wet_calc = pb_val;
+                        Real Rho_wet_calc = dp_val;
                         
                         Real P_dry_calc = pb_val;
 
-                        qc_val[k_vec] = qc_in;
-                        nc_val[k_vec] = nc_in;
-                        qr_val[k_vec] = qr_in;
-                        nr_val[k_vec] = nr_in;
-                        qi_val[k_vec] = qi_in;
-                        qm_val[k_vec] = qm_in;
-                        ni_val[k_vec] = ni_in;
-                        bm_val[k_vec] = bm_in;
-                        th_val[k_vec] = th_in;
-                        qv_val[k_vec] = qv_in;
-
-                        T_val[k_vec] = T_calc;
-                        Tm_val[k_vec] = Tm_calc;
-                        P_wet_val[k_vec] = P_wet_calc;
-                        P_dry_val[k_vec] = P_dry_calc;
-                        Rho_wet_val[k_vec] = Rho_wet_calc;
-                        qv_prev_val[k_vec] = qv_m_in;
-
+                        qc_pack[k_vec] = qc_in;
+                        nc_pack[k_vec] = nc_in;
+                        qr_pack[k_vec] = qr_in;
+                        nr_pack[k_vec] = nr_in;
+                        qi_pack[k_vec] = qi_in;
+                        qm_pack[k_vec] = qm_in;
+                        ni_pack[k_vec] = ni_in;
+                        bm_pack[k_vec] = bm_in;
+                        th_pack[k_vec] = th_in;
+                        qv_pack[k_vec] = qv_in;
+                        qv_prev_pack[k_vec] = qv_prev_in;
+                        T_pack[k_vec] = T_calc;
+                        Tm_pack[k_vec] = Tm_calc;
+                        P_wet_pack[k_vec] = P_wet_calc;
+                        P_dry_pack[k_vec] = P_dry_calc;
+                        Rho_wet_pack[k_vec] = Rho_wet_calc;
                     } 
                     else {
-                        qc_val[k_vec] = 0.0; nc_val[k_vec] = 0.0;
-                        qr_val[k_vec] = 0.0; nr_val[k_vec] = 0.0;
-                        qi_val[k_vec] = 0.0; qm_val[k_vec] = 0.0;
-                        ni_val[k_vec] = 0.0; bm_val[k_vec] = 0.0;
-                        th_val[k_vec] = 0.0; qv_val[k_vec] = 0.0;
-                        T_val[k_vec] = 0.0;  Tm_val[k_vec] = 0.0;
-                        P_wet_val[k_vec] = 0.0; P_dry_val[k_vec] = 0.0;
-                        Rho_wet_val[k_vec] = 0.0;
-                        qv_prev_val[k_vec] = 0.0;
+
+                        qc_pack[k_vec] = 0.0; nc_pack[k_vec] = 0.0;
+                        qr_pack[k_vec] = 0.0; nr_pack[k_vec] = 0.0;
+                        qi_pack[k_vec] = 0.0; qm_pack[k_vec] = 0.0;
+                        ni_pack[k_vec] = 0.0; bm_pack[k_vec] = 0.0;
+                        th_pack[k_vec] = 250.0; qv_pack[k_vec] = 1e-6;
+                        T_pack[k_vec] = 250.0; 
+                        P_wet_pack[k_vec] = 100000.0; P_dry_pack[k_vec] = 100000.0;
+                        Rho_wet_pack[k_vec] = 1.0;
                     }
                 });
-
-                qc_p3(icol, k_pack) = qc_val;
-                nc_p3(icol, k_pack) = nc_val;
-                qr_p3(icol, k_pack) = qr_val;
-                nr_p3(icol, k_pack) = nr_val;
-                qi_p3(icol, k_pack) = qi_val;
-                qm_p3(icol, k_pack) = qm_val;
-                ni_p3(icol, k_pack) = ni_val;
-                bm_p3(icol, k_pack) = bm_val;
-                th_p3(icol, k_pack) = th_val;
-                qv_p3(icol, k_pack) = qv_val;
-
-                T_p3(icol, k_pack) = T_val;
-                Tm_p3(icol, k_pack) = Tm_val;
-                P_wet_p3(icol, k_pack) = P_wet_val;
-                P_dry_p3(icol, k_pack) = P_dry_val;
-                Rho_wet_p3(icol, k_pack) = Rho_wet_val;
-                qv_prev_p3(icol, k_pack) = qv_prev_val;
             });
         }
     );
@@ -648,6 +757,7 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
     const int nx_phys = grid_.get_local_physical_points_x();
     const int nlev_packs = m_num_lev_packs;
     const int halo = grid_.get_halo_cells();
+    auto dt = m_infrastructure.dt;
 
     auto qc_3d = state.get_field<3>("qc").get_mutable_device_data();
     auto nc_3d = state.get_field<3>("nc").get_mutable_device_data();
@@ -661,7 +771,6 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
     auto qv_3d = state.get_field<3>("qv").get_mutable_device_data();
     auto qp_3d = state.get_field<3>("qp").get_mutable_device_data(); 
     auto T_3d  = state.get_field<3>("T").get_mutable_device_data();
-    auto qv_m_3d = state.get_field<3>("qv_m").get_mutable_device_data();
 
     auto eff_rad_qc_3d = state.get_field<3>("diag_eff_radius_qc").get_mutable_device_data();
     auto eff_rad_qi_3d = state.get_field<3>("diag_eff_radius_qi").get_mutable_device_data();
@@ -722,25 +831,25 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
             Kokkos::parallel_for(Kokkos::TeamThreadRange(team, nlev_packs), [&](const int k_pack) {
                 const int k_offset = k_pack * Spack::n;
 
-                Spack qc_val = qc_p3(icol, k_pack);
-                Spack nc_val = nc_p3(icol, k_pack);
-                Spack qr_val = qr_p3(icol, k_pack);
-                Spack nr_val = nr_p3(icol, k_pack);
-                Spack qi_val = qi_p3(icol, k_pack);
-                Spack qm_val = qm_p3(icol, k_pack);
-                Spack ni_val = ni_p3(icol, k_pack);
-                Spack bm_val = bm_p3(icol, k_pack);
-                Spack th_val = th_p3(icol, k_pack);
-                Spack qv_val = qv_p3(icol, k_pack);
-                Spack T_val  = T_p3(icol, k_pack);
-                Spack qv_prev_val = qv_prev_p3(icol, k_pack);
+                const auto& qc_pack = qc_p3(icol, k_pack);
+                const auto& nc_pack = nc_p3(icol, k_pack);
+                const auto& qr_pack = qr_p3(icol, k_pack);
+                const auto& nr_pack = nr_p3(icol, k_pack);
+                const auto& qi_pack = qi_p3(icol, k_pack);
+                const auto& qm_pack = qm_p3(icol, k_pack);
+                const auto& ni_pack = ni_p3(icol, k_pack);
+                const auto& bm_pack = bm_p3(icol, k_pack);
+                const auto& th_pack = th_p3(icol, k_pack);
+                const auto& qv_pack = qv_p3(icol, k_pack);
+                const auto& T_pack  = T_p3(icol, k_pack);
+                const auto& qv_prev_pack = qv_prev_p3(icol, k_pack);
                 
-                Spack eff_qc_val = eff_rad_qc_p3(icol, k_pack);
-                Spack eff_qi_val = eff_rad_qi_p3(icol, k_pack);
-                Spack eff_qr_val = eff_rad_qr_p3(icol, k_pack);
+                const auto& eff_qc_pack = eff_rad_qc_p3(icol, k_pack);
+                const auto& eff_qi_pack = eff_rad_qi_p3(icol, k_pack);
+                const auto& eff_qr_pack = eff_rad_qr_p3(icol, k_pack);
 
-                Spack precip_liq_flux_val = precip_liq_flux_p3(icol, k_pack);
-                Spack precip_ice_flux_val = precip_ice_flux_p3(icol, k_pack);
+                const auto& precip_liq_flux_pack = precip_liq_flux_p3(icol, k_pack);
+                const auto& precip_ice_flux_pack = precip_ice_flux_p3(icol, k_pack);
 
                 Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, (int)Spack::n), [&](const int k_vec) {
                     const int k_phys = k_offset + k_vec;
@@ -750,8 +859,11 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
                         int hxp = topo(iy_vvm, ix_vvm) + 1;
 
                         if (k_vvm == hxp) {
-                            precip_liq_surf_2d(iy_vvm, ix_vvm) = precip_liq_flux_val[k_vec];
-                            precip_ice_surf_2d(iy_vvm, ix_vvm) = precip_ice_flux_val[k_vec];
+                            precip_liq_surf_flux_2d(iy_vvm, ix_vvm) = precip_liq_flux_pack[k_vec];
+                            precip_ice_surf_flux_2d(iy_vvm, ix_vvm) = precip_ice_flux_pack[k_vec];
+
+                            precip_liq_surf_2d(iy_vvm, ix_vvm) += precip_liq_flux_pack[k_vec] * dt;
+                            precip_ice_surf_2d(iy_vvm, ix_vvm) += precip_ice_flux_pack[k_vec] * dt;
                         }
                         
                         if (ITYPEW(k_vvm, iy_vvm, ix_vvm) != 1) {
@@ -767,34 +879,31 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
                             th_3d(k_vvm, iy_vvm, ix_vvm) = thbar(k_vvm);
                             
                             T_3d(k_vvm, iy_vvm, ix_vvm) = thbar(k_vvm) * pibar(k_vvm);
-                            qv_m_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
                             qp_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
 
                             eff_rad_qc_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
                             eff_rad_qi_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
                             eff_rad_qr_3d(k_vvm, iy_vvm, ix_vvm) = 0.0;
-
                         } 
                         else {
-                            qc_3d(k_vvm, iy_vvm, ix_vvm) = qc_val[k_vec];
-                            nc_3d(k_vvm, iy_vvm, ix_vvm) = nc_val[k_vec];
-                            qr_3d(k_vvm, iy_vvm, ix_vvm) = qr_val[k_vec];
-                            nr_3d(k_vvm, iy_vvm, ix_vvm) = nr_val[k_vec];
-                            qi_3d(k_vvm, iy_vvm, ix_vvm) = qi_val[k_vec];
-                            qm_3d(k_vvm, iy_vvm, ix_vvm) = qm_val[k_vec];
-                            ni_3d(k_vvm, iy_vvm, ix_vvm) = ni_val[k_vec];
-                            bm_3d(k_vvm, iy_vvm, ix_vvm) = bm_val[k_vec];
-                            th_3d(k_vvm, iy_vvm, ix_vvm) = T_val[k_vec] / pibar(k_vvm);
-                            qv_3d(k_vvm, iy_vvm, ix_vvm) = qv_val[k_vec];
+                            qc_3d(k_vvm, iy_vvm, ix_vvm) = qc_pack[k_vec];
+                            nc_3d(k_vvm, iy_vvm, ix_vvm) = nc_pack[k_vec];
+                            qr_3d(k_vvm, iy_vvm, ix_vvm) = qr_pack[k_vec];
+                            nr_3d(k_vvm, iy_vvm, ix_vvm) = nr_pack[k_vec];
+                            qi_3d(k_vvm, iy_vvm, ix_vvm) = qi_pack[k_vec];
+                            qm_3d(k_vvm, iy_vvm, ix_vvm) = qm_pack[k_vec];
+                            ni_3d(k_vvm, iy_vvm, ix_vvm) = ni_pack[k_vec];
+                            bm_3d(k_vvm, iy_vvm, ix_vvm) = bm_pack[k_vec];
+                            th_3d(k_vvm, iy_vvm, ix_vvm) = T_pack[k_vec] / pibar(k_vvm);
+                            qv_3d(k_vvm, iy_vvm, ix_vvm) = qv_pack[k_vec];
                             
-                            T_3d(k_vvm, iy_vvm, ix_vvm)  = T_val[k_vec]; 
-                            qv_m_3d(k_vvm, iy_vvm, ix_vvm) = qv_prev_val[k_vec];
+                            T_3d(k_vvm, iy_vvm, ix_vvm)  = T_pack[k_vec]; 
 
-                            qp_3d(k_vvm, iy_vvm, ix_vvm) = qc_val[k_vec] + qr_val[k_vec] + qi_val[k_vec];
+                            qp_3d(k_vvm, iy_vvm, ix_vvm) = qc_pack[k_vec] + qr_pack[k_vec] + qi_pack[k_vec];
 
-                            eff_rad_qc_3d(k_vvm, iy_vvm, ix_vvm) = eff_qc_val[k_vec];
-                            eff_rad_qi_3d(k_vvm, iy_vvm, ix_vvm) = eff_qi_val[k_vec];
-                            eff_rad_qr_3d(k_vvm, iy_vvm, ix_vvm) = eff_qr_val[k_vec];
+                            eff_rad_qc_3d(k_vvm, iy_vvm, ix_vvm) = eff_qc_pack[k_vec];
+                            eff_rad_qi_3d(k_vvm, iy_vvm, ix_vvm) = eff_qi_pack[k_vec];
+                            eff_rad_qr_3d(k_vvm, iy_vvm, ix_vvm) = eff_qr_pack[k_vec];
                         }
                     }
                 });
@@ -804,14 +913,19 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
 
     std::vector<std::string> p3_update_vars = {
         "qc", "nc", "qr", "nr", "qi", "qm", "ni", "bm", 
-        "th", "qv", "qp", "T", "qv_m"
+        "th", "qv", "qp", "T"
     };
     halo_exchanger_.exchange_multiple_halos(p3_update_vars, state);
 }
 
 
-void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
+void VVM_P3_Interface::run(VVM::Core::State &state, const VVM::Real dt) {
     VVM::Utils::Timer p3_timer("P3_timer");
+
+    if (m_need_reset_precip) {
+        this->reset_precip_accumulation(state);
+        m_need_reset_precip = false;
+    }
 
 
     // FIXME: The pmid, pmid_try should be decided. The pmid from VVM is now dry pressure. 
@@ -839,6 +953,7 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
     workspace_mgr.reset_internals();
 
 
+    /*
     // Pre-P3 Saturation Adjustment (Emulating qcnuc + qccon)
     // This step creates cloud water (qc) and cloud number (nc) from supersaturation
     // BEFORE P3 runs, acting as the "activation" and "macrophysics" step.
@@ -863,82 +978,58 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
         KOKKOS_LAMBDA(const MemberType& team) {
             const int icol = team.league_rank();
 
-            Kokkos::parallel_for(Kokkos::TeamThreadRange(team, nlev_packs), [&](const int k_pack) {
-                auto& qv_pack = qv_view(icol, k_pack);
-                auto& qc_pack = qc_view(icol, k_pack);
-                auto& nc_pack = nc_view(icol, k_pack);
-                auto& th_pack = th_view(icol, k_pack);
-                const auto& p_pack = p_view(icol, k_pack);
-                const auto& inv_exner_pack = inv_exner_view(icol, k_pack);
+            Kokkos::parallel_for(Kokkos::TeamVectorRange(team, nlev_packs), [&](const int k_pack) {
+                auto& qv_pack = qv_view(icol, k_pack); auto& qc_pack = qc_view(icol, k_pack);
+                auto& nc_pack = nc_view(icol, k_pack); auto& th_pack = th_view(icol, k_pack);
+                const auto& p_pack = p_view(icol, k_pack); const auto& inv_exner_pack = inv_exner_view(icol, k_pack);
 
                 Spack T_pack = th_pack / inv_exner_pack;
-
                 auto is_too_cold = (T_pack < 233.15);
 
-                // Calculate Saturation
                 Smask range_mask(true);
-                Spack qvs_pack = Physics::qv_sat_dry(
-                    T_pack, p_pack, 
-                    false, // is_ice = false 
-                    range_mask, 
-                    Physics::Polysvp1, 
-                    "VVM_Sat_Adj_Opt"
-                );
-
-                // delta_q > 0: Supersaturated
-                // delta_q < 0: Subsaturated
+                Spack qvs_pack = Physics::qv_sat_dry(T_pack, p_pack, false, range_mask, Physics::Polysvp1, "VVM_Sat_Adj");
                 Spack delta_q_potential = qv_pack - qvs_pack;
 
-                // A: delta_q > 0
-                // B: delta_q < 0 && qc > 1e-12
                 auto need_condense = (delta_q_potential > 0.0);
                 auto need_evaporate = (delta_q_potential < 0.0) && (qc_pack > 1.0e-12);
                 auto need_adjustment = (need_condense || need_evaporate) && !is_too_cold;
 
                 if (need_adjustment.any()) {
                     auto is_new_cloud = need_condense && (qc_pack < min_qc);
-                    
-                    // Thermal Inertia Factor
                     Spack denominator = 1.0 + (Lv * Lv * qvs_pack) / (Cp * Rv * T_pack * T_pack);
                     Spack adjustment = delta_q_potential / denominator;
 
-                    // Evaporation Limiter
-                    // adjustment < 0, only evaporates qc
-                    // if adjustment < -qc, adjustment = -qc
-                    auto limit_mask = (adjustment < -qc_pack);
-                    adjustment.set(limit_mask, -qc_pack);
+                    auto limit_evap = (adjustment < -qc_pack);
+                    adjustment.set(limit_evap, -qc_pack);
+                    auto limit_cond = (adjustment > qv_pack);
+                    adjustment.set(limit_cond, qv_pack);
 
-                    // Update State
                     qv_pack.set(need_adjustment, qv_pack - adjustment);
                     qc_pack.set(need_adjustment, qc_pack + adjustment);
                     
                     Spack d_th = inv_exner_pack * (Lv / Cp) * adjustment;
                     th_pack.set(need_adjustment, th_pack + d_th);
 
-                    if (is_new_cloud.any()) {
-                         nc_pack.set(is_new_cloud, nccn_val);
-                    }
-
-                    // Full Evaporation
+                    if (is_new_cloud.any()) nc_pack.set(is_new_cloud, nccn_val);
                     auto is_cloud_gone = (qc_pack < 1.0e-12); 
-                    if (is_cloud_gone.any()) {
-                        nc_pack.set(is_cloud_gone, 0.0);
-                    }
+                    if (is_cloud_gone.any()) nc_pack.set(is_cloud_gone, 0.0);
                 }
             });
         }
     );
     // Kokkos::fence();
+    */
 
     P3F::p3_main(
         m_runtime_options, m_prog_state, m_diag_inputs, m_diag_outputs, m_infrastructure,
         m_history_only, m_lookup_tables,
 #ifdef SCREAM_P3_SMALL_KERNELS
-        temporaries,
+        m_temporaries,
 #endif
         workspace_mgr, m_num_cols, m_num_levs
     );
 
+    /*
     Kokkos::parallel_for("post_p3_saturation_adjustment", m_policy,
         KOKKOS_LAMBDA(const MemberType& team) {
             const int icol = team.league_rank();
@@ -999,6 +1090,7 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
             });
         }
     );
+    */
 
     // Conduct the post-processing of the p3_main output.
     Kokkos::parallel_for("p3_main_local_vals",
@@ -1007,7 +1099,40 @@ void VVM_P3_Interface::run(VVM::Core::State &state, const double dt) {
     ); // Kokkos::parallel_for(p3_main_local_vals)
     Kokkos::fence();
     postprocessing_and_unpacking(state);
+
+    int output_steps = std::round(m_output_interval_s / dt);
+    if (m_infrastructure.it > 0 && (m_infrastructure.it % output_steps) == 0) {
+        this->compute_time_averaged_precip(state);
+        m_need_reset_precip = true;
+    }
 }
+
+void VVM_P3_Interface::compute_time_averaged_precip(VVM::Core::State& state) {
+    auto& precip_liq_surf_mass_2d = state.get_field<2>("precip_liq_surf_mass").get_mutable_device_data();
+    auto& precip_ice_surf_mass_2d = state.get_field<2>("precip_ice_surf_mass").get_mutable_device_data();
+
+    VVM::Real total_time = (m_output_interval_s > 0.0) ? m_output_interval_s : 1.0;
+
+    int ny = grid_.get_local_total_points_y();
+    int nx = grid_.get_local_total_points_x();
+
+    Kokkos::parallel_for("Compute_Precip_Average", 
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ny, nx}),
+        KOKKOS_LAMBDA(const int j, const int i) {
+            precip_liq_surf_mass_2d(j, i) /= total_time;
+            precip_ice_surf_mass_2d(j, i) /= total_time;
+        }
+    );
+}
+
+void VVM_P3_Interface::reset_precip_accumulation(VVM::Core::State& state) {
+    auto& precip_liq_surf_mass_2d = state.get_field<2>("precip_liq_surf_mass").get_mutable_device_data();
+    auto& precip_ice_surf_mass_2d = state.get_field<2>("precip_ice_surf_mass").get_mutable_device_data();
+
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), precip_liq_surf_mass_2d, 0.0);
+    Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), precip_ice_surf_mass_2d, 0.0);
+}
+
 
 void VVM_P3_Interface::finalize() {
     m_wsm_view_storage = {}; 
@@ -1068,6 +1193,9 @@ void VVM_P3_Interface::finalize() {
     m_dummy_input = {};
 
     m_col_location_view = {};
+#ifdef SCREAM_P3_SMALL_KERNELS
+    m_temporaries = P3F::P3Temporaries();
+#endif
 }
 
 } // namespace Physics

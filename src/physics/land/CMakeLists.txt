@@ -31,11 +31,22 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     target_compile_options(vvm_land PRIVATE -fast -acc)
 
     target_compile_options(vvm_land PRIVATE
-        $<$<COMPILE_LANGUAGE:Fortran>:-Mallocatable=03;-Mfreeform;-Mextend;-Mpreprocess;-r8>
+        $<$<COMPILE_LANGUAGE:Fortran>:-Mallocatable=03;-Mfreeform;-Mextend;-Mpreprocess>
     )
+
+    if(VVM_USE_DOUBLE_PRECISION)
+        target_compile_options(vvm_land PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-r8>)
+    else()
+        target_compile_definitions(vvm_land PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:SP>)
+    endif()
     
     target_link_options(vvm_land PRIVATE -acc -fortranlibs -c++libs)
 endif()
 
 target_link_libraries(vvm_land PUBLIC Kokkos::kokkos vvm_core)
 target_link_libraries(eamxx_physics INTERFACE vvm_land)
+
+add_custom_command(TARGET vvm_land PRE_LINK
+    COMMAND rm -f $<TARGET_FILE:vvm_land>
+    COMMENT "Auto-removing stale shared library to prevent pgacclnk incremental link crash..."
+)

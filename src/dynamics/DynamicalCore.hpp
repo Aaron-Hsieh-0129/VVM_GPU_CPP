@@ -8,6 +8,7 @@
 #include "core/State.hpp"
 #include "core/Grid.hpp"
 #include "core/Parameters.hpp"
+#include "core/vvm_types.hpp"
 #include "utils/ConfigurationManager.hpp"
 #include "temporal_schemes/TemporalScheme.hpp"
 #include "tendency_processes/TendencyCalculator.hpp"
@@ -39,12 +40,12 @@ public:
     void compute_zeta_vertical_structure(Core::State& state) const;
     void compute_uvtopmn();
     void compute_wind_fields();
-    // void step(Core::State& state, double dt);
+    // void step(Core::State& state, VVM::Real dt);
 
     void calculate_thermo_tendencies();
-    void update_thermodynamics(double dt);
+    void update_thermodynamics(VVM::Real dt);
     void calculate_vorticity_tendencies();
-    void update_vorticity(double dt);
+    void update_vorticity(VVM::Real dt);
     void diagnose_wind_fields(Core::State& state);
 
 
@@ -69,12 +70,12 @@ private:
     bool enable_coriolis_ = false;
     bool enable_turbulence_ = false;
 
-    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> tempumn_{"tempumn"};
-    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> tempvmn_{"tempvmn"};
-    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> mean_u_turb_{"mean_u_turb"};
-    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> mean_v_turb_{"mean_v_turb"};
-    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> mean_u_coriolis_{"mean_u_coriolis"};
-    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> mean_v_coriolis_{"mean_v_coriolis"};
+    Kokkos::View<VVM::Real, Kokkos::DefaultExecutionSpace::memory_space> tempumn_{"tempumn"};
+    Kokkos::View<VVM::Real, Kokkos::DefaultExecutionSpace::memory_space> tempvmn_{"tempvmn"};
+    Kokkos::View<VVM::Real, Kokkos::DefaultExecutionSpace::memory_space> mean_u_turb_{"mean_u_turb"};
+    Kokkos::View<VVM::Real, Kokkos::DefaultExecutionSpace::memory_space> mean_v_turb_{"mean_v_turb"};
+    Kokkos::View<VVM::Real, Kokkos::DefaultExecutionSpace::memory_space> mean_u_coriolis_{"mean_u_coriolis"};
+    Kokkos::View<VVM::Real, Kokkos::DefaultExecutionSpace::memory_space> mean_v_coriolis_{"mean_v_coriolis"};
 };
 
 } // namespace Dynamics

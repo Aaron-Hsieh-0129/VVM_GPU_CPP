@@ -24,8 +24,8 @@ struct Constants
 {
   using ci_string      = ekat::CaseInsensitiveString;
 
-  static constexpr Scalar Cpair         = 1004.64;
-  static constexpr Scalar Rair          = 287.042;
+  static constexpr Scalar Cpair         = 1004.5; // Aaron: modify from 1004.64 to 1004.5 to be same as VVM
+  static constexpr Scalar Rair          = 287.04; // Aaron: modify from 287.042 to 287.04 to be same as VVM
   static constexpr Scalar RH2O          = 461.505;
   static constexpr Scalar RV            = RH2O;         // Water vapor gas constant ~ J/K/kg     !461.51
   static constexpr Scalar RHO_H2O       = 1000.0;
@@ -35,7 +35,7 @@ struct Constants
   static constexpr Scalar MWdry         = 28.966;
   static constexpr Scalar o2mmr         = 0.23143;      // o2 mass mixing ratio
   static constexpr Scalar ep_2          = MWH2O/MWdry;  // ratio of molecular mass of water to the molecular mass of dry air !0.622
-  static constexpr Scalar gravit        = 9.80616;
+  static constexpr Scalar gravit        = 9.806; // Aaron: modify from 9.80616 to 9.806 to be same as VVM
   static constexpr Scalar LatVap        = 2501000.0;
   static constexpr Scalar LatIce        = 333700.0;
   static constexpr Scalar CpLiq         = 4188.0;
@@ -43,7 +43,7 @@ struct Constants
   static constexpr Scalar T_zerodegc    = Tmelt;
   static constexpr Scalar T_homogfrz    = Tmelt - 40;
   static constexpr Scalar T_rainfrz     = Tmelt - 4;
-  static constexpr Scalar Pi            = 3.14159265358979323;
+  static constexpr Scalar Pi            = 3.14159265; // Aaron: modify from 3.14159265358979323 to 3.14159265 to be same as VVM
   static constexpr Scalar RHOW          = RHO_H2O;
   static constexpr Scalar INV_RHOW      = 1.0/RHOW;
   static constexpr Scalar RHO_RIMEMIN   =  50.0;  //Min limit for rime density [kg m-3]
@@ -62,8 +62,8 @@ struct Constants
   static constexpr Scalar CONS7         = 4.*PIOV3*RHOW*1.e-18;
   static constexpr Scalar QSMALL        = 1.e-14;
   static constexpr Scalar QTENDSMALL    = 1e-20;
-  static constexpr Scalar BSMALL        = 1.e-15;
-  static constexpr Scalar NSMALL        = 1.e-16;
+  static constexpr Scalar BSMALL        = QSMALL * INV_RHO_RIMEMAX;
+  static constexpr Scalar NSMALL        = 1.e-20;
   static constexpr Scalar ZERO          = 0.0;
   static constexpr Scalar ONE           = 1.0;
   static constexpr Scalar P0            = 100000.0;        // reference pressure, Pa
@@ -80,6 +80,21 @@ struct Constants
   static constexpr Scalar bcn           = 2.;
   static constexpr Scalar dropmass      = 5.2e-7;
   static constexpr Scalar NCCNST        = 200.0e+6;
+  // Aaron - constants used in droplet activation
+  static constexpr Scalar MW            = 0.018;    // molecule weight of water [kg/mol]
+  static constexpr Scalar RR            = 8.3145;    // ideal gas constant [J/mol/K]
+  static constexpr Scalar INV_RM1       = 2.e+7;           // inverse aerosol mean size (m-1) 
+  static constexpr Scalar INV_RM2       = 7.6923076e+5;    // inverse aerosol mean size (m-1) 
+  static constexpr Scalar VI            = 3.; // number of ions in solution nu
+  static constexpr Scalar OSM           = 1.; // osmotic potential phi_s [ ]
+  static constexpr Scalar EPSM          = 0.9; // mass fraction of soluble material [ ]
+  static constexpr Scalar RHOA          = 1777.; // density of (dry) aerosol [kg/m3]
+  static constexpr Scalar MAP           = 0.132; // molecular weight of aerosol M_s [kg/mol]
+  static constexpr Scalar SIG1          = 2.0; // aerosol standard deviation
+  static constexpr Scalar SIG2          = 2.5; // aerosol standard deviation
+  static constexpr Scalar NANEW1        = 300.e6; // aerosol number mixing ratio (kg-1)   
+  static constexpr Scalar NANEW2        = 0.; // aerosol number mixing ratio (kg-1)   
+
   static constexpr Scalar incloud_limit = 5.1e-3;
   static constexpr Scalar precip_limit  = 1.0e-2;
   static constexpr Scalar Karman        = 0.4;

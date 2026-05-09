@@ -29,7 +29,9 @@ void Functions<S,D>
    const auto t_lt_T_icenuc = temp < T_icenuc;
    const auto qv_supersat_i_ge_005 = qv_supersat_i >= 0.05;
 
-   const auto do_log = (!do_predict_nc || do_prescribed_CCN);
+   // const auto do_log = (!do_predict_nc || do_prescribed_CCN);
+   // Aaron - hardcode to true
+   const auto do_log = true;
 
    const auto any_if_log     = t_lt_T_icenuc && qv_supersat_i_ge_005 && (!do_log) && context;
    const auto any_if_not_log = t_lt_T_icenuc && qv_supersat_i_ge_005 && do_log && context;

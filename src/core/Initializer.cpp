@@ -1,7 +1,11 @@
 #include "Initializer.hpp"
 #include "io/TxtReader.hpp"
 #include "io/PnetcdfReader.hpp"
+#include "vvm_types.hpp"
 #include <Kokkos_Core.hpp>
+#include <algorithm>
+#include <iostream>
+#include <string>
 
 namespace VVM {
 namespace Core {
@@ -52,11 +56,11 @@ void Initializer::initialize_state() const {
 }
 
 void Initializer::initialize_grid() const {
-    double DOMAIN = 15000.;
-    double dz = config_.get_value<double>("grid.dz");
-    double dz1 = config_.get_value<double>("grid.dz1");
-    double CZ2 = (dz-dz1) / (dz * (DOMAIN-dz));
-    double CZ1 = 1. - CZ2 * DOMAIN;
+    VVM::Real DOMAIN = real(15000.);
+    VVM::Real dz = config_.get_value<VVM::Real>("grid.dz");
+    VVM::Real dz1 = config_.get_value<VVM::Real>("grid.dz1");
+    VVM::Real CZ2 = (dz-dz1) / (dz * (DOMAIN-dz));
+    VVM::Real CZ1 = real(1.) - CZ2 * DOMAIN;
 
     const int h = grid_.get_halo_cells();
     const int nz = grid_.get_local_total_points_z();
@@ -68,13 +72,13 @@ void Initializer::initialize_grid() const {
     auto z_mid_mutable_h = parameters_.z_mid.get_host_data();
     auto z_up_mutable_h = parameters_.z_up.get_host_data();
 
-    double ZB = 0.;
+    VVM::Real ZB = real(0.);
     z_up_mutable_h(h-1) = ZB;
     for (int k = h; k < nz; k++) {
         z_up_mutable_h(k) = z_up_mutable_h(k-1) + dz;
     }
     z_mid_mutable_h(h-1) = z_up_mutable_h(h-1);
-    z_mid_mutable_h(h) = z_up_mutable_h(h-1) + 0.5 * dz;
+    z_mid_mutable_h(h) = z_up_mutable_h(h-1) + real(0.5) * dz;
     for (int k = h+1; k < nz; k++) {
         z_mid_mutable_h(k) = z_mid_mutable_h(k-1) + dz;
     }
@@ -83,8 +87,8 @@ void Initializer::initialize_grid() const {
 
     Kokkos::parallel_for("Init_Z_flexZCoef", Kokkos::RangePolicy<>(h-1, nz),
         KOKKOS_LAMBDA(const int k) {
-            flex_height_coef_mid_mutable(k) = 1. / (CZ1 + 2 * CZ2 * z_mid_mutable(k));
-            flex_height_coef_up_mutable(k) = 1. / (CZ1 + 2 * CZ2 * z_up_mutable(k));
+            flex_height_coef_mid_mutable(k) = real(1.) / (CZ1 + real(2.) * CZ2 * z_mid_mutable(k));
+            flex_height_coef_up_mutable(k) = real(1.) / (CZ1 + real(2.) * CZ2 * z_up_mutable(k));
             z_mid_mutable(k) = z_mid_mutable(k) * (CZ1 + CZ2 * z_mid_mutable(k));
             z_up_mutable(k) = z_up_mutable(k) * (CZ1 + CZ2 * z_up_mutable(k));
         }
@@ -129,21 +133,21 @@ void Initializer::initialize_topo() const {
     const int ny = grid_.get_local_total_points_y();
     const int nx = grid_.get_local_total_points_x();
 
-    double local_maxtopo_h, maxtopo_h;
+    VVM::Real local_maxtopo_h, maxtopo_h;
     Kokkos::parallel_reduce("FindMax", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
-        KOKKOS_LAMBDA(const int j, const int i, double& local_max) {
+        KOKKOS_LAMBDA(const int j, const int i, VVM::Real& local_max) {
             if (topo(j, i) > local_max) {
                 local_max = topo(j, i);
             }
         },
-        Kokkos::Max<double>(local_maxtopo_h)
+        Kokkos::Max<VVM::Real>(local_maxtopo_h)
     );
 
     MPI_Allreduce(
         &local_maxtopo_h,
         &maxtopo_h,
         1,
-        MPI_DOUBLE,
+        VVM_MPI_REAL,
         MPI_MAX,
         grid_.get_comm()
     );
@@ -151,16 +155,16 @@ void Initializer::initialize_topo() const {
     parameters_.max_topo_idx = maxtopo_h;
 
     // Assign ITYPE
-    Kokkos::deep_copy(ITYPEU, 1.);
-    Kokkos::deep_copy(ITYPEV, 1.);
-    Kokkos::deep_copy(ITYPEW, 1.);
+    Kokkos::deep_copy(ITYPEU, real(1.));
+    Kokkos::deep_copy(ITYPEV, real(1.));
+    Kokkos::deep_copy(ITYPEW, real(1.));
     Kokkos::parallel_for("assign_ITYPE", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({h,h}, {ny-h,nx-h}),
         KOKKOS_LAMBDA(const int j, const int i) {
             if (topo(j, i) != 0) {
                 for (int k = 0; k <= topo(j,i); k++) {
-                    ITYPEU(k,j,i) = 0;
-                    ITYPEV(k,j,i) = 0;
-                    ITYPEW(k,j,i) = 0;
+                    ITYPEU(k,j,i) = real(0.);
+                    ITYPEV(k,j,i) = real(0);
+                    ITYPEW(k,j,i) = real(0);
                 } 
             }
         }
@@ -170,8 +174,8 @@ void Initializer::initialize_topo() const {
     Kokkos::parallel_for("assign_ITYPE", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,h,h}, {nz-h,ny-h,nx-h}),
         KOKKOS_LAMBDA(const int k, const int j, const int i) {
             if (ITYPEW(k,j,i) == 0) {
-                ITYPEU(k,j,i-1) = 0;
-                ITYPEV(k,j-1,i) = 0;
+                ITYPEU(k,j,i-1) = real(0);
+                ITYPEV(k,j-1,i) = real(0);
             }
         }
     );
@@ -217,11 +221,11 @@ void Initializer::initialize_poisson() const {
         KOKKOS_LAMBDA(const int k) {
             if (k >= h && k <= nz-h-2) {
                 AGAU(k) = -flex_height_coef_up(k) * flex_height_coef_mid(k) * rdz2() / rhobar(k);
-                BGAU(k) = (WRXMU() + 2.*rdx2() + 2.*rdy2()) / rhobar_up(k) + 
+                BGAU(k) = (WRXMU() + real(2.)*rdx2() + real(2.)*rdy2()) / rhobar_up(k) + 
                           flex_height_coef_up(k) * (flex_height_coef_mid(k+1)/rhobar(k+1)+flex_height_coef_mid(k)/rhobar(k))*rdz2();
                 CGAU(k) = -flex_height_coef_up(k) * flex_height_coef_mid(k+1) * rdz2() / rhobar(k+1);
             }
-            else AGAU(k) = BGAU(k) = CGAU(k) = -9e16;
+            else AGAU(k) = BGAU(k) = CGAU(k) = real(-9e16);
         }
     );
 
@@ -240,7 +244,7 @@ void Initializer::initialize_poisson() const {
             h_bn_new(k) = h_BGAU(k) - h_AGAU(k) * h_cn_new(k-1);
             h_cn_new(k) = h_CGAU(k) / h_bn_new(k);
         }
-        else h_bn_new(k) = h_cn_new(k) = -9e16;
+        else h_bn_new(k) = h_cn_new(k) = real(-9e16);
     }
     Kokkos::deep_copy(bn_new, h_bn_new);
     Kokkos::deep_copy(cn_new, h_cn_new);
@@ -318,11 +322,11 @@ void Initializer::assign_vars() const {
             v(k,j,i) = V(k);
         }
     );
-    Kokkos::deep_copy(w, 0.);
+    Kokkos::deep_copy(w, real(0.));
 // utop predict
 #if defined(ENABLE_NCCL)
-    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> utopmn("utopmn");
-    Kokkos::View<double, Kokkos::DefaultExecutionSpace::memory_space> vtopmn("vtopmn");
+    Kokkos::View<VVM::Real, Kokkos::DefaultExecutionSpace::memory_space> utopmn("utopmn");
+    Kokkos::View<VVM::Real, Kokkos::DefaultExecutionSpace::memory_space> vtopmn("vtopmn");
     state_.calculate_horizontal_mean(state_.get_field<3>("u"), utopmn);
     state_.calculate_horizontal_mean(state_.get_field<3>("v"), vtopmn);
     auto utopmn_view = state_.get_field<0>("utopmn").get_mutable_device_data();
@@ -356,7 +360,7 @@ void Initializer::assign_vars() const {
     auto& dpbar_mid = state_.get_field<1>("dpbar_mid").get_mutable_device_data();
     Kokkos::parallel_for("assign_pbar_up", Kokkos::RangePolicy<>(1, nz),
         KOKKOS_LAMBDA(const int k) {
-            pbar_up(k) = 0.5*(pbar(k) + pbar(k+1));
+            pbar_up(k) = real(0.5)*(pbar(k) + pbar(k+1));
         }
     );
     Kokkos::parallel_for("assign_pbar_up", Kokkos::RangePolicy<>(2, nz),
@@ -389,18 +393,41 @@ void Initializer::assign_vars() const {
     auto& lon = state_.get_field<2>("lon").get_mutable_device_data();
     auto& lat = state_.get_field<2>("lat").get_mutable_device_data();
     if (config_.get_value<bool>("grid.fix_latlon", false)) {
-        Kokkos::deep_copy(lon, 120.95);
-        Kokkos::deep_copy(lat, 23.458);
+        Kokkos::deep_copy(lon, real(120.95));
+        Kokkos::deep_copy(lat, real(23.458));
     }
 
-    double OMEGA = config_.get_value<double>("constants.OMEGA", 7.292e-5);
-    double PI = config_.get_value<double>("constants.PI", 3.14159265);
+    // TODO: This is tcvvm setting. It needs to be user friendly.
+    VVM::Real OMEGA = config_.get_value<VVM::Real>("constants.OMEGA", real(7.292e-5));
+    VVM::Real PI = config_.get_value<VVM::Real>("constants.PI", real(3.14159265));
     auto& f = state_.get_field<1>("f").get_mutable_device_data();
-    Kokkos::parallel_for("Init_Coriolis", Kokkos::RangePolicy<>(0, ny),
-        KOKKOS_LAMBDA(const int j) {
-            f(j) = 2. * OMEGA * Kokkos::sin(lat(j, 0) * PI / 180.);
+    auto& f_2d = state_.get_field<2>("f_2d").get_mutable_device_data();
+    const int global_start_j = grid_.get_local_physical_start_y();
+    const auto& dy = parameters_.dy;
+    Kokkos::parallel_for("Init_Coriolis", 
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {ny, nx}),
+        KOKKOS_LAMBDA(const int j, const int i) {
+            const int global_j = global_start_j + j;
+            f(j) = real(2.) * OMEGA * Kokkos::sin((global_j - real(1540.)/real(2.) - real(0.5))*dy()/real(6.37e6));
+            f_2d(j,i) = real(2.) * OMEGA * Kokkos::sin((global_j - real(1540.)/real(2.) - real(0.5))*dy()/real(6.37e6));
         }
     );
+    halo_exchanger_.exchange_halos(state_.get_field<2>("f_2d"));
+
+    // Assign Tg
+    const auto& topo = state_.get_field<2>("topo").get_device_data();
+    const auto& pibar = state_.get_field<1>("pibar").get_device_data();
+    auto& Tg = state_.get_field<2>("Tg").get_mutable_device_data();
+
+    Kokkos::parallel_for("Init_Tg", 
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {ny, nx}),
+        KOKKOS_LAMBDA(const int j, const int i) {
+            // NOTE: Fortran VVM uses hx rather than hxp here
+            int hx = topo(j, i);
+            Tg(j, i) = th(hx, j, i) * pibar(hx);
+        }
+    );
+    halo_exchanger_.exchange_halos(state_.get_field<2>("Tg"));
     return;
 }
 
@@ -416,7 +443,7 @@ void Initializer::initialize_perturbation() const {
     const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
     const int nx = grid_.get_local_total_points_x();
-    double PI = config_.get_value<double>("constants.PI");
+    VVM::Real PI = config_.get_value<VVM::Real>("constants.PI");
 
     auto& th = state_.get_field<3>("th").get_mutable_device_data();
     auto& xi = state_.get_field<3>("xi").get_mutable_device_data();
@@ -433,24 +460,24 @@ void Initializer::initialize_perturbation() const {
         auto& rhobar_up = state_.get_field<1>("rhobar_up").get_mutable_device_data();
 
         if (test_mode == "advection_w") {
-            Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), th, 300.);
-            Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), rhobar, 1.);
-            Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), rhobar_up, 1.);
+            Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), th, real(300.));
+            Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), rhobar, real(1.));
+            Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), rhobar_up, real(1.));
         }
 
         Kokkos::parallel_for("test_init", 
             Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, ny, nx}),
             KOKKOS_LAMBDA(int k, int j, int i) {
                 if (k == h+16 && (h+3 <= j && h+11 >= j) && (h+3 <= i && h+11 >= i)) {
-                    th(k,j,i) += 50;
-                    xi(k,j,i) += 50;
-                    eta(k,j,i) += 50;
-                    zeta(nz-h-1,j,i) += 50;
+                    th(k,j,i) += real(50.);
+                    xi(k,j,i) += real(50.);
+                    eta(k,j,i) += real(50.);
+                    zeta(nz-h-1,j,i) += real(50.);
                 }
         });
-        if (test_mode == "advection_u") Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), u, 10.);
-        else if (test_mode == "advection_v") Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), v, 10.);
-        else if (test_mode == "advection_w") Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), w, 10.);
+        if (test_mode == "advection_u") Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), u, real(10.));
+        else if (test_mode == "advection_v") Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), v, real(10.));
+        else if (test_mode == "advection_w") Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), w, real(10.));
         else if (test_mode == "stretching") {
             Kokkos::parallel_for("test_wind_init", 
                 Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz, ny, nx}),
@@ -458,9 +485,9 @@ void Initializer::initialize_perturbation() const {
                     const int global_j = global_start_j + j;
                     const int global_i = global_start_i + i;
 
-                    u(k,j,i) = 32./2. - global_i - 1;
-                    v(k,j,i) = 32./2. - global_j - 1;
-                    w(k,j,i) = -(32./2. - k - 1);
+                    u(k,j,i) = real(32.)/real(2.) - global_i - real(1.);
+                    v(k,j,i) = real(32.)/real(2.) - global_j - real(1.);
+                    w(k,j,i) = -(real(32.)/real(2.) - k - real(1.));
             });
         }
         else if (test_mode == "twisting") {
@@ -471,13 +498,13 @@ void Initializer::initialize_perturbation() const {
                     const int global_i = global_start_i + i; 
 
                     if (k == nz-h-1 && (h+3 <= j && h+11 >= j) && (h+3 <= i && h+11 >= i)) {
-                        xi(k,j,i) += 50.;
-                        eta(k,j,i) += 50.;
+                        xi(k,j,i) += real(50.);
+                        eta(k,j,i) += real(50.);
                     }
 
-                    u(k,j,i) = -0.2*(32./2. - global_j - 1.);
-                    v(k,j,i) = -0.2*(32./2. - global_i - 1.);
-                    w(k,j,i) = 0.2*(32./2. - global_i - 1.);
+                    u(k,j,i) = -real(0.2)*(real(32.)/real(2.) - global_j - real(1.));
+                    v(k,j,i) = -real(0.2)*(real(32.)/real(2.) - global_i - real(1.));
+                    w(k,j,i) = real(0.2)*(real(32.)/real(2.) - global_i - real(1.));
                 }
             );
         }
@@ -487,12 +514,12 @@ void Initializer::initialize_perturbation() const {
             KOKKOS_LAMBDA(int k, int j, int i) {
                 const int global_i = global_start_i + i;
 
-                double radius_norm = std::sqrt(
-                                      std::pow(((global_i + 1) - (int) (nx/2)) * dx() / 1000., 2) +
-                                      std::pow((z_mid(k) - 5000.) / 1000., 2)
+                VVM::Real radius_norm = Kokkos::sqrt(
+                                      Kokkos::pow(((global_i + 1) - (int) (nx/2)) * dx() / real(1000.), 2) +
+                                      Kokkos::pow((z_mid(k) - real(5000.)) / real(1000.), 2)
                                      );
-                if (radius_norm <= 1) {
-                    th(k, j, i) += 10. * (std::cos(PI * 0.5 * radius_norm));
+                if (radius_norm <= real(1.)) {
+                    th(k, j, i) += real(10.) * (Kokkos::cos(PI * real(0.5) * radius_norm));
                 }
             }
         );
@@ -503,21 +530,21 @@ void Initializer::initialize_perturbation() const {
                 const int global_i = global_start_i + i;
                 const int global_j = global_start_j + j;
 
-                double radius_norm = std::sqrt(
-                                      std::pow(((global_i + 1) - (int) (nx/2)) * dx() / 1000., 2) +
-                                      std::pow(((global_j + 1) - (int) (ny/2)) * dy() / 1000., 2) +
-                                      std::pow((z_mid(k) - 5000.) / 1000., 2)
+                VVM::Real radius_norm = Kokkos::sqrt(
+                                      Kokkos::pow(((global_i + 1) - (int) (nx/2)) * dx() / real(1000.), 2) +
+                                      Kokkos::pow(((global_j + 1) - (int) (ny/2)) * dy() / real(1000.), 2) +
+                                      Kokkos::pow((z_mid(k) - real(5000.)) / real(1000.), 2)
                                      );
-                if (radius_norm <= 1) {
-                    th(k, j, i) += 5. * (std::cos(PI * 0.5 * radius_norm));
+                if (radius_norm <= real(1.)) {
+                    th(k, j, i) += real(5.) * (Kokkos::cos(PI * real(0.5) * radius_norm));
                 }
             }
         );
     }
     else if (test_mode == "topo") {
         auto& utopmn = state_.get_field<0>("utopmn").get_mutable_device_data();
-        Kokkos::deep_copy(u, 10.);
-        Kokkos::deep_copy(utopmn, 10.);
+        Kokkos::deep_copy(u, real(10.));
+        Kokkos::deep_copy(utopmn, real(10.));
         
     }
 
@@ -527,12 +554,12 @@ void Initializer::initialize_perturbation() const {
             KOKKOS_LAMBDA(int k, int j, int i) {
                 const int global_i = global_start_i + i;
 
-                double radius_norm = std::sqrt(
-                                      std::pow(((global_i + 1) - (int) (nx/2)) * dx() / 2000., 2) +
-                                      std::pow((z_mid(k) - 3000.) / 2000., 2)
+                VVM::Real radius_norm = Kokkos::sqrt(
+                                      Kokkos::pow(((global_i + 1) - (int) (nx/2)) * dx() / real(2000.), 2) +
+                                      Kokkos::pow((z_mid(k) - real(3000.)) / real(2000.), 2)
                                      );
-                if (radius_norm <= 1) {
-                    th(k, j, i) += 5. * (std::cos(PI * 0.5 * radius_norm));
+                if (radius_norm <= real(1.)) {
+                    th(k, j, i) += real(5.) * (Kokkos::cos(PI * real(0.5) * radius_norm));
                 }
             }
         );
@@ -543,13 +570,13 @@ void Initializer::initialize_perturbation() const {
                 const int global_j = global_start_j + j;
                 const int global_i = global_start_i + i;
 
-                double radius_norm = std::sqrt(
-                                      std::pow(((global_i + 1) - (int) (nx/2)) * dx() / 2000., 2) +
-                                      std::pow(((global_j + 1) - (int) (ny/2)) * dy() / 2000., 2) +
-                                      std::pow((z_mid(k) - 3000.) / 2000., 2)
+                VVM::Real radius_norm = Kokkos::sqrt(
+                                      Kokkos::pow(((global_i + 1) - (int) (nx/2)) * dx() / real(2000.), 2) +
+                                      Kokkos::pow(((global_j + 1) - (int) (ny/2)) * dy() / real(2000.), 2) +
+                                      Kokkos::pow((z_mid(k) - real(3000.)) / real(2000.), 2)
                                      );
-                if (radius_norm <= 1) {
-                    th(k, j, i) += 5. * (std::cos(PI * 0.5 * radius_norm));
+                if (radius_norm <= real(1.)) {
+                    th(k, j, i) += real(5.) * (Kokkos::cos(PI * real(0.5) * radius_norm));
                 }
             }
         );

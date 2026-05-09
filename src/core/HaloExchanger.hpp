@@ -1,6 +1,7 @@
 #include "Grid.hpp"
 #include "Field.hpp"
 #include "State.hpp"
+#include "vvm_types.hpp"
 #include <algorithm>
 #include <vector>
 #include <Kokkos_Core.hpp>
@@ -76,10 +77,10 @@ private:
 
     std::map<std::string, cudaGraphExec_t> graph_map_;
 
-    mutable Kokkos::View<double*, ExecSpace> send_x_left_, recv_x_left_;
-    mutable Kokkos::View<double*, ExecSpace> send_x_right_, recv_x_right_;
-    mutable Kokkos::View<double*, ExecSpace> send_y_bottom_, recv_y_bottom_;
-    mutable Kokkos::View<double*, ExecSpace> send_y_top_, recv_y_top_;
+    mutable Kokkos::View<VVM::Real*, ExecSpace> send_x_left_, recv_x_left_;
+    mutable Kokkos::View<VVM::Real*, ExecSpace> send_x_right_, recv_x_right_;
+    mutable Kokkos::View<VVM::Real*, ExecSpace> send_y_bottom_, recv_y_bottom_;
+    mutable Kokkos::View<VVM::Real*, ExecSpace> send_y_top_, recv_y_top_;
 
     size_t buffer_size_x_2d_, buffer_size_y_2d_;
     size_t buffer_size_x_3d_, buffer_size_y_3d_;
@@ -158,16 +159,16 @@ inline HaloExchanger::HaloExchanger(const Utils::ConfigurationManager& config, c
         size_t max_y = std::max({buffer_size_y_2d_, buffer_size_y_3d_, buffer_size_y_4d_, buffer_size_slice_y_});
 
         if (max_x > 0) {
-            send_x_left_  = Kokkos::View<double*, ExecSpace>("sxl", max_x);
-            recv_x_left_  = Kokkos::View<double*, ExecSpace>("rxl", max_x);
-            send_x_right_ = Kokkos::View<double*, ExecSpace>("sxr", max_x);
-            recv_x_right_ = Kokkos::View<double*, ExecSpace>("rxr", max_x);
+            send_x_left_  = Kokkos::View<VVM::Real*, ExecSpace>("sxl", max_x);
+            recv_x_left_  = Kokkos::View<VVM::Real*, ExecSpace>("rxl", max_x);
+            send_x_right_ = Kokkos::View<VVM::Real*, ExecSpace>("sxr", max_x);
+            recv_x_right_ = Kokkos::View<VVM::Real*, ExecSpace>("rxr", max_x);
         }
         if (max_y > 0) {
-            send_y_bottom_ = Kokkos::View<double*, ExecSpace>("syb", max_y);
-            recv_y_bottom_ = Kokkos::View<double*, ExecSpace>("ryb", max_y);
-            send_y_top_    = Kokkos::View<double*, ExecSpace>("syt", max_y);
-            recv_y_top_    = Kokkos::View<double*, ExecSpace>("ryt", max_y);
+            send_y_bottom_ = Kokkos::View<VVM::Real*, ExecSpace>("syb", max_y);
+            recv_y_bottom_ = Kokkos::View<VVM::Real*, ExecSpace>("ryb", max_y);
+            send_y_top_    = Kokkos::View<VVM::Real*, ExecSpace>("syt", max_y);
+            recv_y_top_    = Kokkos::View<VVM::Real*, ExecSpace>("ryt", max_y);
         }
     }
 }
@@ -232,10 +233,10 @@ inline void HaloExchanger::exchange_multiple_halos(const std::vector<std::string
             Kokkos::deep_copy(exec_space_, Kokkos::subview(recv_x_right_, std::make_pair((size_t)0, count_x_total)), Kokkos::subview(send_x_left_, std::make_pair((size_t)0, count_x_total)));
         } else {
             ncclGroupStart();
-            if(neighbor_right != MPI_PROC_NULL) ncclSend(send_x_right_.data(), count_x_total, ncclDouble, neighbor_right, nccl_comm_, stream_);
-            if(neighbor_left != MPI_PROC_NULL) ncclRecv(recv_x_left_.data(), count_x_total, ncclDouble, neighbor_left, nccl_comm_, stream_);
-            if(neighbor_left != MPI_PROC_NULL) ncclSend(send_x_left_.data(), count_x_total, ncclDouble, neighbor_left, nccl_comm_, stream_);
-            if(neighbor_right != MPI_PROC_NULL) ncclRecv(recv_x_right_.data(), count_x_total, ncclDouble, neighbor_right, nccl_comm_, stream_);
+            if(neighbor_right != MPI_PROC_NULL) ncclSend(send_x_right_.data(), count_x_total, VVM_NCCL_REAL, neighbor_right, nccl_comm_, stream_);
+            if(neighbor_left != MPI_PROC_NULL) ncclRecv(recv_x_left_.data(), count_x_total, VVM_NCCL_REAL, neighbor_left, nccl_comm_, stream_);
+            if(neighbor_left != MPI_PROC_NULL) ncclSend(send_x_left_.data(), count_x_total, VVM_NCCL_REAL, neighbor_left, nccl_comm_, stream_);
+            if(neighbor_right != MPI_PROC_NULL) ncclRecv(recv_x_right_.data(), count_x_total, VVM_NCCL_REAL, neighbor_right, nccl_comm_, stream_);
             ncclGroupEnd();
         }
 
@@ -274,10 +275,10 @@ inline void HaloExchanger::exchange_multiple_halos(const std::vector<std::string
             Kokkos::deep_copy(exec_space_, Kokkos::subview(recv_y_top_, std::make_pair((size_t)0, count_y_total)), Kokkos::subview(send_y_bottom_, std::make_pair((size_t)0, count_y_total)));
         } else {
             ncclGroupStart();
-            if(neighbor_top != MPI_PROC_NULL) ncclSend(send_y_top_.data(), count_y_total, ncclDouble, neighbor_top, nccl_comm_, stream_);
-            if(neighbor_bottom != MPI_PROC_NULL) ncclRecv(recv_y_bottom_.data(), count_y_total, ncclDouble, neighbor_bottom, nccl_comm_, stream_);
-            if(neighbor_bottom != MPI_PROC_NULL) ncclSend(send_y_bottom_.data(), count_y_total, ncclDouble, neighbor_bottom, nccl_comm_, stream_);
-            if(neighbor_top != MPI_PROC_NULL) ncclRecv(recv_y_top_.data(), count_y_total, ncclDouble, neighbor_top, nccl_comm_, stream_);
+            if(neighbor_top != MPI_PROC_NULL) ncclSend(send_y_top_.data(), count_y_total, VVM_NCCL_REAL, neighbor_top, nccl_comm_, stream_);
+            if(neighbor_bottom != MPI_PROC_NULL) ncclRecv(recv_y_bottom_.data(), count_y_total, VVM_NCCL_REAL, neighbor_bottom, nccl_comm_, stream_);
+            if(neighbor_bottom != MPI_PROC_NULL) ncclSend(send_y_bottom_.data(), count_y_total, VVM_NCCL_REAL, neighbor_bottom, nccl_comm_, stream_);
+            if(neighbor_top != MPI_PROC_NULL) ncclRecv(recv_y_top_.data(), count_y_total, VVM_NCCL_REAL, neighbor_top, nccl_comm_, stream_);
             ncclGroupEnd();
         }
 
@@ -489,14 +490,14 @@ void HaloExchanger::exchange_halos_impl(Field<Dim>& field, int depth) const {
             // NCCL Communication
             ncclGroupStart();
             if(neighbor_right != MPI_PROC_NULL) 
-                ncclSend(send_r.data(), count_x, ncclDouble, neighbor_right, nccl_comm_, stream_);
+                ncclSend(send_r.data(), count_x, VVM_NCCL_REAL, neighbor_right, nccl_comm_, stream_);
             if(neighbor_left != MPI_PROC_NULL) 
-                ncclRecv(recv_l.data(), count_x, ncclDouble, neighbor_left, nccl_comm_, stream_);
+                ncclRecv(recv_l.data(), count_x, VVM_NCCL_REAL, neighbor_left, nccl_comm_, stream_);
 
             if(neighbor_left != MPI_PROC_NULL) 
-                ncclSend(send_l.data(), count_x, ncclDouble, neighbor_left, nccl_comm_, stream_);
+                ncclSend(send_l.data(), count_x, VVM_NCCL_REAL, neighbor_left, nccl_comm_, stream_);
             if(neighbor_right != MPI_PROC_NULL) 
-                ncclRecv(recv_r.data(), count_x, ncclDouble, neighbor_right, nccl_comm_, stream_);
+                ncclRecv(recv_r.data(), count_x, VVM_NCCL_REAL, neighbor_right, nccl_comm_, stream_);
             ncclGroupEnd();
         }
 
@@ -577,14 +578,14 @@ void HaloExchanger::exchange_halos_impl(Field<Dim>& field, int depth) const {
             // NCCL
             ncclGroupStart();
             if(neighbor_top != MPI_PROC_NULL) 
-                ncclSend(send_t.data(), count_y, ncclDouble, neighbor_top, nccl_comm_, stream_);
+                ncclSend(send_t.data(), count_y, VVM_NCCL_REAL, neighbor_top, nccl_comm_, stream_);
             if(neighbor_bottom != MPI_PROC_NULL) 
-                ncclRecv(recv_b.data(), count_y, ncclDouble, neighbor_bottom, nccl_comm_, stream_);
+                ncclRecv(recv_b.data(), count_y, VVM_NCCL_REAL, neighbor_bottom, nccl_comm_, stream_);
 
             if(neighbor_bottom != MPI_PROC_NULL) 
-                ncclSend(send_b.data(), count_y, ncclDouble, neighbor_bottom, nccl_comm_, stream_);
+                ncclSend(send_b.data(), count_y, VVM_NCCL_REAL, neighbor_bottom, nccl_comm_, stream_);
             if(neighbor_top != MPI_PROC_NULL) 
-                ncclRecv(recv_t.data(), count_y, ncclDouble, neighbor_top, nccl_comm_, stream_);
+                ncclRecv(recv_t.data(), count_y, VVM_NCCL_REAL, neighbor_top, nccl_comm_, stream_);
             ncclGroupEnd();
         }
 
@@ -662,10 +663,10 @@ inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) co
             });
 
             ncclGroupStart();
-            if(neighbor_top != MPI_PROC_NULL) ncclSend(send_t.data(), count, ncclDouble, neighbor_top, nccl_comm_, stream_);
-            if(neighbor_bottom != MPI_PROC_NULL) ncclRecv(recv_b.data(), count, ncclDouble, neighbor_bottom, nccl_comm_, stream_);
-            if(neighbor_bottom != MPI_PROC_NULL) ncclSend(send_b.data(), count, ncclDouble, neighbor_bottom, nccl_comm_, stream_);
-            if(neighbor_top != MPI_PROC_NULL) ncclRecv(recv_t.data(), count, ncclDouble, neighbor_top, nccl_comm_, stream_);
+            if(neighbor_top != MPI_PROC_NULL) ncclSend(send_t.data(), count, VVM_NCCL_REAL, neighbor_top, nccl_comm_, stream_);
+            if(neighbor_bottom != MPI_PROC_NULL) ncclRecv(recv_b.data(), count, VVM_NCCL_REAL, neighbor_bottom, nccl_comm_, stream_);
+            if(neighbor_bottom != MPI_PROC_NULL) ncclSend(send_b.data(), count, VVM_NCCL_REAL, neighbor_bottom, nccl_comm_, stream_);
+            if(neighbor_top != MPI_PROC_NULL) ncclRecv(recv_t.data(), count, VVM_NCCL_REAL, neighbor_top, nccl_comm_, stream_);
             ncclGroupEnd();
 
             Kokkos::parallel_for("unpack_y_slice", Kokkos::MDRangePolicy<Kokkos::Rank<2>, ExecSpace>(exec_space_, {0, 0}, {nx, h}),
@@ -694,10 +695,10 @@ inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) co
             });
 
             ncclGroupStart();
-            if(neighbor_right != MPI_PROC_NULL) ncclSend(send_r.data(), count, ncclDouble, neighbor_right, nccl_comm_, stream_);
-            if(neighbor_left != MPI_PROC_NULL) ncclRecv(recv_l.data(), count, ncclDouble, neighbor_left, nccl_comm_, stream_);
-            if(neighbor_left != MPI_PROC_NULL) ncclSend(send_l.data(), count, ncclDouble, neighbor_left, nccl_comm_, stream_);
-            if(neighbor_right != MPI_PROC_NULL) ncclRecv(recv_r.data(), count, ncclDouble, neighbor_right, nccl_comm_, stream_);
+            if(neighbor_right != MPI_PROC_NULL) ncclSend(send_r.data(), count, VVM_NCCL_REAL, neighbor_right, nccl_comm_, stream_);
+            if(neighbor_left != MPI_PROC_NULL) ncclRecv(recv_l.data(), count, VVM_NCCL_REAL, neighbor_left, nccl_comm_, stream_);
+            if(neighbor_left != MPI_PROC_NULL) ncclSend(send_l.data(), count, VVM_NCCL_REAL, neighbor_left, nccl_comm_, stream_);
+            if(neighbor_right != MPI_PROC_NULL) ncclRecv(recv_r.data(), count, VVM_NCCL_REAL, neighbor_right, nccl_comm_, stream_);
             ncclGroupEnd();
 
             Kokkos::parallel_for("unpack_x_slice", Kokkos::MDRangePolicy<Kokkos::Rank<2>, ExecSpace>(exec_space_, {0, 0}, {ny, h}),
@@ -789,15 +790,15 @@ private:
     int neighbor_left_, neighbor_right_;
     int neighbor_bottom_, neighbor_top_;
 
-    mutable Kokkos::View<double*> send_x_left_, recv_x_left_;
-    mutable Kokkos::View<double*> send_x_right_, recv_x_right_;
-    mutable Kokkos::View<double*> send_y_bottom_, recv_y_bottom_;
-    mutable Kokkos::View<double*> send_y_top_, recv_y_top_;
+    mutable Kokkos::View<VVM::Real*> send_x_left_, recv_x_left_;
+    mutable Kokkos::View<VVM::Real*> send_x_right_, recv_x_right_;
+    mutable Kokkos::View<VVM::Real*> send_y_bottom_, recv_y_bottom_;
+    mutable Kokkos::View<VVM::Real*> send_y_top_, recv_y_top_;
 
-    // mutable Kokkos::View<double*>::HostMirror send_x_left_h_, recv_x_left_h_;
-    // mutable Kokkos::View<double*>::HostMirror send_x_right_h_, recv_x_right_h_;
-    // mutable Kokkos::View<double*>::HostMirror send_y_bottom_h_, recv_y_bottom_h_;
-    // mutable Kokkos::View<double*>::HostMirror send_y_top_h_, recv_y_top_h_;
+    // mutable Kokkos::View<VVM::Real*>::HostMirror send_x_left_h_, recv_x_left_h_;
+    // mutable Kokkos::View<VVM::Real*>::HostMirror send_x_right_h_, recv_x_right_h_;
+    // mutable Kokkos::View<VVM::Real*>::HostMirror send_y_bottom_h_, recv_y_bottom_h_;
+    // mutable Kokkos::View<VVM::Real*>::HostMirror send_y_top_h_, recv_y_top_h_;
 
     size_t buffer_size_x_2d_, buffer_size_y_2d_;
     size_t buffer_size_x_3d_, buffer_size_y_3d_;
@@ -840,10 +841,10 @@ inline HaloExchanger::HaloExchanger(const Grid& grid)
         size_t max_buffer_size_y = std::max({buffer_size_y_2d_, buffer_size_y_3d_, buffer_size_y_4d_, buffer_size_slice_y_});
 
         if (max_buffer_size_x > 0) {
-            send_x_left_  = Kokkos::View<double*>("send_x_left_buf", max_buffer_size_x);
-            recv_x_left_  = Kokkos::View<double*>("recv_x_left_buf", max_buffer_size_x);
-            send_x_right_ = Kokkos::View<double*>("send_x_right_buf", max_buffer_size_x);
-            recv_x_right_ = Kokkos::View<double*>("recv_x_right_buf", max_buffer_size_x);
+            send_x_left_  = Kokkos::View<VVM::Real*>("send_x_left_buf", max_buffer_size_x);
+            recv_x_left_  = Kokkos::View<VVM::Real*>("recv_x_left_buf", max_buffer_size_x);
+            send_x_right_ = Kokkos::View<VVM::Real*>("send_x_right_buf", max_buffer_size_x);
+            recv_x_right_ = Kokkos::View<VVM::Real*>("recv_x_right_buf", max_buffer_size_x);
 
             // send_x_left_h_  = Kokkos::create_mirror_view(send_x_left_);
             // recv_x_left_h_  = Kokkos::create_mirror_view(recv_x_left_);
@@ -851,10 +852,10 @@ inline HaloExchanger::HaloExchanger(const Grid& grid)
             // recv_x_right_h_ = Kokkos::create_mirror_view(recv_x_right_);
         }
         if (max_buffer_size_y > 0) {
-            send_y_bottom_ = Kokkos::View<double*>("send_y_bottom_buf", max_buffer_size_y);
-            recv_y_bottom_ = Kokkos::View<double*>("recv_y_bottom_buf", max_buffer_size_y);
-            send_y_top_    = Kokkos::View<double*>("send_y_top_buf", max_buffer_size_y);
-            recv_y_top_    = Kokkos::View<double*>("recv_y_top_buf", max_buffer_size_y);
+            send_y_bottom_ = Kokkos::View<VVM::Real*>("send_y_bottom_buf", max_buffer_size_y);
+            recv_y_bottom_ = Kokkos::View<VVM::Real*>("recv_y_bottom_buf", max_buffer_size_y);
+            send_y_top_    = Kokkos::View<VVM::Real*>("send_y_top_buf", max_buffer_size_y);
+            recv_y_top_    = Kokkos::View<VVM::Real*>("recv_y_top_buf", max_buffer_size_y);
 
             // send_y_bottom_h_ = Kokkos::create_mirror_view(send_y_bottom_);
             // recv_y_bottom_h_ = Kokkos::create_mirror_view(recv_y_bottom_);
@@ -943,15 +944,15 @@ HaloExchangeRequests HaloExchanger::post_exchange_halo_x(Field<Dim>& field, int 
     HaloExchangeRequests req_obj;
     req_obj.requests.resize(4);
 
-    if(neighbor_right_ != MPI_PROC_NULL) MPI_Irecv(recv_r.data(), count, MPI_DOUBLE, neighbor_right_, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT), cart_comm_, &req_obj.requests[req_obj.count++]);
-    if(neighbor_left_  != MPI_PROC_NULL) MPI_Irecv(recv_l.data(), count, MPI_DOUBLE, neighbor_left_, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT), cart_comm_, &req_obj.requests[req_obj.count++]);
-    if(neighbor_left_  != MPI_PROC_NULL) MPI_Isend(send_l.data(), count, MPI_DOUBLE, neighbor_left_, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT), cart_comm_, &req_obj.requests[req_obj.count++]);
-    if(neighbor_right_ != MPI_PROC_NULL) MPI_Isend(send_r.data(), count, MPI_DOUBLE, neighbor_right_, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT), cart_comm_, &req_obj.requests[req_obj.count++]);
+    if(neighbor_right_ != MPI_PROC_NULL) MPI_Irecv(recv_r.data(), count, VVM_MPI_REAL, neighbor_right_, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT), cart_comm_, &req_obj.requests[req_obj.count++]);
+    if(neighbor_left_  != MPI_PROC_NULL) MPI_Irecv(recv_l.data(), count, VVM_MPI_REAL, neighbor_left_, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT), cart_comm_, &req_obj.requests[req_obj.count++]);
+    if(neighbor_left_  != MPI_PROC_NULL) MPI_Isend(send_l.data(), count, VVM_MPI_REAL, neighbor_left_, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT), cart_comm_, &req_obj.requests[req_obj.count++]);
+    if(neighbor_right_ != MPI_PROC_NULL) MPI_Isend(send_r.data(), count, VVM_MPI_REAL, neighbor_right_, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT), cart_comm_, &req_obj.requests[req_obj.count++]);
 
-    // if(neighbor_right_ != MPI_PROC_NULL) MPI_Irecv(recv_r_h.data(), count, MPI_DOUBLE, neighbor_right_, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT), cart_comm_, &req_obj.requests[req_obj.count++]);
-    // if(neighbor_left_  != MPI_PROC_NULL) MPI_Irecv(recv_l_h.data(), count, MPI_DOUBLE, neighbor_left_, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT), cart_comm_, &req_obj.requests[req_obj.count++]);
-    // if(neighbor_left_  != MPI_PROC_NULL) MPI_Isend(send_l_h.data(), count, MPI_DOUBLE, neighbor_left_, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT), cart_comm_, &req_obj.requests[req_obj.count++]);
-    // if(neighbor_right_ != MPI_PROC_NULL) MPI_Isend(send_r_h.data(), count, MPI_DOUBLE, neighbor_right_, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT), cart_comm_, &req_obj.requests[req_obj.count++]);
+    // if(neighbor_right_ != MPI_PROC_NULL) MPI_Irecv(recv_r_h.data(), count, VVM_MPI_REAL, neighbor_right_, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT), cart_comm_, &req_obj.requests[req_obj.count++]);
+    // if(neighbor_left_  != MPI_PROC_NULL) MPI_Irecv(recv_l_h.data(), count, VVM_MPI_REAL, neighbor_left_, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT), cart_comm_, &req_obj.requests[req_obj.count++]);
+    // if(neighbor_left_  != MPI_PROC_NULL) MPI_Isend(send_l_h.data(), count, VVM_MPI_REAL, neighbor_left_, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT), cart_comm_, &req_obj.requests[req_obj.count++]);
+    // if(neighbor_right_ != MPI_PROC_NULL) MPI_Isend(send_r_h.data(), count, VVM_MPI_REAL, neighbor_right_, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT), cart_comm_, &req_obj.requests[req_obj.count++]);
 
     return req_obj;
 }
@@ -1087,15 +1088,15 @@ HaloExchangeRequests HaloExchanger::post_exchange_halo_y(Field<Dim>& field, int 
     HaloExchangeRequests req_obj;
     req_obj.requests.resize(4);
     
-    if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Irecv(recv_b.data(), count, MPI_DOUBLE, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SEND_TO_TOP), cart_comm_, &req_obj.requests[req_obj.count++]);
-    if(neighbor_top_    != MPI_PROC_NULL) MPI_Irecv(recv_t.data(), count, MPI_DOUBLE, neighbor_top_, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM), cart_comm_, &req_obj.requests[req_obj.count++]);
-    if(neighbor_top_    != MPI_PROC_NULL) MPI_Isend(send_t.data(), count, MPI_DOUBLE, neighbor_top_, static_cast<int>(HaloExchangeTags::SEND_TO_TOP), cart_comm_, &req_obj.requests[req_obj.count++]);
-    if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Isend(send_b.data(), count, MPI_DOUBLE, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM), cart_comm_, &req_obj.requests[req_obj.count++]);
+    if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Irecv(recv_b.data(), count, VVM_MPI_REAL, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SEND_TO_TOP), cart_comm_, &req_obj.requests[req_obj.count++]);
+    if(neighbor_top_    != MPI_PROC_NULL) MPI_Irecv(recv_t.data(), count, VVM_MPI_REAL, neighbor_top_, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM), cart_comm_, &req_obj.requests[req_obj.count++]);
+    if(neighbor_top_    != MPI_PROC_NULL) MPI_Isend(send_t.data(), count, VVM_MPI_REAL, neighbor_top_, static_cast<int>(HaloExchangeTags::SEND_TO_TOP), cart_comm_, &req_obj.requests[req_obj.count++]);
+    if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Isend(send_b.data(), count, VVM_MPI_REAL, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM), cart_comm_, &req_obj.requests[req_obj.count++]);
 
-    // if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Irecv(recv_b_h.data(), count, MPI_DOUBLE, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SEND_TO_TOP), cart_comm_, &req_obj.requests[req_obj.count++]);
-    // if(neighbor_top_    != MPI_PROC_NULL) MPI_Irecv(recv_t_h.data(), count, MPI_DOUBLE, neighbor_top_, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM), cart_comm_, &req_obj.requests[req_obj.count++]);
-    // if(neighbor_top_    != MPI_PROC_NULL) MPI_Isend(send_t_h.data(), count, MPI_DOUBLE, neighbor_top_, static_cast<int>(HaloExchangeTags::SEND_TO_TOP), cart_comm_, &req_obj.requests[req_obj.count++]);
-    // if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Isend(send_b_h.data(), count, MPI_DOUBLE, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM), cart_comm_, &req_obj.requests[req_obj.count++]);
+    // if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Irecv(recv_b_h.data(), count, VVM_MPI_REAL, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SEND_TO_TOP), cart_comm_, &req_obj.requests[req_obj.count++]);
+    // if(neighbor_top_    != MPI_PROC_NULL) MPI_Irecv(recv_t_h.data(), count, VVM_MPI_REAL, neighbor_top_, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM), cart_comm_, &req_obj.requests[req_obj.count++]);
+    // if(neighbor_top_    != MPI_PROC_NULL) MPI_Isend(send_t_h.data(), count, VVM_MPI_REAL, neighbor_top_, static_cast<int>(HaloExchangeTags::SEND_TO_TOP), cart_comm_, &req_obj.requests[req_obj.count++]);
+    // if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Isend(send_b_h.data(), count, VVM_MPI_REAL, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM), cart_comm_, &req_obj.requests[req_obj.count++]);
 
     return req_obj;
 }
@@ -1219,10 +1220,10 @@ inline void HaloExchanger::exchange_multiple_halos(const std::vector<std::string
         auto send_l = Kokkos::subview(send_x_left_, std::make_pair((size_t)0, count_x_total));
         auto send_r = Kokkos::subview(send_x_right_, std::make_pair((size_t)0, count_x_total));
 
-        if(neighbor_right != MPI_PROC_NULL) MPI_Irecv(recv_r.data(), count_x_total, MPI_DOUBLE, neighbor_right, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT), cart_comm_, &req_obj.requests[req_obj.count++]);
-        if(neighbor_left  != MPI_PROC_NULL) MPI_Irecv(recv_l.data(), count_x_total, MPI_DOUBLE, neighbor_left, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT), cart_comm_, &req_obj.requests[req_obj.count++]);
-        if(neighbor_left  != MPI_PROC_NULL) MPI_Isend(send_l.data(), count_x_total, MPI_DOUBLE, neighbor_left, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT), cart_comm_, &req_obj.requests[req_obj.count++]);
-        if(neighbor_right != MPI_PROC_NULL) MPI_Isend(send_r.data(), count_x_total, MPI_DOUBLE, neighbor_right, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT), cart_comm_, &req_obj.requests[req_obj.count++]);
+        if(neighbor_right != MPI_PROC_NULL) MPI_Irecv(recv_r.data(), count_x_total, VVM::RealUBLE, neighbor_right, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT), cart_comm_, &req_obj.requests[req_obj.count++]);
+        if(neighbor_left  != MPI_PROC_NULL) MPI_Irecv(recv_l.data(), count_x_total, VVM::RealUBLE, neighbor_left, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT), cart_comm_, &req_obj.requests[req_obj.count++]);
+        if(neighbor_left  != MPI_PROC_NULL) MPI_Isend(send_l.data(), count_x_total, VVM::RealUBLE, neighbor_left, static_cast<int>(HaloExchangeTags::SEND_TO_LEFT), cart_comm_, &req_obj.requests[req_obj.count++]);
+        if(neighbor_right != MPI_PROC_NULL) MPI_Isend(send_r.data(), count_x_total, VVM::RealUBLE, neighbor_right, static_cast<int>(HaloExchangeTags::SEND_TO_RIGHT), cart_comm_, &req_obj.requests[req_obj.count++]);
 
         if (req_obj.count > 0) {
             MPI_Waitall(req_obj.count, req_obj.requests.data(), MPI_STATUSES_IGNORE);
@@ -1268,10 +1269,10 @@ inline void HaloExchanger::exchange_multiple_halos(const std::vector<std::string
         auto send_b = Kokkos::subview(send_y_bottom_, std::make_pair((size_t)0, count_y_total));
         auto send_t = Kokkos::subview(send_y_top_, std::make_pair((size_t)0, count_y_total));
 
-        if(neighbor_bottom != MPI_PROC_NULL) MPI_Irecv(recv_b.data(), count_y_total, MPI_DOUBLE, neighbor_bottom, static_cast<int>(HaloExchangeTags::SEND_TO_TOP), cart_comm_, &req_obj.requests[req_obj.count++]);
-        if(neighbor_top    != MPI_PROC_NULL) MPI_Irecv(recv_t.data(), count_y_total, MPI_DOUBLE, neighbor_top, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM), cart_comm_, &req_obj.requests[req_obj.count++]);
-        if(neighbor_top    != MPI_PROC_NULL) MPI_Isend(send_t.data(), count_y_total, MPI_DOUBLE, neighbor_top, static_cast<int>(HaloExchangeTags::SEND_TO_TOP), cart_comm_, &req_obj.requests[req_obj.count++]);
-        if(neighbor_bottom != MPI_PROC_NULL) MPI_Isend(send_b.data(), count_y_total, MPI_DOUBLE, neighbor_bottom, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM), cart_comm_, &req_obj.requests[req_obj.count++]);
+        if(neighbor_bottom != MPI_PROC_NULL) MPI_Irecv(recv_b.data(), count_y_total, VVM::RealUBLE, neighbor_bottom, static_cast<int>(HaloExchangeTags::SEND_TO_TOP), cart_comm_, &req_obj.requests[req_obj.count++]);
+        if(neighbor_top    != MPI_PROC_NULL) MPI_Irecv(recv_t.data(), count_y_total, VVM::RealUBLE, neighbor_top, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM), cart_comm_, &req_obj.requests[req_obj.count++]);
+        if(neighbor_top    != MPI_PROC_NULL) MPI_Isend(send_t.data(), count_y_total, VVM::RealUBLE, neighbor_top, static_cast<int>(HaloExchangeTags::SEND_TO_TOP), cart_comm_, &req_obj.requests[req_obj.count++]);
+        if(neighbor_bottom != MPI_PROC_NULL) MPI_Isend(send_b.data(), count_y_total, VVM::RealUBLE, neighbor_bottom, static_cast<int>(HaloExchangeTags::SEND_TO_BOTTOM), cart_comm_, &req_obj.requests[req_obj.count++]);
 
         if (req_obj.count > 0) {
             MPI_Waitall(req_obj.count, req_obj.requests.data(), MPI_STATUSES_IGNORE);
@@ -1331,15 +1332,15 @@ inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) co
 
             MPI_Request reqs[4];
             int req_count = 0;
-            if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Irecv(recv_b.data(), count, MPI_DOUBLE, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_TOP), cart_comm_, &reqs[req_count++]);
-            if(neighbor_top_    != MPI_PROC_NULL) MPI_Irecv(recv_t.data(), count, MPI_DOUBLE, neighbor_top_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_BOTTOM), cart_comm_, &reqs[req_count++]);
-            if(neighbor_top_    != MPI_PROC_NULL) MPI_Isend(send_t.data(), count, MPI_DOUBLE, neighbor_top_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_TOP), cart_comm_, &reqs[req_count++]);
-            if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Isend(send_b.data(), count, MPI_DOUBLE, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_BOTTOM), cart_comm_, &reqs[req_count++]);
+            if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Irecv(recv_b.data(), count, VVM::RealUBLE, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_TOP), cart_comm_, &reqs[req_count++]);
+            if(neighbor_top_    != MPI_PROC_NULL) MPI_Irecv(recv_t.data(), count, VVM::RealUBLE, neighbor_top_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_BOTTOM), cart_comm_, &reqs[req_count++]);
+            if(neighbor_top_    != MPI_PROC_NULL) MPI_Isend(send_t.data(), count, VVM::RealUBLE, neighbor_top_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_TOP), cart_comm_, &reqs[req_count++]);
+            if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Isend(send_b.data(), count, VVM::RealUBLE, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_BOTTOM), cart_comm_, &reqs[req_count++]);
 
-            // if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Irecv(recv_b_h.data(), count, MPI_DOUBLE, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_TOP), cart_comm_, &reqs[req_count++]);
-            // if(neighbor_top_    != MPI_PROC_NULL) MPI_Irecv(recv_t_h.data(), count, MPI_DOUBLE, neighbor_top_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_BOTTOM), cart_comm_, &reqs[req_count++]);
-            // if(neighbor_top_    != MPI_PROC_NULL) MPI_Isend(send_t_h.data(), count, MPI_DOUBLE, neighbor_top_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_TOP), cart_comm_, &reqs[req_count++]);
-            // if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Isend(send_b_h.data(), count, MPI_DOUBLE, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_BOTTOM), cart_comm_, &reqs[req_count++]);
+            // if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Irecv(recv_b_h.data(), count, VVM_MPI_REAL, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_TOP), cart_comm_, &reqs[req_count++]);
+            // if(neighbor_top_    != MPI_PROC_NULL) MPI_Irecv(recv_t_h.data(), count, VVM_MPI_REAL, neighbor_top_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_BOTTOM), cart_comm_, &reqs[req_count++]);
+            // if(neighbor_top_    != MPI_PROC_NULL) MPI_Isend(send_t_h.data(), count, VVM_MPI_REAL, neighbor_top_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_TOP), cart_comm_, &reqs[req_count++]);
+            // if(neighbor_bottom_ != MPI_PROC_NULL) MPI_Isend(send_b_h.data(), count, VVM_MPI_REAL, neighbor_bottom_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_BOTTOM), cart_comm_, &reqs[req_count++]);
             
             if(req_count > 0) MPI_Waitall(req_count, reqs, MPI_STATUSES_IGNORE);
             // Kokkos::fence();
@@ -1387,15 +1388,15 @@ inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) co
 
             MPI_Request reqs[4];
             int req_count = 0;
-            if(neighbor_right_ != MPI_PROC_NULL) MPI_Irecv(recv_r.data(), count, MPI_DOUBLE, neighbor_right_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_LEFT), cart_comm_, &reqs[req_count++]);
-            if(neighbor_left_  != MPI_PROC_NULL) MPI_Irecv(recv_l.data(), count, MPI_DOUBLE, neighbor_left_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_RIGHT), cart_comm_, &reqs[req_count++]);
-            if(neighbor_left_  != MPI_PROC_NULL) MPI_Isend(send_l.data(), count, MPI_DOUBLE, neighbor_left_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_LEFT), cart_comm_, &reqs[req_count++]);
-            if(neighbor_right_ != MPI_PROC_NULL) MPI_Isend(send_r.data(), count, MPI_DOUBLE, neighbor_right_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_RIGHT), cart_comm_, &reqs[req_count++]);
+            if(neighbor_right_ != MPI_PROC_NULL) MPI_Irecv(recv_r.data(), count, VVM_MPI_REAL, neighbor_right_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_LEFT), cart_comm_, &reqs[req_count++]);
+            if(neighbor_left_  != MPI_PROC_NULL) MPI_Irecv(recv_l.data(), count, VVM_MPI_REAL, neighbor_left_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_RIGHT), cart_comm_, &reqs[req_count++]);
+            if(neighbor_left_  != MPI_PROC_NULL) MPI_Isend(send_l.data(), count, VVM_MPI_REAL, neighbor_left_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_LEFT), cart_comm_, &reqs[req_count++]);
+            if(neighbor_right_ != MPI_PROC_NULL) MPI_Isend(send_r.data(), count, VVM_MPI_REAL, neighbor_right_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_RIGHT), cart_comm_, &reqs[req_count++]);
 
-            // if(neighbor_right_ != MPI_PROC_NULL) MPI_Irecv(recv_r_h.data(), count, MPI_DOUBLE, neighbor_right_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_LEFT), cart_comm_, &reqs[req_count++]);
-            // if(neighbor_left_  != MPI_PROC_NULL) MPI_Irecv(recv_l_h.data(), count, MPI_DOUBLE, neighbor_left_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_RIGHT), cart_comm_, &reqs[req_count++]);
-            // if(neighbor_left_  != MPI_PROC_NULL) MPI_Isend(send_l_h.data(), count, MPI_DOUBLE, neighbor_left_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_LEFT), cart_comm_, &reqs[req_count++]);
-            // if(neighbor_right_ != MPI_PROC_NULL) MPI_Isend(send_r_h.data(), count, MPI_DOUBLE, neighbor_right_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_RIGHT), cart_comm_, &reqs[req_count++]);
+            // if(neighbor_right_ != MPI_PROC_NULL) MPI_Irecv(recv_r_h.data(), count, VVM_MPI_REAL, neighbor_right_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_LEFT), cart_comm_, &reqs[req_count++]);
+            // if(neighbor_left_  != MPI_PROC_NULL) MPI_Irecv(recv_l_h.data(), count, VVM_MPI_REAL, neighbor_left_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_RIGHT), cart_comm_, &reqs[req_count++]);
+            // if(neighbor_left_  != MPI_PROC_NULL) MPI_Isend(send_l_h.data(), count, VVM_MPI_REAL, neighbor_left_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_LEFT), cart_comm_, &reqs[req_count++]);
+            // if(neighbor_right_ != MPI_PROC_NULL) MPI_Isend(send_r_h.data(), count, VVM_MPI_REAL, neighbor_right_, static_cast<int>(HaloExchangeTags::SLICE_SEND_TO_RIGHT), cart_comm_, &reqs[req_count++]);
             
             if(req_count > 0) MPI_Waitall(req_count, reqs, MPI_STATUSES_IGNORE);
             // Kokkos::fence();

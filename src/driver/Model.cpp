@@ -17,6 +17,8 @@ Model::Model(const Utils::ConfigurationManager& config,
     std::string x_bc = config.get_value<std::string>("grid.boundary_condition.x", "periodic");
     std::string y_bc = config.get_value<std::string>("grid.boundary_condition.y", "periodic");
     bc_manager_.initialize_bc_types(x_bc, y_bc);
+    VVM::Real dt_s = params_.get_value_host(params_.dt);
+    VVM::Real epsilon = real(1e-6);
 
     std::string mode = config_.get_value<std::string>("simulation.idealized_test", "none");
     std::vector<std::string> no_solver_mode = {"advection_u", "advection_v", "advection_w", "stretching", "twisting"};
@@ -34,14 +36,17 @@ Model::Model(const Utils::ConfigurationManager& config,
         turbulence_ = std::make_unique<Physics::TurbulenceProcess>(config_, grid_, params_, halo_exchanger_, state_);
     }
 
-    if (config_.get_value<bool>("physics.surface.enable_surface", false)) {
-        surface_ = std::make_unique<Physics::SurfaceProcess>(config_, grid_, params_, halo_exchanger_, state_);
-        surface_freq_in_steps_ = config_.get_value<int>("physics.surface.frequency_step", 12);
-    }
-
     if (config_.get_value<bool>("physics.rrtmgp.enable_rrtmgp", false)) {
         radiation_ = std::make_unique<Physics::RRTMGP::RRTMGPRadiation>(config_, grid_, params_);
-        rad_freq_in_steps_ = config_.get_value<int>("physics.rrtmgp.rad_frequency_step", 1);
+
+        VVM::Real rad_freq_s = config_.get_value<VVM::Real>("physics.rrtmgp.rad_frequency_s", 1.0);
+        VVM::Real remainder = std::fmod(rad_freq_s, dt_s);
+
+        if (remainder > epsilon && (dt_s - remainder) > epsilon) {
+            throw std::runtime_error("Error: RRTMGP radiation calling frequency can't be evenly divided by dt.");
+        }
+
+        rad_freq_in_steps_ = static_cast<int>(std::round(rad_freq_s / dt_s));
     }
 
     if (config_.get_value<bool>("dynamics.forcings.sponge_layer.enable", false)) {
@@ -60,11 +65,28 @@ Model::Model(const Utils::ConfigurationManager& config,
     if (config.get_value<bool>("physics.p3.enable_p3", false)) {
         thermodynamics_vars_.insert(thermodynamics_vars_.end(), {"qc", "qr", "qi", "nc", "nr", "ni", "bm", "qm"});
     }
-    sfc_vars_ = {"th", "qv"};
 
-    if (config_.get_value<bool>("physics.land.enable_land", false)) {
-        land_ = std::make_unique<Physics::LandProcess>(config_, grid_, params_, halo_exchanger_, state_);
-        land_freq_in_steps_ = config_.get_value<int>("physics.land.frequency_step", 12);
+    sfc_thermodynamics_vars_ = {"th", "qv"};
+    sfc_dynamics_vars_ = {"xi", "eta"};
+    enable_surface_process_ = config.get_value<bool>("physics.surface_process.enable", false);
+    std::string land_scheme  = config.get_value<std::string>("physics.surface_process.land_scheme", "none");
+    std::string ocean_scheme = config.get_value<std::string>("physics.surface_process.ocean_scheme", "none");
+    if (enable_surface_process_) {
+        surface_ = std::make_unique<Physics::SurfaceProcess>(config_, grid_, params_, halo_exchanger_, state_);
+
+        if (land_scheme == "noahlsm") {
+            land_ = std::make_unique<Physics::LandProcess>(config_, grid_, params_, halo_exchanger_, state_, ocean_scheme);
+        }
+
+        VVM::Real surface_process_s = config_.get_value<VVM::Real>("physics.surface_process.frequency_s", 1);
+
+        VVM::Real remainder = std::fmod(surface_process_s, dt_s);
+
+        if (remainder > epsilon && (dt_s - remainder) > epsilon) {
+            throw std::runtime_error("Error: surface process calling frequency can't be evenly divided by dt.");
+        }
+
+        surface_process_steps_ = static_cast<int>(std::round(surface_process_s / dt_s));
     }
 }
 
@@ -94,9 +116,9 @@ void Model::init() {
     if (!state_.has_field("th_perturb")) state_.add_field<3>("th_perturb", {nz, ny, nx});
 }
 
-void Model::run_step(double dt) {
+void Model::run_step(VVM::Real dt) {
     size_t current_step = state_.get_step();
-    double current_time = state_.get_time();
+    VVM::Real current_time = state_.get_time();
 
     if (lateral_boundary_nudging_) {
         lateral_boundary_nudging_->update_large_scale_forcing(state_, current_time);
@@ -140,43 +162,40 @@ void Model::run_step(double dt) {
             turbulence_->calculate_tendencies(state_, var_name, fe_tend_field);
         }
     }
-    if (surface_) {
-        if ((state_.get_step()-1) % surface_freq_in_steps_ == 0) {
+
+    // Surface process (sea/land/ice)
+    if (enable_surface_process_) {
+        bool is_compute_step = (state_.get_step()-1) % surface_process_steps_ == 0;
+        if (is_compute_step) {
+            // NOTE: Even the configuration specified tco_ocean model which is not from surface_, surface_ stil calculates surface friction for xi and eta. 
             surface_->compute_coefficients(state_);
+            if (land_) land_->run(dt);
         }
-        for (const auto& var_name : sfc_vars_) {
+
+        for (const auto& var_name : sfc_thermodynamics_vars_) {
             std::string fe_name = "fe_tendency_" + var_name;
             auto& fe_tend_field = state_.get_field<3>(fe_name);
             if (!turbulence_) fe_tend_field.set_to_zero(); 
-            surface_->calculate_tendencies(state_, var_name, fe_tend_field);
+            if (surface_) {
+                surface_->calculate_tendencies(state_, var_name, fe_tend_field);
+            }
+            if (land_) {
+                land_->calculate_tendencies(var_name, fe_tend_field);
+            }
         }
     }
 
-    if (land_) {
-        if ((state_.get_step()-1) % land_freq_in_steps_ == 0) {
-            land_->run(dt);
-        }
-        for (const auto& var_name : sfc_vars_) {
-            std::string fe_name = "fe_tendency_" + var_name;
-            auto& fe_tend_field = state_.get_field<3>(fe_name);
-            if (!turbulence_) fe_tend_field.set_to_zero(); 
-            land_->calculate_tendencies(var_name, fe_tend_field);
-        }
-    }
-
-
-    if (turbulence_ || surface_ || land_) {
-        for (const auto& var_name : (turbulence_ ? turbulence_->get_thermodynamics_vars() : sfc_vars_) ) {
+    if (turbulence_ || enable_surface_process_) {
+        for (const auto& var_name : (turbulence_ ? turbulence_->get_thermodynamics_vars() : sfc_thermodynamics_vars_) ) {
             std::string fe_name = "fe_tendency_" + var_name;
             auto& fe_tend_field = state_.get_field<3>(fe_name);
             VVM::Dynamics::TimeIntegrator::apply_forward_update(state_, var_name, grid_, dt, fe_tend_field);
         }
-    } 
-
+    }
 
     // Apply sponge layer
     if (sponge_layer_) {
-        for (const auto& var_name : turbulence_->get_thermodynamics_vars()) {
+        for (const auto& var_name : sponge_layer_->get_thermodynamics_vars()) {
             std::string fe_name = "fe_tendency_" + var_name;
             auto& fe_tend_field = state_.get_field<3>(fe_name);
             fe_tend_field.set_to_zero(); 
@@ -198,7 +217,7 @@ void Model::run_step(double dt) {
         }
     }
 
-    if (turbulence_ || sponge_layer_ || surface_ || land_ || lateral_boundary_nudging_) {
+    if (turbulence_ || sponge_layer_ || enable_surface_process_ || lateral_boundary_nudging_) {
         halo_exchanger_.exchange_multiple_halos(thermodynamics_vars_, state_);
         for (const auto& var_name : thermodynamics_vars_) {
             if (var_name == "th" || var_name == "qv") {
@@ -228,19 +247,39 @@ void Model::run_step(double dt) {
                 auto& fe_tend_field = state_.get_field<2>(fe_name);
                 fe_tend_field.set_to_zero(); 
                 turbulence_->calculate_tendencies(state_, var_name, fe_tend_field);
-                VVM::Dynamics::TimeIntegrator::apply_forward_update(state_, var_name, grid_, dt, fe_tend_field);
             }
             else {
                 auto& fe_tend_field = state_.get_field<3>(fe_name);
                 fe_tend_field.set_to_zero(); 
                 turbulence_->calculate_tendencies(state_, var_name, fe_tend_field);
+            }
+        }
+    }
+
+    if (enable_surface_process_) {
+        for (const auto& var_name : sfc_dynamics_vars_) {
+            std::string fe_name = "fe_tendency_" + var_name;
+            auto& fe_tend_field = state_.get_field<3>(fe_name);
+            if (!turbulence_) fe_tend_field.set_to_zero(); 
+            surface_->calculate_tendencies(state_, var_name, fe_tend_field);
+        }
+    }
+
+    if (turbulence_ || enable_surface_process_) {
+        for (const auto& var_name : (turbulence_ ? turbulence_->get_dynamics_vars() : sfc_dynamics_vars_)) {
+            std::string fe_name = "fe_tendency_" + var_name;
+            if (var_name == "zeta") {
+                auto& fe_tend_field = state_.get_field<2>(fe_name);
+                VVM::Dynamics::TimeIntegrator::apply_forward_update(state_, var_name, grid_, dt, fe_tend_field);
+            } else {
+                auto& fe_tend_field = state_.get_field<3>(fe_name);
                 VVM::Dynamics::TimeIntegrator::apply_forward_update(state_, var_name, grid_, dt, fe_tend_field);
             }
         }
     }
 
     if (sponge_layer_) {
-        for (const auto& var_name : turbulence_->get_dynamics_vars()) {
+        for (const auto& var_name : sponge_layer_->get_dynamics_vars()) {
             if (var_name == "zeta") {
                 std::string fe_name = "fe_tendency_" + var_name;
                 auto& fe_tend_field = state_.get_field<2>(fe_name);
@@ -258,7 +297,7 @@ void Model::run_step(double dt) {
         }
     }
 
-    if (turbulence_ || sponge_layer_) {
+    if (turbulence_ || sponge_layer_ || enable_surface_process_) {
         halo_exchanger_.exchange_multiple_halos(dynamics_vars_, state_);
         for (const auto& var_name : dynamics_vars_) {
             bc_manager_.apply_vorticity_bc(state_.get_field<3>(var_name));

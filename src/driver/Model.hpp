@@ -7,6 +7,7 @@
 #include "physics/land/LandProcess.hpp"
 #include "core/Initializer.hpp"
 #include "core/BoundaryConditionManager.hpp"
+#include "core/vvm_types.hpp"
 #include "dynamics/temporal_schemes/TimeIntegrator.hpp"
 #include "dynamics/forcings/SpongeLayer.hpp"
 #include "dynamics/forcings/RandomForcing.hpp"
@@ -25,7 +26,7 @@ public:
           Core::HaloExchanger& halo_exchanger);
 
     void init();
-    void run_step(double dt);
+    void run_step(VVM::Real dt);
     void finalize();
 
 private:
@@ -36,7 +37,8 @@ private:
     Core::BoundaryConditionManager bc_manager_;
     std::vector<std::string> dynamics_vars_;
     std::vector<std::string> thermodynamics_vars_;
-    std::vector<std::string> sfc_vars_;
+    std::vector<std::string> sfc_thermodynamics_vars_;
+    std::vector<std::string> sfc_dynamics_vars_;
 
     Core::State& state_;
 
@@ -51,10 +53,12 @@ private:
     std::unique_ptr<Physics::LandProcess> land_;
 
     int rad_freq_in_steps_;
-    int surface_freq_in_steps_;
-    int land_freq_in_steps_;
+    int surface_process_steps_;
+    // int surface_freq_in_steps_;
+    // int land_freq_in_steps_;
 
     bool wind_solver_ = true;
+    bool enable_surface_process_ = false;
 };
 
 }

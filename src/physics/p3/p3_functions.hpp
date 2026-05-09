@@ -27,13 +27,18 @@ template <typename ScalarT, typename DeviceT> struct Functions {
   //
   // ---------- P3 constants ---------
   //
+
+  // Aaron - Change the loaded lookup table from 4.1.1 to v6.4
   struct P3C {
     // Constants for ice lookup tables
     enum {
       densize            = 5,
       rimsize            = 4,
+      liqsize            = 4, // Aaron - Change the loaded lookup table from 4.1.1 to v6.4
       isize              = 50,
-      ice_table_size     = 12, // number of quantities used from lookup table
+      // Aaron - Change the loaded lookup table from 4.1.1 to v6.4
+      // ice_table_size     = 12, // number of quantities used from lookup table
+      ice_table_size     = 19, // number of quantities used from lookup table
       rcollsize          = 30,
       collect_table_size = 2, // number of ice-rain collection  quantities used from lookup table
 
@@ -46,12 +51,15 @@ template <typename ScalarT, typename DeviceT> struct Functions {
     };
 
     static constexpr ScalarT lookup_table_1a_dum1_c =
-        4.135985029041767e+00; // 1.0/(0.1*log10(261.7))
+        // 4.135985029041767e+00; // 1.0/(0.1*log10(261.7))
+        3.444606e+00; // Aaron - aligning with Fortran P3
     // static constexpr const char *p3_lookup_base = SCREAM_DATA_DIR "/tables/p3_lookup_table_1.dat-v";
     static constexpr const char *p3_lookup_base = "../rundata/p3/p3_lookup_table_1.dat-v";
 
     static constexpr const char *p3_version =
-        "4.1.1"; // TODO: Change this so that the table version and table path is a runtime option.
+        // Aaron - Change the loaded lookup table from 4.1.1 to v6.4
+        // "4.1.1"; // TODO: Change this so that the table version and table path is a runtime option.
+        "6.4";
   };
 
   //
@@ -121,7 +129,8 @@ template <typename ScalarT, typename DeviceT> struct Functions {
     Scalar accretion_qr_exponent                = 1.15;
     Scalar rain_selfcollection_prefactor        = 5.78;
     Scalar rain_selfcollection_breakup_diameter = 0.00028;
-    Scalar constant_mu_rain                     = 1.0;
+    // Aaron - set constant_mu_rain from 1 to 0 to align with Fortran P3 for Marshall-Palmer distribution
+    Scalar constant_mu_rain                     = 0.0;
     Scalar spa_ccn_to_nc_factor                 = 1.0;
     Scalar spa_ccn_to_nc_exponent               = 1.0;
     Scalar cldliq_to_ice_collection_factor      = 0.5;
@@ -635,9 +644,13 @@ template <typename ScalarT, typename DeviceT> struct Functions {
 
   KOKKOS_FUNCTION
   static void cloud_water_conservation(
-      const Spack &qc, const Scalar dt, Spack &qc2qr_autoconv_tend, Spack &qc2qr_accret_tend,
+      const Spack &qc, const Scalar dt, 
+      Spack &qc2qv_evap_tend, Spack &qv2qc_conden_tend, Spack &qv2qc_nucleat_tend, 
+      Spack &qc2qr_autoconv_tend, Spack &qc2qr_accret_tend,
       Spack &qc2qi_collect_tend, Spack &qc2qi_hetero_freeze_tend, Spack &qc2qr_ice_shed_tend,
-      Spack &qc2qi_berg_tend, Spack &qi2qv_sublim_tend, Spack &qv2qi_vapdep_tend, Spack &qcheti_cnt,
+      Spack &qc2qi_berg_tend, Spack &qi2qv_sublim_tend, Spack &qv2qi_vapdep_tend, 
+      Spack &nc2nr_autoconv_tend, Spack &nc_accret_tend, Spack &nc_collect_tend, Spack &nc2ni_immers_freeze_tend,
+      Spack &qcheti_cnt,
       Spack &qicnt, const bool &use_hetfrz_classnuc, const Smask &context = Smask(true),
       const Spack &cld_frac_l = Spack(), const Spack &cld_frac_i = Spack(),
       const P3Runtime &runtime_options = {});
@@ -646,16 +659,25 @@ template <typename ScalarT, typename DeviceT> struct Functions {
   static void rain_water_conservation(const Spack &qr, const Spack &qc2qr_autoconv_tend,
                                       const Spack &qc2qr_accret_tend, const Spack &qi2qr_melt_tend,
                                       const Spack &qc2qr_ice_shed_tend, const Scalar dt,
-                                      Spack &qr2qv_evap_tend, Spack &qr2qi_collect_tend,
+                                      Spack& qv2qr_conden_tend, Spack &qr2qv_evap_tend, Spack &qr2qi_collect_tend,
                                       Spack &qr2qi_immers_freeze_tend,
+                                      Spack &nr_evap_tend, Spack &nr_collect_tend, Spack &nr2ni_immers_freeze_tend,
                                       const Smask &context = Smask(true));
+
+  KOKKOS_FUNCTION
+  static void vapor_water_conservation(
+    const Spack& qv, const Scalar dt, Spack& qv2qc_conden_tend, Spack& qv2qc_nucleat_tend, Spack& qv2qr_conden_tend, 
+    Spack& qv2qi_vapdep_tend, Spack& qv2qi_nucleat_tend, Spack& qc2qv_evap_tend, Spack& qr2qv_evap_tend, 
+    Spack& qi2qv_sublim_tend, Spack& ni_nucleat_tend, Spack& nc_nuclet_tend);
 
   KOKKOS_FUNCTION
   static void ice_water_conservation(
       const Spack &qi, const Spack &qv2qi_vapdep_tend, const Spack &qv2qi_nucleat_tend,
       const Spack &qc2qi_berg_tend, const Spack &qr2qi_collect_tend,
       const Spack &qc2qi_collect_tend, const Spack &qr2qi_immers_freeze_tend,
-      const Spack &qc2qi_hetero_freeze_tend, const Scalar dt, Spack &qinuc_cnt, Spack &qcheti_cnt,
+      const Spack &qc2qi_hetero_freeze_tend, const Scalar dt, 
+      Spack& ni_sublim_tend, Spack& ni2nr_melt_tend, 
+      Spack &qinuc_cnt, Spack &qcheti_cnt,
       Spack &qicnt, Spack &qi2qv_sublim_tend, Spack &qi2qr_melt_tend,
       const bool &use_hetfrz_classnuc, const Smask &context = Smask(true));
 
@@ -735,7 +757,7 @@ template <typename ScalarT, typename DeviceT> struct Functions {
 
   // Computes rain self collection process rate
   KOKKOS_FUNCTION
-  static void rain_self_collection(const Spack &rho, const Spack &qr_incld, const Spack &nr_incld,
+  static void rain_self_collection(const Spack &rho, const Spack &qr_incld, Spack &nr_incld,
                                    Spack &nr_selfcollect_tend, const P3Runtime &runtime_options,
                                    const Smask &context = Smask(true));
 
@@ -845,6 +867,40 @@ template <typename ScalarT, typename DeviceT> struct Functions {
                              const Scalar &dt, Spack &qr2qv_evap_tend, Spack &nr_evap_tend,
                              const Smask &context = Smask(true));
 
+  // Aaron - evporation/condensation/deposition/sublimation 
+  KOKKOS_FUNCTION
+  static void calc_cond_evap_dep_sub(
+    const Spack& qc_incld, const Spack& qr_incld, const Spack& qi_incld, 
+    const Spack& nr_incld, const Spack& ni_incld,
+    const Spack& cld_frac_l, const Spack& cld_frac_r, const Spack& cld_frac_i,
+    const Spack& qv, const Spack& qv_prev, const Spack& qv_sat_l, const Spack& qv_sat_i,
+    const Spack& ab, const Spack& abi, const Spack& epsc, const Spack& epsr, 
+    const Spack& epsi, const Spack& epsi_tot,
+    const Spack& T_atm, const Spack& t_prev, const Spack& dqsdt,
+    const Scalar& dt, const Scalar& inv_dt, const bool do_ice_production,
+    Spack& qv2qc_conden_tend, Spack& qc2qv_evap_tend, 
+    Spack& qv2qr_conden_tend, Spack& qr2qv_evap_tend, Spack& nr_evap_tend,
+    Spack& qv2qi_vapdep_tend, Spack& qi2qv_sublim_tend, Spack& ni_sublim_tend, 
+    Spack& qc2qi_berg_tend, const Smask& context = Smask(true));
+
+  // Aaron - droplet activation
+  KOKKOS_FUNCTION
+  static void droplet_activation(
+    const Spack& T_atm, const Spack& th_atm, const Spack& pres, 
+    const Spack& qv, const Spack& qv_prev, const Spack& qv_sat_l,
+    const Spack& nc_incld, const Spack& cld_frac_l,
+    const Int& it, const Scalar& inv_dt, Spack& qv2qc_nucleat_tend,
+    Spack& nc_nuclet_tend, Spack& qv2qc_conden_tend, const Smask& context = Smask(true));
+
+  // Aaron - limit saturation adjustment
+  KOKKOS_FUNCTION
+  static void limit_cond_evap_dep_sub(
+      const Spack& T_atm, const Spack& pres, const Spack& qv, const Spack& cld_frac_l, 
+      const Scalar& dt, const Scalar& inv_dt, Spack& qv2qc_conden_tend, Spack& nc_nucleat_tend, Spack& qv2qr_conden_tend, 
+      Spack& qv2qc_nucleat_tend, Spack& qc2qv_evap_tend, Spack& qr2qv_evap_tend, 
+      Spack& nr_evap_tend, Spack& qv2qi_depos_tend, Spack& qv2qi_nucleat_tend, 
+      Spack& ni_nucleat_tend, Spack& qi2qv_sublim_tend, Spack& ni_sublim_tend, const Smask& context = Smask(true));
+
   // get number and mass tendencies due to melting ice
   KOKKOS_FUNCTION
   static void ice_melting(const Spack &rho, const Spack &T_atm, const Spack &pres,
@@ -857,6 +913,8 @@ template <typename ScalarT, typename DeviceT> struct Functions {
   // liquid-phase dependent processes:
   KOKKOS_FUNCTION
   static void update_prognostic_liquid(
+      const Spack &qv2qc_nucleat_tend, const Spack &qv2qc_conden_tend, const Spack &qc2qv_evap_tend, 
+      const Spack& qv2qr_conden_tend, const Spack& nc_nuclet_tend, 
       const Spack &qc2qr_accret_tend, const Spack &nc_accret_tend, const Spack &qc2qr_autoconv_tend,
       const Spack &nc2nr_autoconv_tend, const Spack &ncautr, const Spack &nc_selfcollect_tend,
       const Spack &qr2qv_evap_tend, const Spack &nr_evap_tend, const Spack &nr_selfcollect_tend,
@@ -988,7 +1046,7 @@ template <typename ScalarT, typename DeviceT> struct Functions {
       const uview_1d<const Spack> &nc_nuceat_tend, const uview_1d<const Spack> &nccn_prescribed,
       const uview_1d<const Spack> &inv_exner, const uview_1d<const Spack> &exner,
       const uview_1d<const Spack> &inv_cld_frac_l, const uview_1d<const Spack> &inv_cld_frac_i,
-      const uview_1d<const Spack> &inv_cld_frac_r, const uview_1d<Spack> &T_atm,
+      const uview_1d<const Spack> &inv_cld_frac_r, const uview_1d<const Spack> &T_prev, const uview_1d<const Spack> &qv_prev, const uview_1d<Spack> &T_atm,
       const uview_1d<Spack> &rho, const uview_1d<Spack> &inv_rho, const uview_1d<Spack> &qv_sat_l,
       const uview_1d<Spack> &qv_sat_i, const uview_1d<Spack> &qv_supersat_i,
       const uview_1d<Spack> &rhofacr, const uview_1d<Spack> &rhofaci, const uview_1d<Spack> &acn,
@@ -1009,7 +1067,7 @@ template <typename ScalarT, typename DeviceT> struct Functions {
       const uview_2d<const Spack> &nccn_prescribed, const uview_2d<const Spack> &inv_exner,
       const uview_2d<const Spack> &exner, const uview_2d<const Spack> &inv_cld_frac_l,
       const uview_2d<const Spack> &inv_cld_frac_i, const uview_2d<const Spack> &inv_cld_frac_r,
-      const uview_2d<Spack> &T_atm, const uview_2d<Spack> &rho, const uview_2d<Spack> &inv_rho,
+      const uview_2d<const Spack> &T_prev, const uview_2d<const Spack> &qv_prev, const uview_2d<Spack> &T_atm, const uview_2d<Spack> &rho, const uview_2d<Spack> &inv_rho,
       const uview_2d<Spack> &qv_sat_l, const uview_2d<Spack> &qv_sat_i,
       const uview_2d<Spack> &qv_supersat_i, const uview_2d<Spack> &rhofacr,
       const uview_2d<Spack> &rhofaci, const uview_2d<Spack> &acn, const uview_2d<Spack> &qv,
@@ -1027,7 +1085,7 @@ template <typename ScalarT, typename DeviceT> struct Functions {
   KOKKOS_FUNCTION
   static void p3_main_part2(
       const MemberType &team, const Int &nk_pack, const Scalar &max_total_ni,
-      const bool &do_predict_nc, const bool &do_prescribed_CCN, const Scalar &dt,
+      const bool &do_predict_nc, const bool &do_prescribed_CCN, const Scalar &dt, const Scalar &it,
       const Scalar &inv_dt, const uview_1d<const Spack> &ohetfrz_immersion_nucleation_tend,
       const uview_1d<const Spack> &ohetfrz_contact_nucleation_tend,
       const uview_1d<const Spack> &ohetfrz_deposition_nucleation_tend, const view_dnu_table &dnu,
@@ -1070,7 +1128,7 @@ template <typename ScalarT, typename DeviceT> struct Functions {
 #ifdef SCREAM_P3_SMALL_KERNELS
   static void p3_main_part2_disp(
       const Int &nj, const Int &nk, const Scalar &max_total_ni, const bool &do_predict_nc,
-      const bool &do_prescribed_CCN, const Scalar &dt, const Scalar &inv_dt,
+      const bool &do_prescribed_CCN, const Scalar &dt, const Scalar &it, const Scalar &inv_dt,
       const uview_2d<const Spack> &hetfrz_immersion_nucleation_tend,
       const uview_2d<const Spack> &hetfrz_contact_nucleation_tend,
       const uview_2d<const Spack> &hetfrz_deposition_nucleation_tend, const view_dnu_table &dnu,
@@ -1197,7 +1255,7 @@ template <typename ScalarT, typename DeviceT> struct Functions {
 
   KOKKOS_FUNCTION
   static void nc_conservation(const Spack &nc, const Spack &nc_selfcollect_tend, const Real &dt,
-                              Spack &nc_collect_tend, Spack &nc2ni_immers_freeze_tend,
+                              Spack& nc_nuclet_tend, Spack &nc_collect_tend, Spack &nc2ni_immers_freeze_tend,
                               Spack &nc_accret_tend, Spack &nc2nr_autoconv_tend, Spack &ncheti_cnt,
                               Spack &nicnt, const bool &use_hetfrz_classnuc,
                               const Smask &context = Smask(true));
@@ -1248,6 +1306,9 @@ constexpr ScalarT Functions<ScalarT, DeviceT>::P3C::lookup_table_1a_dum1_c;
 #include "p3_droplet_self_coll_impl.hpp"
 #include "p3_dsd2_impl.hpp"
 #include "p3_evaporate_rain_impl.hpp"
+#include "p3_calc_cond_evap_dep_sub_impl.hpp"
+#include "p3_droplet_activation_impl.hpp"
+#include "p3_limit_cond_evap_dep_sub_impl.hpp"
 #include "p3_find_impl.hpp"
 #include "p3_get_time_space_phys_variables_impl.hpp"
 #include "p3_ice_classical_nucleation_impl.hpp"

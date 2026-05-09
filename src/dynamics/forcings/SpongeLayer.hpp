@@ -10,6 +10,7 @@
 #include "core/Parameters.hpp"
 #include "core/HaloExchanger.hpp"
 #include "core/Field.hpp"
+#include "core/vvm_types.hpp"
 #include "utils/ConfigurationManager.hpp"
 
 namespace VVM {
@@ -42,12 +43,12 @@ private:
     std::vector<std::string> dynamics_vars_;
     std::vector<std::string> thermodynamics_vars_;
 
-    double CRAD_;
+    VVM::Real CRAD_;
     int k_start_thermo_;
     int k_start_vort_;
-    Kokkos::View<const double*> ref_profile_;
-    double sponge_base_height_;
-    double max_damping_coeff_;
+    Kokkos::View<const VVM::Real*> ref_profile_;
+    VVM::Real sponge_base_height_;
+    VVM::Real max_damping_coeff_;
 };
 
 } // namespace Dynamics
