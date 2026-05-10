@@ -234,23 +234,24 @@
 
                         if (ivegsrc .ge. 1) then
 
-                           if (vegtyper == 10) then
-                              z0max = exp(tem2*log01 + tem1*log07)
-                           elseif (vegtyper == 6) then
-                              z0max = exp(tem2*log01 + tem1*log05)
-                           elseif (vegtyper == 7) then
-         !           z0max = exp( tem2*log01 + tem1*log01 )
-                              z0max = 0.01
-                           elseif (vegtyper == 16) then
-         !           z0max = exp( tem2*log01 + tem1*log01 )
-                              z0max = 0.01
-                           else
-                              if (islimskr == 2) then
-                                 z0max = exp(tem2*log(0.0002) + tem1*log(z0max))
-                              else
-                                 z0max = exp(tem2*log01 + tem1*log(z0max))
-                              end if
-                           end if
+                            ! Aaron - don't need this hard code
+         !                   if (vegtyper == 10) then
+         !                      z0max = exp(tem2*log01 + tem1*log07)
+         !                   elseif (vegtyper == 6) then
+         !                      z0max = exp(tem2*log01 + tem1*log05)
+         !                   elseif (vegtyper == 7) then
+         ! !           z0max = exp( tem2*log01 + tem1*log01 )
+         !                      z0max = 0.01
+         !                   elseif (vegtyper == 16) then
+         ! !           z0max = exp( tem2*log01 + tem1*log01 )
+         !                      z0max = 0.01
+         !                   else
+         !                      if (islimskr == 2) then
+         !                         z0max = exp(tem2*log(0.0002) + tem1*log(z0max))
+         !                      else
+         !                         z0max = exp(tem2*log01 + tem1*log(z0max))
+         !                      end if
+         !                   end if
 
                         elseif (ivegsrc == 0) then
 
@@ -276,7 +277,13 @@
                         z0max = max(z0max, 1.0e-6)
          !
          !           czilc = 10.0 ** (- (0.40/0.07) * z0) ! fei's canopy height dependance of czil
-                        czilc = 0.8
+                        ! czilc = 0.8
+
+                        if (vegtyper == 13) then
+                           czilc = 0.1
+                        else
+                           czilc = 10.0 ** (- (0.40/0.07) * z0max)
+                        end if
 
                         tem1 = 1.0 - sigmafr
                         ztmax = z0max*exp(-tem1*tem1 &

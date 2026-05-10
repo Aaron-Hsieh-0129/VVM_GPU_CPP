@@ -537,6 +537,8 @@ end subroutine check_boundary
             hs = hstbl(vegtyp(i, jj))                                                     !%f
 ! roughness lengthe is defined in sfcsub                                                  !%f
 !     z0(i, jj)  = z0_data(vegtyp(i, jj))                                                 !%f
+            ! Aaron - turn this on to use input data
+            z0(i, jj)  = z0_data(vegtyp(i, jj))                                           !%f
             xlai(i, jj) = lai_data(vegtyp(i, jj))                                         !%f
 !     sfcems(i, jj)= ems1_data(vegtyp(i, jj))      !for summer season                     !%f
 !     sfcems(i, jj)= ems2_data(vegtyp(i, jj))      !for winter season                     !%f

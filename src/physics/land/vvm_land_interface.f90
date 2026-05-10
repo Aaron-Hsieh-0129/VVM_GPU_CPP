@@ -2,6 +2,7 @@ module vvm_land_interface
     use iso_c_binding, only: c_double, c_float, c_int, c_bool
     use index, only: jlistnum
     use param, only: my_max
+    use namelist_soilveg, only: z0_data, ems1_data, ems2_data
     implicit none
 
 #ifdef VVM_USE_DOUBLE_PRECISION
@@ -20,7 +21,7 @@ contains
         islimsk, vegtype, soiltyp, slopetyp, &
         sigmaf, sfemis, alb, shdmin, shdmax, &
         t1, q1, u1, v1, ps, prcp, swdn, lwdn, hgt, prslki_in, &
-        stc, smc, slc, tskin, canopy, snwdph, &
+        stc, smc, slc, tskin, canopy, snwdph, sneqv, &
         hflux, qflux, evap, zorl) bind(c, name="run_vvm_land_wrapper")
         
         integer(c_int), value :: use_tco_ocean
@@ -33,11 +34,12 @@ contains
         real(c_vvm_real), intent(in)    :: hgt(nx,ny) ! VVM height (m)
         real(c_vvm_real), intent(in)    :: prslki_in(nx,ny) ! VVM portion (pi(sfc)/pi(air)) 
 
-        real(c_vvm_real), intent(in)    :: sigmaf(nx,ny), sfemis(nx,ny)
+        real(c_vvm_real), intent(in)    :: sigmaf(nx,ny)
         real(c_vvm_real), intent(in)    :: alb(nx,ny), shdmin(nx,ny), shdmax(nx,ny)
 
+        real(c_vvm_real), intent(inout) :: sfemis(nx,ny)
         real(c_vvm_real), intent(inout) :: stc(nx,nsoil,ny), smc(nx,nsoil,ny), slc(nx,nsoil,ny)
-        real(c_vvm_real), intent(inout) :: tskin(nx,ny), canopy(nx,ny), snwdph(nx,ny), zorl(nx,ny)
+        real(c_vvm_real), intent(inout) :: tskin(nx,ny), canopy(nx,ny), snwdph(nx,ny), sneqv(nx,ny), zorl(nx,ny)
         real(c_vvm_real), intent(inout) :: hflux(nx,ny), qflux(nx,ny), evap(nx,ny)
 
         real(8), parameter :: g = 9.806_c_vvm_real
@@ -60,7 +62,7 @@ contains
         real(c_double) :: qsurf(nx,ny), gfx(nx,ny), ep1d(nx,ny)
         real(c_double) :: tgclim(nx,ny)
         real(c_double) :: snoalb(nx,ny), albedo2(nx,ny)
-        real(c_double) :: sheleg(nx,ny), tprcp(nx,ny), srflag(nx,ny), sncover(nx,ny)
+        real(c_double) :: tprcp(nx,ny), srflag(nx,ny), sncover(nx,ny)
         real(c_double) :: drain(nx,ny), runof(nx,ny)
         real(c_double) :: zice(nx,ny), cice(nx,ny), xtice(nx,ny), snomt(nx,ny)
         
@@ -93,12 +95,12 @@ contains
         !$acc data present(islimsk, vegtype, soiltyp, slopetyp, &
         !$acc              sigmaf, sfemis, alb, shdmin, shdmax, &
         !$acc              t1, q1, u1, v1, ps, prcp, swdn, lwdn, hgt, &
-        !$acc              stc, smc, slc, tskin, canopy, snwdph, hflux, qflux, evap, zorl) &
+        !$acc              stc, smc, slc, tskin, canopy, snwdph, sneqv, hflux, qflux, evap, zorl) &
         !$acc      create(psi, prsl1, prslki, tg, z0rl, cd, cdq, rb, stress, &
         !$acc             fm, fh, ustar, sfcw, ddvel, fm10, fh2, fh10, &
         !$acc             tsurf, flag_iter, flag_guess, qsurf, &
         !$acc             gfx, ep1d, tgclim, snoalb, albedo2, &
-        !$acc             sheleg, tprcp, srflag, sncover, drain, runof, zice, cice, xtice, snomt, &
+        !$acc             tprcp, srflag, sncover, drain, runof, zice, cice, xtice, snomt, &
         !$acc             u10, v10, t2, q2, rh2, rh10, ro2)
 
         ncld = 1
@@ -125,7 +127,6 @@ contains
                 z0rl(i,j) = zorl(i,j) * 100.0_c_vvm_real  ! NCEP zorl to cm
                 
                 tprcp(i,j) = prcp(i,j) * dt / 1000.0_c_vvm_real  !  mm/s times dt to m
-                sheleg(i,j) = snwdph(i,j) / 10.0_c_vvm_real
                 
                 ! srflag (rain or snow)
                 if (t1(i,j) <= 273.15_c_vvm_real) then
@@ -149,6 +150,14 @@ contains
                 zice(i,j) = 0.0_c_vvm_real
                 cice(i,j) = 0.0_c_vvm_real
                 xtice(i,j) = 0.0_c_vvm_real
+
+
+                if (islimsk(i,j) == 1) then
+                    sfemis(i,j) = ems2_data(vegtype(i,j)) + sigmaf(i,j) * &
+                                  (ems1_data(vegtype(i,j)) - ems2_data(vegtype(i,j)))
+                else
+                    sfemis(i,j) = 0.98D0
+                end if
             end do
         end do
         
@@ -179,14 +188,14 @@ contains
             call sfc_drv_gpu(myim, nx, nsoil, 1, ncld, psi, u1, v1, t1, q1, soiltyp, &
                  vegtype, sigmaf, sfemis, lwdn, swdn, swdn, dt, &
                  tgclim, cd, cdq, prsl1, prslki, hgt, islimsk, ddvel, slopetyp, &
-                 shdmin, shdmax, snoalb, alb, flag_iter, flag_guess, isot, ivegsrc, sheleg, &
+                 shdmin, shdmax, snoalb, alb, flag_iter, flag_guess, isot, ivegsrc, sneqv, &
                  snwdph, tg, tprcp, srflag, smc, stc, slc, &
-                 canopy, tsurf, zorl, sncover, qsurf, gfx, drain, qflux, &
+                 canopy, tsurf, z0rl, sncover, qsurf, gfx, drain, qflux, &
                  hflux, ep1d, runof, albedo2, 1, 1, 1, async_id)
                  
             call sfc_sice_gpu(myim, nx, nsoil, 1, ncld, psi, u1, v1, t1, q1, dt, sfemis, lwdn, &
                  swdn, swdn, srflag, cd, cdq, prsl1, prslki, islimsk, ddvel, &
-                 flag_iter, mom4ice, lsm, zice, cice, xtice, sheleg, &
+                 flag_iter, mom4ice, lsm, zice, cice, xtice, sneqv, &
                  tg, tprcp, stc, ep1d, snwdph, qsurf, snomt, gfx, &
                  qflux, hflux, async_id)
                  

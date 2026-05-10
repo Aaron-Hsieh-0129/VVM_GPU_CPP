@@ -48,6 +48,7 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
     m_tskin = view_2d_ll("lsm_tskin", m_nx, m_ny);
     m_canopy = view_2d_ll("lsm_canopy", m_nx, m_ny);
     m_snwdph = view_2d_ll("lsm_snwdph", m_nx, m_ny);
+    m_sneqv = view_2d_ll("lsm_sneqv", m_nx, m_ny);
     m_zorl = view_2d_ll("lsm_zorl", m_nx, m_ny);
 
     m_sigmaf = view_2d_ll("lsm_sigmaf", m_nx, m_ny); // Green Vegetation Fraction
@@ -68,6 +69,7 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
     if (!state.has_field("sea_land_ice_mask")) state.add_field<2>("sea_land_ice_mask", {ny, nx});
     if (!state.has_field("canopy")) state.add_field<2>("canopy", {ny, nx});
     if (!state.has_field("snwdph")) state.add_field<2>("snwdph", {ny, nx});
+    if (!state.has_field("sneqv")) state.add_field<2>("sneqv", {ny, nx});
     if (!state.has_field("zorl")) state.add_field<2>("zorl", {ny, nx});
     if (!state.has_field("vegtype")) state.add_field<2>("vegtype", {ny, nx});
     if (!state.has_field("soiltype")) state.add_field<2>("soiltype", {ny, nx});
@@ -79,6 +81,7 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
     if (!state.has_field("stc")) state.add_field<3>("stc", {m_nsoil, ny, nx});
     if (!state.has_field("smc")) state.add_field<3>("smc", {m_nsoil, ny, nx});
     if (!state.has_field("slc")) state.add_field<3>("slc", {m_nsoil, ny, nx});
+    if (!state.has_field("sfemis")) state.add_field<2>("sfemis", {ny, nx});
 
     m_use_tco_ocean = (ocean_scheme == "tco_ocean") ? 1 : 0; // false/true: 0/1 
 }
@@ -88,33 +91,39 @@ void LandProcess::init() {
     auto& pibar_v = state_.get_field<1>("pibar").get_device_data();
     auto& topo_v = state_.get_field<2>("topo").get_device_data();
     auto& Tg = state_.get_field<2>("Tg").get_mutable_device_data(); 
+    // auto& smc = state_.get_field<3>("smc").get_mutable_device_data(); 
+    // auto& slc = state_.get_field<3>("slc").get_mutable_device_data(); 
     
     Kokkos::parallel_for("InitLandStates", 
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {m_nx, m_ny}),
         KOKKOS_CLASS_LAMBDA(const int i, const int j) {
             const int vi = i + m_halo_x;
             const int vj = j + m_halo_y;
+            int hx = topo_v(vj, vi);
             int hxp = topo_v(vj, vi) + 1;
 
             m_tskin(i, j) = Tg(vj, vi);
 
+
+            // NOTE: These values will be overwritten in preprocessing_and_packing
             m_islimsk(i, j) = 1;
             m_vegtype(i, j) = 2;
             m_soiltype(i, j) = 2;
             m_slopetype(i, j) = 1;
-            
             m_prcp(i,j) = 0.0;
-
             m_zorl(i, j) = 0.1;
             m_canopy(i, j) = 0.0;
             m_snwdph(i, j) = 0.0;
+            m_sneqv(i, j) = 0.0;
 
-            m_t1(i, j) = th_v(hxp, vj, vi) * pibar_v(hxp);
-
+            m_t1(i, j) = th_v(hx, vj, vi) * pibar_v(hx);
             for(int k=0; k<m_nsoil; ++k) {
                 m_stc(i, k, j) = m_t1(i, j); // soil temperature
-                m_smc(i, k, j) = 0.34; // volumetric soil moisture content
-                m_slc(i, k, j) = 0.34; // liquid soil moisture
+                // m_smc(i, k, j) = smc(vj, vi) / real(100.); // volumetric soil moisture content
+                // m_slc(i, k, j) = slc(vj, vi) / real(100.); // liquid soil moisture
+                m_smc(i, k, j) = 0.3415875; // volumetric soil moisture content
+                m_slc(i, k, j) = 0.3415875; // liquid soil moisture
+
             }
         }
     );
@@ -155,7 +164,7 @@ void LandProcess::prepare_static_data() {
             m_prslki(i, j) = pibar_up_v(hx) / pibar_v(hxp);
 
             m_sigmaf(i, j) = gvf(vj, vi) / real(100.);  // Green Vegetation Fraction
-            m_sfemis(i, j) = real(0.98); // Surface Emissivity
+            m_sfemis(i, j) = real(0.98); // Surface Emissivity (the distribution will be given in vvm_land_interface.f90)
             m_alb(i, j)    = albedo(vj, vi) / real(100.);  // Surface albedo
             m_shdmin(i, j) = shdmin(vj, vi) / real(100.); // Minimum Fractional Coverage
             m_shdmax(i, j) = shdmax(vj, vi) / real(100.); // Maximum Fractional Coverage
@@ -179,14 +188,9 @@ void LandProcess::preprocessing_and_packing() {
     auto& th_v = state_.get_field<3>("th").get_device_data();
 
     auto& pibar_v = state_.get_field<1>("pibar").get_device_data();
-    auto& pr_v = state_.get_field<1>("pbar").get_device_data();
     auto& topo_v = state_.get_field<2>("topo").get_device_data();
     
     auto& canopy_v = state_.get_field<2>("canopy").get_device_data();
-    auto& snwdph_v = state_.get_field<2>("snwdph").get_device_data();
-    auto& stc_v    = state_.get_field<3>("stc").get_device_data();
-    auto& smc_v    = state_.get_field<3>("smc").get_device_data();
-    auto& slc_v    = state_.get_field<3>("slc").get_device_data();
     auto& precip_liq_surf_2d = state_.get_field<2>("precip_liq_surf_flux").get_mutable_device_data();
     auto& precip_ice_surf_2d = state_.get_field<2>("precip_ice_surf_flux").get_mutable_device_data();
 
@@ -206,7 +210,6 @@ void LandProcess::preprocessing_and_packing() {
             // m_u1(i, j) = u_v(hxp, vj, vi);
             // m_v1(i, j) = v_v(hxp, vj, vi);
             m_q1(i, j) = qv_v(hxp, vj, vi);
-            m_ps(i, j) = pr_v(hxp);
 
             m_swdn(i,j) = swdn_v(hxp, vj, vi);
             m_lwdn(i,j) = lwdn_v(hxp, vj, vi);
@@ -221,10 +224,13 @@ void LandProcess::postprocessing_and_unpacking() {
     
     auto& canopy_v = state_.get_field<2>("canopy").get_mutable_device_data();
     auto& snwdph_v = state_.get_field<2>("snwdph").get_mutable_device_data();
+    auto& sneqv_v = state_.get_field<2>("sneqv").get_mutable_device_data();
     auto& stc_v    = state_.get_field<3>("stc").get_mutable_device_data();
     auto& smc_v    = state_.get_field<3>("smc").get_mutable_device_data();
     auto& slc_v    = state_.get_field<3>("slc").get_mutable_device_data();
     auto& Tg = state_.get_field<2>("Tg").get_mutable_device_data(); 
+    auto& zorl = state_.get_field<2>("zorl").get_mutable_device_data(); 
+    auto& sfemis = state_.get_field<2>("sfemis").get_mutable_device_data(); 
 
 
     Kokkos::parallel_for("UnpackToVVM", 
@@ -237,14 +243,17 @@ void LandProcess::postprocessing_and_unpacking() {
             le_v(vj, vi)  = m_evap(i, j);
 
             Tg(vj, vi) = m_tskin(i, j);
-            canopy_v(vj, vi) = m_canopy(i, j);
-            snwdph_v(vj, vi) = m_snwdph(i, j);
-
-            for(int k=0; k<m_nsoil; ++k) {
-                stc_v(k, vj, vi) = m_stc(i, k, j);
-                smc_v(k, vj, vi) = m_smc(i, k, j);
-                slc_v(k, vj, vi) = m_slc(i, k, j);
-            }
+            // NOTE: The following varaibles don't need to be unpacked unless they need to be output
+            // canopy_v(vj, vi) = m_canopy(i, j);
+            // snwdph_v(vj, vi) = m_snwdph(i, j);
+            // sneqv_v(vj, vi) = m_sneqv(i, j);
+            // zorl(vj, vi) = m_zorl(i, j);
+            // sfemis(vj, vi) = m_sfemis(i, j);
+            // for(int k=0; k<m_nsoil; ++k) {
+            //     stc_v(k, vj, vi) = m_stc(i, k, j);
+            //     smc_v(k, vj, vi) = m_smc(i, k, j);
+            //     slc_v(k, vj, vi) = m_slc(i, k, j);
+            // }
         }
     );
 }
@@ -268,7 +277,7 @@ void LandProcess::run(VVM::Real dt) {
         m_t1.data(), m_q1.data(), m_u1.data(), m_v1.data(), m_ps.data(), 
         m_prcp.data(), m_swdn.data(), m_lwdn.data(), m_hgt.data(), m_prslki.data(),
         m_stc.data(), m_smc.data(), m_slc.data(), m_tskin.data(), 
-        m_canopy.data(), m_snwdph.data(),
+        m_canopy.data(), m_snwdph.data(), m_sneqv.data(),
         m_hflux.data(), m_qflux.data(), m_evap.data(), m_zorl.data());
 
     postprocessing_and_unpacking();
@@ -280,7 +289,7 @@ void LandProcess::finalize() {
     m_zorl = {}; m_t1 = {}; m_q1 = {}; m_u1 = {}; m_v1 = {};
     m_ps = {}; m_prcp = {}; m_swdn = {}; m_lwdn = {};
     m_stc = {}; m_smc = {}; m_slc = {};
-    m_tskin = {}; m_canopy = {}; m_snwdph = {};
+    m_tskin = {}; m_canopy = {}; m_snwdph = {}; m_sneqv = {};
     m_hflux = {}; m_qflux = {}; m_evap = {};
 }
 
@@ -293,7 +302,7 @@ void LandProcess::register_openacc() {
     MAP_KOKKOS_DEVICE(m_swdn); MAP_KOKKOS_DEVICE(m_lwdn); MAP_KOKKOS_DEVICE(m_hgt); MAP_KOKKOS_DEVICE(m_prslki);
     MAP_KOKKOS_DEVICE(m_sigmaf); MAP_KOKKOS_DEVICE(m_sfemis); MAP_KOKKOS_DEVICE(m_alb); MAP_KOKKOS_DEVICE(m_shdmin); MAP_KOKKOS_DEVICE(m_shdmax);
     MAP_KOKKOS_DEVICE(m_stc); MAP_KOKKOS_DEVICE(m_smc); MAP_KOKKOS_DEVICE(m_slc);
-    MAP_KOKKOS_DEVICE(m_tskin); MAP_KOKKOS_DEVICE(m_canopy); MAP_KOKKOS_DEVICE(m_snwdph);
+    MAP_KOKKOS_DEVICE(m_tskin); MAP_KOKKOS_DEVICE(m_canopy); MAP_KOKKOS_DEVICE(m_snwdph); MAP_KOKKOS_DEVICE(m_sneqv);
     MAP_KOKKOS_DEVICE(m_hflux); MAP_KOKKOS_DEVICE(m_qflux); MAP_KOKKOS_DEVICE(m_evap);
 }
 
@@ -306,7 +315,7 @@ void LandProcess::unregister_openacc() {
     UNMAP_KOKKOS_DEVICE(m_swdn); UNMAP_KOKKOS_DEVICE(m_lwdn); UNMAP_KOKKOS_DEVICE(m_hgt); UNMAP_KOKKOS_DEVICE(m_prslki);
     UNMAP_KOKKOS_DEVICE(m_sigmaf); UNMAP_KOKKOS_DEVICE(m_sfemis); UNMAP_KOKKOS_DEVICE(m_alb); UNMAP_KOKKOS_DEVICE(m_shdmin); UNMAP_KOKKOS_DEVICE(m_shdmax);
     UNMAP_KOKKOS_DEVICE(m_stc); UNMAP_KOKKOS_DEVICE(m_smc); UNMAP_KOKKOS_DEVICE(m_slc);
-    UNMAP_KOKKOS_DEVICE(m_tskin); UNMAP_KOKKOS_DEVICE(m_canopy); UNMAP_KOKKOS_DEVICE(m_snwdph);
+    UNMAP_KOKKOS_DEVICE(m_tskin); UNMAP_KOKKOS_DEVICE(m_canopy); UNMAP_KOKKOS_DEVICE(m_snwdph); UNMAP_KOKKOS_DEVICE(m_sneqv);
     UNMAP_KOKKOS_DEVICE(m_hflux); UNMAP_KOKKOS_DEVICE(m_qflux); UNMAP_KOKKOS_DEVICE(m_evap);
 }
 
