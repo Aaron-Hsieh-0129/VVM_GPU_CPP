@@ -14,7 +14,8 @@ These cases match the **idealized** modes and **automated regression** configs i
 | 2D bubble | `2dbubble` (e.g. `tests/configs/2dbubble.json`) | below |
 | 3D bubble | Warm-bubble dynamics in 3D visualization (same idealized family as 2D bubble; see [Idealized simulations](idealized.md)) | below |
 | TaiwanVVM | TaiwanVVM -- topography, land, and physics | below |   
-| RCE self-aggregation | RCE self-aggregation 100 days | below |   
+| RCE self-aggregation (SST 300 K) | RCE self-aggregation (SST 300 K) 100 days | below |   
+| RCE self-aggregation (RCEMIP, SST 305 K) | RCE self-aggregation (RCEMIP, SST 305 K) 200 days | below |   
 
 ### Advection u
 
@@ -51,9 +52,14 @@ These cases match the **idealized** modes and **automated regression** configs i
 
 <iframe width="100%" height="600" src="https://www.youtube.com/embed/6wFKTAkBJKw" title="GTaiwanVVM" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
-### RCE self-aggregation
+### RCE self-aggregation (SST 300 K)
 
 <iframe width="100%" height="600" src="https://www.youtube.com/embed/QMaB25El1H4" title="GVVM RCE 300K" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
+### RCE self-aggregation (RCEMIP, SST 305 K)
+
+<iframe width="100%" height="600" src="https://www.youtube.com/embed/w2JkpAE6j8U" title="GVVM rcemip 305K" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
 
 ## See also
 

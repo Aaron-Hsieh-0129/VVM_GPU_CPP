@@ -14,8 +14,11 @@ We integrated the original Fortran logic into the Kokkos pack-oriented kernels. 
 ### 1. `p3_calc_cond_evap_dep_sub_impl.hpp`
 This file restores the semi-analytic integration for thermodynamic phase changes. It handles:
 - **Cloud Condensation/Evaporation:** Explicit tendencies for $q_v \rightarrow q_c$ (`qv2qc_conden_tend`) and $q_c \rightarrow q_v$ (`qc2qv_evap_tend`).
+
 - **Rain Condensation/Evaporation:** Adjustments for $q_r$.
+
 - **Ice Deposition/Sublimation:** Restored processes for $q_v \rightarrow q_i$ and $q_i \rightarrow q_v$.
+
 - This function combines original ice depostion/sublimation to do the competing adjustment according to calculated time scale.
 
 ### 2. `p3_droplet_activation_impl.hpp`
@@ -30,9 +33,13 @@ These restored processes are tightly integrated into the `p3_main` execution flo
 
 In `p3_main_impl_part2.hpp`, the sequence of operations was modified to incorporate the restored kernels:
 1. **Calculate Tendencies:** `calc_cond_evap_dep_sub` is called alongside other microphysical growth processes.
+
 2. **Activation:** `droplet_activation` computes new droplets generated via supersaturation.
+
 3. **Impose Limits:** Before mapping back to cell averages, `limit_cond_evap_dep_sub` scales the tendencies to conserve water mass and maintain thermodynamic equilibrium.
+
 4. **Prognostic Updates:** The tendencies (`qv2qc_conden_tend`, `qc2qv_evap_tend`, etc.) are finally injected into `update_prognostic_liquid` and `update_prognostic_ice` to correctly advance the state variables ($q_v, q_c, q_r, q_i, T, \theta$).
 
 ## Tracking the Code Changes
 For developers navigating the codebase, these specific modifications are tagged with comments such as `// Aaron - evporation/condensation/deposition/sublimation` or `// Aaron - limit saturation adjustment` within `p3_functions.hpp` and the `_impl.hpp` files.
+
