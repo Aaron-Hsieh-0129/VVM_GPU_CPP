@@ -20,7 +20,7 @@ end subroutine check_boundary
          (nsoil, nx, myim, flag, flag_iter, couple, icein, ffrozp, dt, zlvl, sldpth, &
           swdn, swnet, lwdn, sfcems, sfcprs, sfctmp, &
           sfcspd, prcp, q2, q2sat, dqsdt2, th2, ivegsrc, &
-          vegtyp, soiltyp, slopetyp, shdmin, alb, snoalb, &
+          vegtyp, soiltyp, slopetyp, shdmin, shdmax, alb, snoalb, &
           !  ---  input/outputs: &
           tbot, cmc, t1, stc, smc, sh2o, sneqv, ch, cm, z0, &
           !  ---  outputs: &
@@ -264,7 +264,7 @@ end subroutine check_boundary
 
          real(kind=kind_phys), dimension(nx, my_max), intent(in) :: ffrozp, &
             zlvl, lwdn, swdn, swnet, sfcprs, sfctmp, sfcems, &
-            sfcspd, prcp, q2, q2sat, dqsdt2, th2, shdmin, alb, snoalb
+            sfcspd, prcp, q2, q2sat, dqsdt2, th2, shdmin, shdmax, alb, snoalb
          real(kind=kind_phys), intent(in) :: dt
          real(kind=kind_phys), dimension(nsoil), intent(in) :: sldpth
 
@@ -348,6 +348,7 @@ end subroutine check_boundary
          real(kind=kind_phys) :: bfac, dsx, dthr, dw, pexp, &
                                  tavgc, tsnowc, tsoilc, esdc, esdcx ! snowpack_gpu
 
+         real(kind=kind_phys) :: interp_fraction
 
 
 
@@ -538,8 +539,20 @@ end subroutine check_boundary
 ! roughness lengthe is defined in sfcsub                                                  !%f
 !     z0(i, jj)  = z0_data(vegtyp(i, jj))                                                 !%f
             ! Aaron - turn this on to use input data
-            z0(i, jj)  = z0_data(vegtyp(i, jj))                                           !%f
-            xlai(i, jj) = lai_data(vegtyp(i, jj))                                         !%f
+            ! z0(i, jj)  = z0_data(vegtyp(i, jj))                                           !%f
+            ! xlai(i, jj) = lai_data(vegtyp(i, jj))                                         !%f
+            if (shdmax(i, jj) > shdmin(i, jj)) then
+                interp_fraction = (shdfac(i, jj) - shdmin(i, jj)) / (shdmax(i, jj) - shdmin(i, jj))
+                interp_fraction = max(0.0_kind_phys, min(interp_fraction, 1.0_kind_phys))
+                
+                z0(i, jj)   = (1.0_kind_phys - interp_fraction) * z0min_data(vegtyp(i, jj)) + &
+                              interp_fraction * z0max_data(vegtyp(i, jj))
+                xlai(i, jj) = (1.0_kind_phys - interp_fraction) * laimin_data(vegtyp(i, jj)) + &
+                              interp_fraction * laimax_data(vegtyp(i, jj))
+            else
+                z0(i, jj)   = 0.5_kind_phys * z0min_data(vegtyp(i, jj)) + 0.5_kind_phys * z0max_data(vegtyp(i, jj))
+                xlai(i, jj) = 0.5_kind_phys * laimin_data(vegtyp(i, jj)) + 0.5_kind_phys * laimax_data(vegtyp(i, jj))
+            end if
 !     sfcems(i, jj)= ems1_data(vegtyp(i, jj))      !for summer season                     !%f
 !     sfcems(i, jj)= ems2_data(vegtyp(i, jj))      !for winter season                     !%f
             if (vegtyp(i, jj) == bare) then                                               !%f
@@ -983,7 +996,8 @@ end subroutine check_boundary
                                                                                           !%g
 !   --- ...  ztfc: ratio of zoh/zom  less or equal than 1                                 !%g
 !            czil: constant c in zilitinkevich, s. s.1995,:note about zt                  !%g
-         zilfc = -czil*vkrm*sqvisc                                                        !%g
+         ! zilfc = -czil*vkrm*sqvisc                                                        !%g
+         zilfc = 10.0_kind_phys ** (-0.40_kind_phys * (z0(i, jj) / 0.07_kind_phys)) * vkrm * sqvisc
                                                                                           !%g
          zu = z0(i, jj)                                                                   !%g
                                                                                           !%g
@@ -1365,7 +1379,7 @@ end subroutine check_boundary
          !           linear when fxexp=1.                                                 !%dmq
          !           fx > 1 represents demand control                                     !%dmq
          !           fx < 1 represents flux control                                       !%dmq
-                     sratio = (sh2o(i, 1, jj) - smcdry(i, jj))/ &                         !%dmq
+                     sratio = (smc(i, 1, jj) - smcdry(i, jj))/ &                         !%dmq
                               (smcmax(i, jj) - smcdry(i, jj))                             !%dmq
                                                                                           !%dmq
                      if (sratio > 0.0) then                                               !%dmq

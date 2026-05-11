@@ -55,6 +55,7 @@ private:
     VVM::Real compute_es(VVM::Real t);
 
     std::string mode_;
+    std::string land_scheme_;
 };
 
 } // namespace Physics

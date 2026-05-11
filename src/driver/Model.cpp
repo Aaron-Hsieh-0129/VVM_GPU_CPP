@@ -168,8 +168,8 @@ void Model::run_step(VVM::Real dt) {
         bool is_compute_step = (state_.get_step()-1) % surface_process_steps_ == 0;
         if (is_compute_step) {
             // NOTE: Even the configuration specified tco_ocean model which is not from surface_, surface_ stil calculates surface friction for xi and eta. 
-            surface_->compute_coefficients(state_);
             if (land_) land_->run(dt);
+            surface_->compute_coefficients(state_);
         }
 
         for (const auto& var_name : sfc_thermodynamics_vars_) {

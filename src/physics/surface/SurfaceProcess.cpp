@@ -41,6 +41,7 @@ void SurfaceProcess::initialize(Core::State& state) {
     if (!state.has_field("sea_land_ice_mask")) state.add_field<2>("sea_land_ice_mask", {ny, nx});
 
     mode_ = config_.get_value<std::string>("physics.surface_process.ocean_scheme", "none");
+    land_scheme_ = config_.get_value<std::string>("physics.surface_process.land_scheme", "none");
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -294,13 +295,13 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
     const auto& zrough = state.get_field<2>("zrough").get_device_data();
     const auto& sea_land_ice_mask = state.get_field<2>("sea_land_ice_mask").get_device_data();
 
-    auto sfc_flux_th = state.get_field<2>("sfc_flux_th").get_mutable_device_data();
-    auto sfc_flux_qv = state.get_field<2>("sfc_flux_qv").get_mutable_device_data();
-    auto sfc_flux_u = state.get_field<2>("sfc_flux_u").get_mutable_device_data();
-    auto sfc_flux_v = state.get_field<2>("sfc_flux_v").get_mutable_device_data();
-    auto ustar_view = state.get_field<2>("ustar").get_mutable_device_data();
-    auto molen_view = state.get_field<2>("molen").get_mutable_device_data();
-    auto VEN2D = state.get_field<2>("VEN2D").get_mutable_device_data();
+    auto& sfc_flux_th = state.get_field<2>("sfc_flux_th").get_mutable_device_data();
+    auto& sfc_flux_qv = state.get_field<2>("sfc_flux_qv").get_mutable_device_data();
+    auto& sfc_flux_u = state.get_field<2>("sfc_flux_u").get_mutable_device_data();
+    auto& sfc_flux_v = state.get_field<2>("sfc_flux_v").get_mutable_device_data();
+    auto& ustar_view = state.get_field<2>("ustar").get_mutable_device_data();
+    auto& molen_view = state.get_field<2>("molen").get_mutable_device_data();
+    auto& VEN2D = state.get_field<2>("VEN2D").get_mutable_device_data();
 
     const auto& hx     = state.get_field<2>("topo").get_device_data();
     const auto& hxu    = state.get_field<2>("topou").get_device_data();
@@ -403,6 +404,29 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
                 sfc_flux_th(j,i) = wt * rhobar_up(hx1) / (cp * pibar(hx1));
             }
         );
+    }
+
+    if (land_scheme_ == "noahlsm") {
+        const auto& cmx = state.get_field<2>("cmx").get_device_data();
+
+        if (mode_ == "sflux_2d" || mode_ == "sflux_tc_2d") {
+            Kokkos::parallel_for("OverwriteLandVEN2D",
+                Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
+                KOKKOS_LAMBDA(const int j, const int i) {
+                    if (sea_land_ice_mask(j, i) != 0) {
+                        VEN2D(j, i) = cmx(j, i);
+                    }
+                }
+            );
+        }
+        else if (mode_ == "tco_ocean") {
+            Kokkos::parallel_for("OverwriteLandVEN2D",
+                Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
+                KOKKOS_LAMBDA(const int j, const int i) {
+                    VEN2D(j, i) = cmx(j, i);
+                }
+            );
+        }
     }
     halo_exchanger_.exchange_halos(state.get_field<2>("VEN2D"));
 

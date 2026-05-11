@@ -22,7 +22,7 @@ contains
         sigmaf, sfemis, alb, shdmin, shdmax, &
         t1, q1, u1, v1, ps, prcp, swdn, lwdn, hgt, prslki_in, &
         stc, smc, slc, tskin, canopy, snwdph, sneqv, &
-        hflux, qflux, evap, zorl) bind(c, name="run_vvm_land_wrapper")
+        hflux, qflux, evap, zorl, cmx) bind(c, name="run_vvm_land_wrapper")
         
         integer(c_int), value :: use_tco_ocean
         integer(c_int), value :: nx, ny, nsoil
@@ -39,7 +39,7 @@ contains
 
         real(c_vvm_real), intent(inout) :: sfemis(nx,ny)
         real(c_vvm_real), intent(inout) :: stc(nx,nsoil,ny), smc(nx,nsoil,ny), slc(nx,nsoil,ny)
-        real(c_vvm_real), intent(inout) :: tskin(nx,ny), canopy(nx,ny), snwdph(nx,ny), sneqv(nx,ny), zorl(nx,ny)
+        real(c_vvm_real), intent(inout) :: tskin(nx,ny), canopy(nx,ny), snwdph(nx,ny), sneqv(nx,ny), zorl(nx,ny), cmx(nx, ny)
         real(c_vvm_real), intent(inout) :: hflux(nx,ny), qflux(nx,ny), evap(nx,ny)
 
         real(8), parameter :: g = 9.806_c_vvm_real
@@ -95,7 +95,7 @@ contains
         !$acc data present(islimsk, vegtype, soiltyp, slopetyp, &
         !$acc              sigmaf, sfemis, alb, shdmin, shdmax, &
         !$acc              t1, q1, u1, v1, ps, prcp, swdn, lwdn, hgt, &
-        !$acc              stc, smc, slc, tskin, canopy, snwdph, sneqv, hflux, qflux, evap, zorl) &
+        !$acc              stc, smc, slc, tskin, canopy, snwdph, sneqv, hflux, qflux, evap, zorl, cmx) &
         !$acc      create(psi, prsl1, prslki, tg, z0rl, cd, cdq, rb, stress, &
         !$acc             fm, fh, ustar, sfcw, ddvel, fm10, fh2, fh10, &
         !$acc             tsurf, flag_iter, flag_guess, qsurf, &
@@ -237,6 +237,8 @@ contains
                     ! land 
                     zorl(i,j) = z0rl(i,j) / 100.0_c_vvm_real ! cm -> m
                 end if
+
+                cmx(i,j) = cd(i,j) * sfcw(i,j)
             end do
         end do
         

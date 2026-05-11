@@ -407,7 +407,7 @@
           couple, ice, ffrozp, delt, zf, sldpth,            & 
           dswsfc, snet, dlwflx, sfcemis, prsl1, sfctmp,                & 
           wind, prcp, q0, qs1, dqsdt2, theta1, ivegsrc,             & 
-          vegtype, soiltyp, slopetyp, shdmin, sfalb, snoalb,              &
+          vegtype, soiltyp, slopetyp, shdmin, shdmax, sfalb, snoalb,              &
 !  ---  input/outputs: &
           tbot, canopy, tsurf, stc, &
           smc, slc, weasd, chx, cmx,  & 
@@ -422,7 +422,7 @@
 
       !!$acc wait(async_id)
       !!$acc update self(soiltyp, vegtype, slopetyp, sfcemis, dlwflx, &
-      !!$acc&       dswsfc, snet, snoalb, sfalb, zf, prsl1, shdmin, weasd, &
+      !!$acc&       dswsfc, snet, snoalb, sfalb, zf, prsl1, shdmin, shdmax, weasd, &
       !!$acc&       canopy, tsurf, trans, sncovr1, gflux, drain, evap, &
       !!$acc&       hflx, ep, runoff, zorl, albedo2, evbs, evcw, sbsno, &
       !!$acc&       stm, smcwlt2, smcref2, q0, qs1, theta1, wind, beta, &
