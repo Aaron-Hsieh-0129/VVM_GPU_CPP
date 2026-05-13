@@ -300,7 +300,14 @@
             "fixed_total_solar_irradiance": 551.58,
             "fixed_solar_zenith_angle": 0.74256,
             "pool_size_multiplier": 1.933,
-            "orbital_year": 2012 
+            "time": {
+                "year": 2021,
+                "month": 3,
+                "day": 31,
+                "hour": 16,
+                "minute": 0,
+                "second": 0
+            }
         },
         "turbulence": {
             "enable_turbulence": true

@@ -20,6 +20,33 @@ using PF = scream::PhysicsFunctions<DefaultDevice>;
 using PC = scream::physics::Constants<Real>;
 using CO = scream::ColumnOps<DefaultDevice, Real>;
 
+bool is_leap_year(int year) {
+    return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+}
+
+double calculate_calday(int year, int month, int day, int hour, int minute, double second) {
+    if (year < 0 || month < 0 || day < 0 || hour < 0 || minute < 0 || second < 0) {
+        std::cout << "WARNING: The timestamp is negative, please check!!!" << std::endl;
+        return 1;
+    }
+    int days_in_month[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    
+    if (is_leap_year(year)) {
+        days_in_month[2] = 29;
+    }
+
+    int day_of_year = 0;
+    for (int i = 1; i < month; ++i) {
+        day_of_year += days_in_month[i];
+    }
+    day_of_year += day;
+
+    double fractional_day = (hour + minute / 60.0 + second / 3600.0) / 24.0;
+
+    return day_of_year + fractional_day;
+}
+
+
 RRTMGPRadiation::RRTMGPRadiation(const VVM::Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params)
     : m_grid(grid), m_config(config), m_params(params)
 {
@@ -77,11 +104,16 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
     // Determine orbital year. If orbital_year is negative, use current year
     // from timestamp for orbital year; if positive, use provided orbital year
     // for duration of simulation.
-    m_orbital_year = m_config.get_value<Int>("orbital_year",-9999);
+    m_orbital_year = m_config.get_value<int>("physics.rrtmgp.time.year", -9999);
+    m_orbital_month = m_config.get_value<int>("physics.rrtmgp.time.month", -9999);
+    m_orbital_day = m_config.get_value<int>("physics.rrtmgp.time.day", -9999);
+    m_orbital_hour = m_config.get_value<int>("physics.rrtmgp.time.hour", -9999);
+    m_orbital_minute = m_config.get_value<int>("physics.rrtmgp.time.minute", -9999);
+    m_orbital_second = m_config.get_value<int>("physics.rrtmgp.time.second", -9999);
     // Get orbital parameters from yaml file
-    m_orbital_eccen = m_config.get_value<double>("orbital_eccentricity",-9999.0);
-    m_orbital_obliq = m_config.get_value<double>("orbital_obliquity"   ,-9999.0);
-    m_orbital_mvelp = m_config.get_value<double>("orbital_mvelp"       ,-9999.0);
+    m_orbital_eccen = m_config.get_value<VVM::Real>("physics.rrtmgp.orbital_eccentricity", -9999.0);
+    m_orbital_obliq = m_config.get_value<VVM::Real>("physics.rrtmgp.orbital_obliquity", -9999.0);
+    m_orbital_mvelp = m_config.get_value<VVM::Real>("physics.rrtmgp.orbital_mvelp", -9999.0);
 
 
     // Value for prescribing an invariant solar constant (i.e. total solar irradiance at
@@ -334,10 +366,10 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
     double obliq = m_orbital_obliq;
     double mvelp = m_orbital_mvelp;
     
-    // TODO: Need timestamp/year from VVM state or time manager
-    // For now assuming a default or simple time stepping
     // double calday = 1.0;       // Placeholder for Jan 1st
-    double calday = 231.66667 + (state.get_time() / 86400.0);
+    calday_ = calculate_calday(m_orbital_year, m_orbital_month, m_orbital_day, m_orbital_hour, m_orbital_minute, m_orbital_second);
+    calday_ += (state.get_time() / 86400.0);
+
     if (eccen >= 0 && obliq >= 0 && mvelp >= 0) {
         orbital_year = shr_orb_undef_int_c2f;
     }
@@ -347,7 +379,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                        &obliqr, &lambm0, &mvelpp);
 
     double delta, eccf;
-    shr_orb_decl_c2f(calday, eccen, mvelpp, lambm0,
+    shr_orb_decl_c2f(calday_, eccen, mvelpp, lambm0,
                      obliqr, &delta, &eccf);
     
     if (m_fixed_total_solar_irradiance > 0) {
@@ -380,7 +412,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 double lon_rad = h_lon(beg + i) * PC::Pi / 180.0;
                 // double lat_rad = 23.5 * PC::Pi / 180.0;
                 // double lon_rad = 121. * PC::Pi / 180.0;
-                h_mu0(i) = shr_orb_cosz_c2f(calday, lat_rad, lon_rad, delta, dt);
+                h_mu0(i) = shr_orb_cosz_c2f(calday_, lat_rad, lon_rad, delta, dt);
             }
         }
         

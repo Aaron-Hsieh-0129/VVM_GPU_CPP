@@ -11,6 +11,7 @@
 #include "core/Grid.hpp"
 #include "core/State.hpp"
 #include "core/Field.hpp"
+#include "core/vvm_types.hpp"
 #include "utils/ConfigurationManager.hpp"
 
 // RRTMGP/EAMxx Includes
@@ -93,6 +94,11 @@ public:
     // If > 0, use constant orbital year for duration of simulation
     // If < 0, use year from timestamp for orbital parameters
     Int m_orbital_year;
+    Int m_orbital_month;
+    Int m_orbital_day;
+    Int m_orbital_hour;
+    Int m_orbital_minute;
+    Int m_orbital_second;
     // Orbital parameters, used for zenith angle calculations.
     // If >= 0, bypass computation based on orbital year and use fixed parameters
     // If <  0, compute based on orbital year, specified above
@@ -246,6 +252,8 @@ protected:
 
     // Struct which contains local variables (Unmanaged views pointing to m_buffer_storage)
     Buffer m_buffer;
+
+    VVM::Real calday_ = -1;
 };
 
 } // namespace RRTMGP
