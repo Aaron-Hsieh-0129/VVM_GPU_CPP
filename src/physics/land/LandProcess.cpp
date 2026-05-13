@@ -53,6 +53,7 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
     m_cmx = view_2d_ll("lsm_cmx", m_nx, m_ny);
 
     m_sigmaf = view_2d_ll("lsm_sigmaf", m_nx, m_ny); // Green Vegetation Fraction
+    m_lai = view_2d_ll("lsm_lai", m_nx, m_ny); // leaf area index (m^2/m^2)
     m_sfemis = view_2d_ll("lsm_sfemis", m_nx, m_ny); // Surface Emissivity
     m_alb    = view_2d_ll("lsm_alb", m_nx, m_ny); // Surface Albedo
     m_shdmin = view_2d_ll("lsm_shdmin", m_nx, m_ny); // Minimum Fractional Coverage
@@ -80,6 +81,7 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
     if (!state.has_field("shdmax")) state.add_field<2>("shdmax", {ny, nx});
     if (!state.has_field("albedo")) state.add_field<2>("albedo", {ny, nx});
     if (!state.has_field("gvf")) state.add_field<2>("gvf", {ny, nx});
+    if (!state.has_field("lai")) state.add_field<2>("lai", {ny, nx});
     if (!state.has_field("stc")) state.add_field<3>("stc", {m_nsoil, ny, nx});
     if (!state.has_field("smc")) state.add_field<3>("smc", {m_nsoil, ny, nx});
     if (!state.has_field("slc")) state.add_field<3>("slc", {m_nsoil, ny, nx});
@@ -151,6 +153,7 @@ void LandProcess::prepare_static_data() {
     auto& shdmax = state_.get_field<2>("shdmax").get_device_data();
     auto& albedo = state_.get_field<2>("albedo").get_device_data();
     auto& gvf = state_.get_field<2>("gvf").get_device_data();
+    auto& lai = state_.get_field<2>("lai").get_device_data();
 
     Kokkos::parallel_for("PrepareLandStaticData", 
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {m_nx, m_ny}),
@@ -167,6 +170,7 @@ void LandProcess::prepare_static_data() {
             m_prslki(i, j) = pibar_up_v(hx) / pibar_v(hxp);
 
             m_sigmaf(i, j) = gvf(vj, vi) / real(100.);  // Green Vegetation Fraction
+            m_lai(i, j) = lai(vj, vi);
             m_sfemis(i, j) = real(0.98); // Surface Emissivity (the distribution will be given in vvm_land_interface.f90)
             m_alb(i, j)    = albedo(vj, vi) / real(100.);  // Surface albedo
             m_shdmin(i, j) = shdmin(vj, vi) / real(100.); // Minimum Fractional Coverage
@@ -284,7 +288,8 @@ void LandProcess::run(VVM::Real dt) {
         m_prcp.data(), m_swdn.data(), m_lwdn.data(), m_hgt.data(), m_prslki.data(),
         m_stc.data(), m_smc.data(), m_slc.data(), m_tskin.data(), 
         m_canopy.data(), m_snwdph.data(), m_sneqv.data(),
-        m_hflux.data(), m_qflux.data(), m_evap.data(), m_zorl.data(), m_cmx.data());
+        m_hflux.data(), m_qflux.data(), m_evap.data(), m_zorl.data(), m_cmx.data(), 
+        m_lai.data(), true);
 
     postprocessing_and_unpacking();
 }
@@ -296,7 +301,7 @@ void LandProcess::finalize() {
     m_ps = {}; m_prcp = {}; m_swdn = {}; m_lwdn = {};
     m_stc = {}; m_smc = {}; m_slc = {};
     m_tskin = {}; m_canopy = {}; m_snwdph = {}; m_sneqv = {};
-    m_hflux = {}; m_qflux = {}; m_evap = {};
+    m_hflux = {}; m_qflux = {}; m_evap = {}; m_lai = {};
 }
 
 void LandProcess::register_openacc() {
@@ -306,7 +311,7 @@ void LandProcess::register_openacc() {
     MAP_KOKKOS_DEVICE(m_u1); MAP_KOKKOS_DEVICE(m_v1);
     MAP_KOKKOS_DEVICE(m_ps); MAP_KOKKOS_DEVICE(m_prcp); 
     MAP_KOKKOS_DEVICE(m_swdn); MAP_KOKKOS_DEVICE(m_lwdn); MAP_KOKKOS_DEVICE(m_hgt); MAP_KOKKOS_DEVICE(m_prslki);
-    MAP_KOKKOS_DEVICE(m_sigmaf); MAP_KOKKOS_DEVICE(m_sfemis); MAP_KOKKOS_DEVICE(m_alb); MAP_KOKKOS_DEVICE(m_shdmin); MAP_KOKKOS_DEVICE(m_shdmax);
+    MAP_KOKKOS_DEVICE(m_sigmaf); MAP_KOKKOS_DEVICE(m_sfemis); MAP_KOKKOS_DEVICE(m_alb); MAP_KOKKOS_DEVICE(m_shdmin); MAP_KOKKOS_DEVICE(m_shdmax); MAP_KOKKOS_DEVICE(m_lai);
     MAP_KOKKOS_DEVICE(m_stc); MAP_KOKKOS_DEVICE(m_smc); MAP_KOKKOS_DEVICE(m_slc);
     MAP_KOKKOS_DEVICE(m_tskin); MAP_KOKKOS_DEVICE(m_canopy); MAP_KOKKOS_DEVICE(m_snwdph); MAP_KOKKOS_DEVICE(m_sneqv);
     MAP_KOKKOS_DEVICE(m_hflux); MAP_KOKKOS_DEVICE(m_qflux); MAP_KOKKOS_DEVICE(m_evap);
@@ -319,7 +324,7 @@ void LandProcess::unregister_openacc() {
     UNMAP_KOKKOS_DEVICE(m_u1); UNMAP_KOKKOS_DEVICE(m_v1);
     UNMAP_KOKKOS_DEVICE(m_ps); UNMAP_KOKKOS_DEVICE(m_prcp); 
     UNMAP_KOKKOS_DEVICE(m_swdn); UNMAP_KOKKOS_DEVICE(m_lwdn); UNMAP_KOKKOS_DEVICE(m_hgt); UNMAP_KOKKOS_DEVICE(m_prslki);
-    UNMAP_KOKKOS_DEVICE(m_sigmaf); UNMAP_KOKKOS_DEVICE(m_sfemis); UNMAP_KOKKOS_DEVICE(m_alb); UNMAP_KOKKOS_DEVICE(m_shdmin); UNMAP_KOKKOS_DEVICE(m_shdmax);
+    UNMAP_KOKKOS_DEVICE(m_sigmaf); UNMAP_KOKKOS_DEVICE(m_sfemis); UNMAP_KOKKOS_DEVICE(m_alb); UNMAP_KOKKOS_DEVICE(m_shdmin); UNMAP_KOKKOS_DEVICE(m_shdmax); UNMAP_KOKKOS_DEVICE(m_lai);
     UNMAP_KOKKOS_DEVICE(m_stc); UNMAP_KOKKOS_DEVICE(m_smc); UNMAP_KOKKOS_DEVICE(m_slc);
     UNMAP_KOKKOS_DEVICE(m_tskin); UNMAP_KOKKOS_DEVICE(m_canopy); UNMAP_KOKKOS_DEVICE(m_snwdph); UNMAP_KOKKOS_DEVICE(m_sneqv);
     UNMAP_KOKKOS_DEVICE(m_hflux); UNMAP_KOKKOS_DEVICE(m_qflux); UNMAP_KOKKOS_DEVICE(m_evap);

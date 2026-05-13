@@ -120,7 +120,7 @@
              sncovr1, qsurf, gflux, drain, evap, hflx, ep, runoff,      &
 !    &       cmm, chh, evbs, evcw, sbsno, snowc, stm, snohf,            &
 !    &       smcwlt2, smcref2, wet1                                     & 
-             albedo2, j, io, jo, async_id)
+             albedo2, j, io, jo, xlai, rdlai2d, async_id)
 !
       !$acc routine(fpvs_gpu) seq
       use machine , only : kind_phys
@@ -200,9 +200,11 @@
              runoff3, sfctmp,         & 
              shdfac,          & 
              smcdry, smcmax, snowh,            & 
-             snomlt, soilw, tbot,      & 
-             xlai
+             snomlt, soilw, tbot
       real (kind=kind_phys) :: tem, fpvs_gpu, ttmp
+
+      real (kind=kind_phys), dimension(im, my_max), intent(inout) :: xlai
+      logical, intent(in) :: rdlai2d
       
       integer, parameter :: nxpvs = 7501
       real :: c1xpvs,c2xpvs,tbpvs(nxpvs)
@@ -230,7 +232,7 @@
       !$acc&      chh, nroot, et, &
       !$acc&      drip, dew, beta, flx1, flx2, flx3, &
       !$acc&      runoff3, snomlt, rc, pc, rsmin, zsoil_noah, &
-      !$acc&      xlai, rcs, rct, rcq, rcsoil, soilw, smcdry, sldpth, &
+      !$acc&      rcs, rct, rcq, rcsoil, soilw, smcdry, sldpth, &
       !$acc&      smcmax, stm, smcwlt2, smcref2, rch) async(async_id)
       !!$acc enter data copyin(sldpth, idx2) async(async_id)
 
@@ -404,7 +406,7 @@
        call sflx_gpu                                                     &
 !  ---  inputs: &
         ( nsoil, im, myim, flag, flag_iter, &
-          couple, ice, ffrozp, delt, zf, sldpth,            & 
+          couple, ice, ffrozp, rdlai2d, delt, zf, sldpth,            & 
           dswsfc, snet, dlwflx, sfcemis, prsl1, sfctmp,                & 
           wind, prcp, q0, qs1, dqsdt2, theta1, ivegsrc,             & 
           vegtype, soiltyp, slopetyp, shdmin, shdmax, sfalb, snoalb,              &
@@ -595,7 +597,7 @@
       !$acc&     chh, nroot, et, &
       !$acc&     drip, dew, beta, flx1, flx2, flx3, &
       !$acc&     runoff3, snomlt, rc, pc, rsmin, zsoil_noah, &
-      !$acc&     xlai, rcs, rct, rcq, rcsoil, soilw, smcdry, sldpth, &
+      !$acc&     rcs, rct, rcq, rcsoil, soilw, smcdry, sldpth, &
       !$acc&     smcmax, stm, smcwlt2, smcref2, rch) async(async_id)
 !
       return

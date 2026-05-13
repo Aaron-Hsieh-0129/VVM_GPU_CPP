@@ -17,7 +17,7 @@ end subroutine check_boundary
       subroutine sflx_gpu &
          !...................................
          !  ---  inputs: &
-         (nsoil, nx, myim, flag, flag_iter, couple, icein, ffrozp, dt, zlvl, sldpth, &
+         (nsoil, nx, myim, flag, flag_iter, couple, icein, ffrozp, rdlai2d, dt, zlvl, sldpth, &
           swdn, swnet, lwdn, sfcems, sfcprs, sfctmp, &
           sfcspd, prcp, q2, q2sat, dqsdt2, th2, ivegsrc, &
           vegtyp, soiltyp, slopetyp, shdmin, shdmax, alb, snoalb, &
@@ -267,10 +267,11 @@ end subroutine check_boundary
             sfcspd, prcp, q2, q2sat, dqsdt2, th2, shdmin, shdmax, alb, snoalb
          real(kind=kind_phys), intent(in) :: dt
          real(kind=kind_phys), dimension(nsoil), intent(in) :: sldpth
+         logical, intent(in) :: rdlai2d
 
 !  ---  input/outputs:
          real(kind=kind_phys), dimension(nx, my_max), intent(inout) :: tbot, &
-            cmc, t1, sneqv, ch, cm, z0, shdfac, snowh
+            cmc, t1, sneqv, ch, cm, z0, shdfac, snowh, xlai
          real(kind=kind_phys), dimension(nx, nsoil, my_max), intent(inout) :: &
             stc, smc, sh2o
 
@@ -280,7 +281,7 @@ end subroutine check_boundary
          real(kind=kind_phys), dimension(nx, my_max), intent(out) :: albedo, &
             eta, sheat, ec, edir, ett, esnow, drip, dew, &
             beta, etp, ssoil, flx1, flx2, flx3, snomlt, sncovr, &
-            runoff1, runoff2, runoff3, rc, pc, rsmin, xlai, rcs, &
+            runoff1, runoff2, runoff3, rc, pc, rsmin, rcs, &
             rct, rcq, rcsoil, soilw, soilm, smcwlt, smcdry, smcref, &
             smcmax
          real(kind=kind_phys), dimension(nx, nsoil, my_max), intent(out) :: et
@@ -538,21 +539,28 @@ end subroutine check_boundary
             hs = hstbl(vegtyp(i, jj))                                                     !%f
 ! roughness lengthe is defined in sfcsub                                                  !%f
 !     z0(i, jj)  = z0_data(vegtyp(i, jj))                                                 !%f
-            ! Aaron - turn this on to use input data
-            ! z0(i, jj)  = z0_data(vegtyp(i, jj))                                           !%f
-            ! xlai(i, jj) = lai_data(vegtyp(i, jj))                                         !%f
+
+            ! Aaron - turn this on to use input data or do interpolation
             if (shdmax(i, jj) > shdmin(i, jj)) then
                 interp_fraction = (shdfac(i, jj) - shdmin(i, jj)) / (shdmax(i, jj) - shdmin(i, jj))
                 interp_fraction = max(0.0_kind_phys, min(interp_fraction, 1.0_kind_phys))
                 
                 z0(i, jj)   = (1.0_kind_phys - interp_fraction) * z0min_data(vegtyp(i, jj)) + &
                               interp_fraction * z0max_data(vegtyp(i, jj))
-                xlai(i, jj) = (1.0_kind_phys - interp_fraction) * laimin_data(vegtyp(i, jj)) + &
-                              interp_fraction * laimax_data(vegtyp(i, jj))
+                
+                if (.not. rdlai2d) then
+                    xlai(i, jj) = (1.0_kind_phys - interp_fraction) * laimin_data(vegtyp(i, jj)) + &
+                                  interp_fraction * laimax_data(vegtyp(i, jj))
+                end if
             else
                 z0(i, jj)   = 0.5_kind_phys * z0min_data(vegtyp(i, jj)) + 0.5_kind_phys * z0max_data(vegtyp(i, jj))
-                xlai(i, jj) = 0.5_kind_phys * laimin_data(vegtyp(i, jj)) + 0.5_kind_phys * laimax_data(vegtyp(i, jj))
+                
+                if (.not. rdlai2d) then
+                    xlai(i, jj) = 0.5_kind_phys * laimin_data(vegtyp(i, jj)) + 0.5_kind_phys * laimax_data(vegtyp(i, jj))
+                end if
             end if
+
+
 !     sfcems(i, jj)= ems1_data(vegtyp(i, jj))      !for summer season                     !%f
 !     sfcems(i, jj)= ems2_data(vegtyp(i, jj))      !for winter season                     !%f
             if (vegtyp(i, jj) == bare) then                                               !%f

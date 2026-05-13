@@ -22,7 +22,8 @@ contains
         sigmaf, sfemis, alb, shdmin, shdmax, &
         t1, q1, u1, v1, ps, prcp, swdn, lwdn, hgt, prslki_in, &
         stc, smc, slc, tskin, canopy, snwdph, sneqv, &
-        hflux, qflux, evap, zorl, cmx) bind(c, name="run_vvm_land_wrapper")
+        hflux, qflux, evap, zorl, cmx, & 
+        lai, rdlai2d) bind(c, name="run_vvm_land_wrapper")
         
         integer(c_int), value :: use_tco_ocean
         integer(c_int), value :: nx, ny, nsoil
@@ -41,6 +42,9 @@ contains
         real(c_vvm_real), intent(inout) :: stc(nx,nsoil,ny), smc(nx,nsoil,ny), slc(nx,nsoil,ny)
         real(c_vvm_real), intent(inout) :: tskin(nx,ny), canopy(nx,ny), snwdph(nx,ny), sneqv(nx,ny), zorl(nx,ny), cmx(nx, ny)
         real(c_vvm_real), intent(inout) :: hflux(nx,ny), qflux(nx,ny), evap(nx,ny)
+
+        real(c_vvm_real), intent(inout) :: lai(nx, ny)
+        logical(c_bool), value          :: rdlai2d
 
         real(8), parameter :: g = 9.806_c_vvm_real
         real(8), parameter :: r = 287.04_c_vvm_real
@@ -191,7 +195,7 @@ contains
                  shdmin, shdmax, snoalb, alb, flag_iter, flag_guess, isot, ivegsrc, sneqv, &
                  snwdph, tg, tprcp, srflag, smc, stc, slc, &
                  canopy, tsurf, z0rl, sncover, qsurf, gfx, drain, qflux, &
-                 hflux, ep1d, runof, albedo2, 1, 1, 1, async_id)
+                 hflux, ep1d, runof, albedo2, 1, 1, 1, lai, rdlai2d, async_id)
                  
             call sfc_sice_gpu(myim, nx, nsoil, 1, ncld, psi, u1, v1, t1, q1, dt, sfemis, lwdn, &
                  swdn, swdn, srflag, cd, cdq, prsl1, prslki, islimsk, ddvel, &
