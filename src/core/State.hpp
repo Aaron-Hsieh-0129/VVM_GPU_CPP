@@ -43,6 +43,11 @@ public:
     State(const Utils::ConfigurationManager& config, const Parameters& params, const Grid& grid);
 #endif
 
+#if defined(ENABLE_NCCL)
+    ncclComm_t get_nccl_comm() const { return nccl_comm_; }
+    cudaStream_t get_cuda_stream() const { return nccl_stream_; }
+#endif
+
     template<size_t Dim>
     void add_field(const std::string& name, std::initializer_list<int> dims_list) {
         if (dims_list.size() != Dim) {

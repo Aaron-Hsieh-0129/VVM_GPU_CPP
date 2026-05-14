@@ -105,6 +105,11 @@
                     "file_prefix": "ls_forcing_",
                     "update_interval_s": 3600.0
                 }
+            },
+            "areamn": {
+                "enable": true,
+                "uvtau": 7200,
+                "nudge_start_m": 0
 
             }
         },

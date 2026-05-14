@@ -57,6 +57,11 @@ Model::Model(const Utils::ConfigurationManager& config,
         lateral_boundary_nudging_ = std::make_unique<Dynamics::LateralBoundaryNudging>(config_, grid_, params_, state_);
     }
 
+    uvtau_ = config.get_value<VVM::Real>("dynamics.forcings.areamn.uvtau", 0.0);
+    if (config_.get_value<bool>("dynamics.forcings.areamn.enable", false)) {
+        area_mean_nudging_ = std::make_unique<Dynamics::AreaMeanNudging>(config_, grid_, params_);
+    }
+
     if (config_.get_value<bool>("dynamics.forcings.random_perturbation.enable", false)) {
         random_forcing_ = std::make_unique<Dynamics::RandomForcing>(config_, grid_, params_);
     }
@@ -103,6 +108,7 @@ void Model::init() {
     if (radiation_) radiation_->initialize(state_);
     if (sponge_layer_) sponge_layer_->initialize(state_);
     if (lateral_boundary_nudging_) lateral_boundary_nudging_->initialize(state_);
+    if (area_mean_nudging_) area_mean_nudging_->initialize(state_);
     if (surface_) surface_->initialize(state_);
     if (land_) land_->init();
     if (random_forcing_) random_forcing_->initialize(state_);
@@ -114,6 +120,11 @@ void Model::init() {
     int nx = grid_.get_local_total_points_x();
     int h = grid_.get_halo_cells();
     if (!state_.has_field("th_perturb")) state_.add_field<3>("th_perturb", {nz, ny, nx});
+
+    if (area_mean_nudging_ && uvtau_ == 0.0) {
+        predict_uvtopmn_ = false;
+    }
+
 }
 
 void Model::run_step(VVM::Real dt) {
@@ -297,14 +308,23 @@ void Model::run_step(VVM::Real dt) {
         }
     }
 
-    if (turbulence_ || sponge_layer_ || enable_surface_process_) {
+    if (area_mean_nudging_) {
+        area_mean_nudging_->apply_vorticity(state_, dt);
+    }
+
+    if (turbulence_ || sponge_layer_ || enable_surface_process_ || area_mean_nudging_) {
         halo_exchanger_.exchange_multiple_halos(dynamics_vars_, state_);
         for (const auto& var_name : dynamics_vars_) {
             bc_manager_.apply_vorticity_bc(state_.get_field<3>(var_name));
         }
         dycore_->compute_zeta_vertical_structure(state_);
     }
-    if (wind_solver_) dycore_->diagnose_wind_fields(state_);
+
+    if (wind_solver_) {
+        if (predict_uvtopmn_) dycore_->compute_uvtopmn();
+        if (area_mean_nudging_) area_mean_nudging_->apply_uvtopmn(state_, dt);
+        dycore_->compute_wind_fields();
+    }
 }
 
 void Model::finalize() {

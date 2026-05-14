@@ -12,6 +12,7 @@
 #include "dynamics/forcings/SpongeLayer.hpp"
 #include "dynamics/forcings/RandomForcing.hpp"
 #include "dynamics/forcings/LateralBoundaryNudging.hpp"
+#include "dynamics/forcings/AreaMeanNudging.hpp"
 #include <set>
 
 namespace VVM {
@@ -51,6 +52,7 @@ private:
     std::unique_ptr<Dynamics::RandomForcing> random_forcing_;
     std::unique_ptr<Dynamics::LateralBoundaryNudging> lateral_boundary_nudging_;
     std::unique_ptr<Physics::LandProcess> land_;
+    std::unique_ptr<Dynamics::AreaMeanNudging> area_mean_nudging_;
 
     int rad_freq_in_steps_;
     int surface_process_steps_;
@@ -59,6 +61,9 @@ private:
 
     bool wind_solver_ = true;
     bool enable_surface_process_ = false;
+
+    VVM::Real uvtau_;
+    bool predict_uvtopmn_ = true;
 };
 
 }
