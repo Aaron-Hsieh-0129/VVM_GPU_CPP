@@ -69,31 +69,110 @@ void Initializer::initialize_grid() const {
     auto& z_up_mutable = parameters_.z_up.get_mutable_device_data();
     auto& flex_height_coef_mid_mutable = parameters_.flex_height_coef_mid.get_mutable_device_data();
     auto& flex_height_coef_up_mutable = parameters_.flex_height_coef_up.get_mutable_device_data();
+
     auto z_mid_mutable_h = parameters_.z_mid.get_host_data();
     auto z_up_mutable_h = parameters_.z_up.get_host_data();
+    auto flex_height_coef_mid_h = parameters_.flex_height_coef_mid.get_host_data();
+    auto flex_height_coef_up_h = parameters_.flex_height_coef_up.get_host_data();
 
     VVM::Real ZB = real(0.);
     z_up_mutable_h(h-1) = ZB;
-    for (int k = h; k < nz; k++) {
-        z_up_mutable_h(k) = z_up_mutable_h(k-1) + dz;
-    }
-    z_mid_mutable_h(h-1) = z_up_mutable_h(h-1);
-    z_mid_mutable_h(h) = z_up_mutable_h(h-1) + real(0.5) * dz;
-    for (int k = h+1; k < nz; k++) {
-        z_mid_mutable_h(k) = z_mid_mutable_h(k-1) + dz;
-    }
-    Kokkos::deep_copy(z_up_mutable, z_up_mutable_h);
-    Kokkos::deep_copy(z_mid_mutable, z_mid_mutable_h);
 
-    Kokkos::parallel_for("Init_Z_flexZCoef", Kokkos::RangePolicy<>(h-1, nz),
-        KOKKOS_LAMBDA(const int k) {
-            flex_height_coef_mid_mutable(k) = real(1.) / (CZ1 + real(2.) * CZ2 * z_mid_mutable(k));
-            flex_height_coef_up_mutable(k) = real(1.) / (CZ1 + real(2.) * CZ2 * z_up_mutable(k));
-            z_mid_mutable(k) = z_mid_mutable(k) * (CZ1 + CZ2 * z_mid_mutable(k));
-            z_up_mutable(k) = z_up_mutable(k) * (CZ1 + CZ2 * z_up_mutable(k));
+    std::string v_coord_type = config_.get_value<std::string>("grid.vertical_coordinate_type", "default");
+
+    if (v_coord_type == "taiwanvvm") {
+        // TaiwanVVM Vertical Coordinate Logic
+        for (int k = h; k < nz; k++) {
+            z_up_mutable_h(k) = z_up_mutable_h(k-1) + dz;
         }
-    );
-    
+
+        z_mid_mutable_h(h-1) = z_up_mutable_h(h-1);
+        z_mid_mutable_h(h) = z_up_mutable_h(h-1) + real(0.5) * dz;
+        for (int k = h+1; k < nz; k++) {
+            z_mid_mutable_h(k) = z_mid_mutable_h(k-1) + dz;
+        }
+
+        // Fortran: DO 40 (ZZ & FNZ transformation)
+        for (int k = h-1; k < nz; k++) {
+            flex_height_coef_up_h(k) = real(1.) / (CZ1 + real(2.) * CZ2 * z_up_mutable_h(k));
+            z_up_mutable_h(k) = z_up_mutable_h(k) * (CZ1 + CZ2 * z_up_mutable_h(k));
+        }
+
+        int KT = static_cast<int>((real(1.) - CZ1) / CZ2 / real(2.) / dz);
+        int kt_idx = (KT + h - 2 >= nz) ? nz - 1 : KT + h - 2; 
+        if (kt_idx < 0) kt_idx = 0;
+        int KT1 = static_cast<int>(z_up_mutable_h(kt_idx) / dz1 + real(0.999));
+
+        z_up_mutable_h(h-1) = ZB;
+        flex_height_coef_up_h(h-1) = dz / dz1;
+
+        for (int K = 2; K <= KT1 - 1; K++) {
+            int kc = K + h - 2;
+            for (int KK = nz - 1; KK >= kc + 1; KK--) {
+                flex_height_coef_up_h(KK) = flex_height_coef_up_h(KK-1);
+                z_up_mutable_h(KK) = z_up_mutable_h(KK-1) + dz1;
+            }
+            if (kc < nz) {
+                flex_height_coef_up_h(kc) = dz / dz1;
+                z_up_mutable_h(kc) = z_up_mutable_h(kc-1) + dz1;
+            }
+        }
+
+        for (int k = h-1; k < nz; k++) {
+            flex_height_coef_mid_h(k) = real(1.) / (CZ1 + real(2.) * CZ2 * z_mid_mutable_h(k));
+            z_mid_mutable_h(k) = z_mid_mutable_h(k) * (CZ1 + CZ2 * z_mid_mutable_h(k));
+        }
+
+        z_mid_mutable_h(h-1) = ZB;
+        flex_height_coef_mid_h(h-1) = dz / dz1;
+        z_mid_mutable_h(h) = z_up_mutable_h(h-1) + dz1 / real(2.);
+        flex_height_coef_mid_h(h) = dz / dz1;
+
+        for (int K = 3; K <= KT1; K++) {
+            int kc = K + h - 2;
+            for (int KK = nz - 1; KK >= kc + 1; KK--) {
+                flex_height_coef_mid_h(KK) = flex_height_coef_mid_h(KK-1);
+                z_mid_mutable_h(KK) = z_mid_mutable_h(KK-1) + dz1;
+            }
+            if (kc < nz) {
+                flex_height_coef_mid_h(kc) = dz / dz1;
+                z_mid_mutable_h(kc) = z_mid_mutable_h(kc-1) + dz1;
+            }
+        }
+
+        int kt1_idx = KT1 + 1 + h - 2;
+        if (kt1_idx < nz && (KT1 + 2 + h - 2) < nz) {
+            flex_height_coef_up_h(kt1_idx) = dz / (z_mid_mutable_h(KT1 + 2 + h - 2) - z_mid_mutable_h(KT1 + 1 + h - 2));
+        }
+
+        Kokkos::deep_copy(z_up_mutable, z_up_mutable_h);
+        Kokkos::deep_copy(z_mid_mutable, z_mid_mutable_h);
+        Kokkos::deep_copy(flex_height_coef_up_mutable, flex_height_coef_up_h);
+        Kokkos::deep_copy(flex_height_coef_mid_mutable, flex_height_coef_mid_h);
+    } 
+    else {
+        for (int k = h; k < nz; k++) {
+            z_up_mutable_h(k) = z_up_mutable_h(k-1) + dz;
+        }
+        z_mid_mutable_h(h-1) = z_up_mutable_h(h-1);
+        z_mid_mutable_h(h) = z_up_mutable_h(h-1) + real(0.5) * dz;
+        for (int k = h+1; k < nz; k++) {
+            z_mid_mutable_h(k) = z_mid_mutable_h(k-1) + dz;
+        }
+        
+        Kokkos::deep_copy(z_up_mutable, z_up_mutable_h);
+        Kokkos::deep_copy(z_mid_mutable, z_mid_mutable_h);
+
+        Kokkos::parallel_for("Init_Z_flexZCoef", Kokkos::RangePolicy<>(h-1, nz),
+            KOKKOS_LAMBDA(const int k) {
+                flex_height_coef_mid_mutable(k) = real(1.) / (CZ1 + real(2.) * CZ2 * z_mid_mutable(k));
+                flex_height_coef_up_mutable(k) = real(1.) / (CZ1 + real(2.) * CZ2 * z_up_mutable(k));
+                z_mid_mutable(k) = z_mid_mutable(k) * (CZ1 + CZ2 * z_mid_mutable(k));
+                z_up_mutable(k) = z_up_mutable(k) * (CZ1 + CZ2 * z_up_mutable(k));
+            }
+        );
+    }
+
     auto& dz_mid_mutable = parameters_.dz_mid.get_mutable_device_data();
     auto& dz_up_mutable = parameters_.dz_up.get_mutable_device_data();
     Kokkos::parallel_for("Init_dz", Kokkos::RangePolicy<>(h, nz-h),

@@ -8,6 +8,7 @@ import os
 
 import netCDF4 as nc
 import numpy as np
+import xarray as xr
 from scipy import stats
 
 # ==============================================================================
@@ -17,27 +18,32 @@ from scipy import stats
 # Set to False: Enter "Idealized Simulation" mode for user-defined ridge & land types
 USE_TAIWAN_TOPO = True
 
-CONFIG_PATH = '../rundata/input_configs/default_config.json'
+CONFIG_PATH = '../rundata/input_configs/taiwanvvm.json'
 SOURCE_TW_DATA = '../rundata/land/topolsm_TW.nc'
 
 # ==============================================================================
 # Helper Functions for Idealized Simulation
 # ==============================================================================
 def get_ideal_topo_data(ny, nx):
+    ds = xr.open_dataset("/work/aaron900129/VVM_GPU_CPP/TOPO.nc")
+    topo_in = np.array(ds['topo'])
     topo = np.zeros((ny, nx), dtype='i4')
-    mountain_width = nx // 4
-    start_col = nx - mountain_width
-    peak_col = start_col + (mountain_width // 2)
-    max_height = 7
-    
-    cols_rise = np.arange(start_col, peak_col + 1)
-    cols_fall = np.arange(peak_col + 1, nx)
-    
-    rise_vals = np.round((cols_rise - start_col) * max_height / (peak_col - start_col))
-    fall_vals = np.round((nx - cols_fall) * max_height / (nx - peak_col))
-    
-    topo[:, cols_rise] = rise_vals.astype('i4')
-    topo[:, cols_fall] = fall_vals.astype('i4')
+    topo = topo_in
+
+    # mountain_width = nx // 4
+    # start_col = nx - mountain_width
+    # peak_col = start_col + (mountain_width // 2)
+    # max_height = 7
+    # 
+    # cols_rise = np.arange(start_col, peak_col + 1)
+    # cols_fall = np.arange(peak_col + 1, nx)
+    # 
+    # rise_vals = np.round((cols_rise - start_col) * max_height / (peak_col - start_col))
+    # fall_vals = np.round((nx - cols_fall) * max_height / (nx - peak_col))
+    # 
+    # topo[:, cols_rise] = rise_vals.astype('i4')
+    # topo[:, cols_fall] = fall_vals.astype('i4')
+
     return topo
 
 def get_ideal_vegtype_data(ny, nx):
@@ -50,7 +56,8 @@ def get_ideal_vegtype_data(ny, nx):
 def get_ideal_soiltype_data(ny, nx):
     soiltype = np.ones((ny, nx), dtype='i4') # STATSGO 1 = Sand
     soiltype[:, :nx//2] = 14                 # STATSGO 14 = Water
-    soiltype[:, nx//2:] = 13                 # STATSGO 13 = Organic Material
+    soiltype[:, nx//2:nx//4*3] = 13          # STATSGO 13 = Organic Material
+    soiltype[:, nx//4*3:] = 2                # STATSGO 2 = Evergreen Broadleaf
     return soiltype
 
 def get_ideal_slopetype_data(ny, nx):
@@ -60,6 +67,27 @@ def get_ideal_slopetype_data(ny, nx):
 
 def get_ideal_tg_data(ny, nx, value=305.0):
     return np.full((ny, nx), value, dtype='f8')
+
+def get_albedo_data(ny, nx):
+    albedo = np.zeros((ny, nx), dtype='f8')
+    albedo[:, :nx//2] = 8
+    albedo[:, nx//2:nx//4*3] = 15
+    albedo[:, nx//4*3:] = 12
+    return albedo
+
+def get_gvf_data(ny, nx):
+    gvf = np.zeros((ny, nx), dtype='f8')
+    gvf[:, :nx//2] = 0
+    gvf[:, nx//2:nx//4*3] = 10
+    gvf[:, nx//4*3:] = 95
+    return gvf
+
+def get_lai_data(ny, nx):
+    lai = np.zeros((ny, nx), dtype='f8')
+    lai[:, :nx//2] = 0
+    lai[:, nx//2:nx//4*3] = 1
+    lai[:, nx//4*3:] = 6.48
+    return lai
 
 # ==============================================================================
 # Auto-read Configuration and Create Pure Physical Grid
@@ -80,8 +108,8 @@ FILENAME = config['netcdf_reader']['source_file']
 os.makedirs(os.path.dirname(FILENAME), exist_ok=True)
 
 # Initialize 1D longitude and latitude arrays
-lon_1d = np.zeros(NX, dtype='f4')
-lat_1d = np.zeros(NY, dtype='f4')
+lon_1d = np.zeros(NX, dtype='f8')
+lat_1d = np.zeros(NY, dtype='f8')
 
 # Calculate stretched vertical grid heights (z_up) - starting from 0 meters
 domain = 15000.0
@@ -89,22 +117,49 @@ cz2 = (DZ - DZ1) / (DZ * (domain - DZ))
 cz1 = 1.0 - cz2 * domain
 
 z_up = np.zeros(NZ, dtype='f8')
-z_up[0] = 0.0  # Layer 0 is the surface (physical height 0)
-for k in range(1, NZ):  
-    z_up[k] = z_up[k-1] + DZ
-for k in range(0, NZ):  
-    z_up[k] = z_up[k] * (cz1 + cz2 * z_up[k])
+v_coord_type = config['grid'].get('vertical_coordinate_type', 'default')
+
+if v_coord_type == 'taiwanvvm':
+    # --- TaiwanVVM Fortran-based Vertical Coordinate Logic ---
+    z_up[0] = 0.0
+    for k in range(1, NZ):
+        z_up[k] = z_up[k-1] + DZ
+
+    for k in range(0, NZ):
+        z_up[k] = z_up[k] * (cz1 + cz2 * z_up[k])
+
+    KT = int((1.0 - cz1) / cz2 / 2.0 / DZ)
+    kt_idx = max(0, min(KT - 1, NZ - 1))
+    KT1 = int(z_up[kt_idx] / DZ1 + 0.999)
+
+    z_up[0] = 0.0
+
+    for K in range(2, KT1):
+        kc = K - 1
+        for KK in range(NZ - 1, kc, -1):
+            z_up[KK] = z_up[KK-1] + DZ1
+        if kc < NZ:
+            z_up[kc] = z_up[kc-1] + DZ1
+else:
+    # --- Default VVM Logic ---
+    z_up[0] = 0.0  # Layer 0 is the surface (physical height 0)
+    for k in range(1, NZ):
+        z_up[k] = z_up[k-1] + DZ
+    for k in range(0, NZ):
+        z_up[k] = z_up[k] * (cz1 + cz2 * z_up[k])
+
+
 
 # Initialize default surface arrays (Using IGBP classification standard)
 topo   = np.zeros((NY, NX), dtype='i4')
 lu     = np.full((NY, NX), 17, dtype='i4') # IGBP 17 = Water bodies / Ocean
 soil   = np.full((NY, NX), 14, dtype='i4') # STATSGO 14 = Default soil for water
 slope  = np.zeros((NY, NX), dtype='i4')
-albedo = np.full((NY, NX), 8.0, dtype='f4')
-gvf    = np.zeros((NY, NX), dtype='f4')
-lai    = np.zeros((NY, NX), dtype='f4')
-shdmax = np.zeros((NY, NX), dtype='f4')
-shdmin = np.zeros((NY, NX), dtype='f4')
+albedo = np.full((NY, NX), 8.0, dtype='f8')
+gvf    = np.zeros((NY, NX), dtype='f8')
+lai    = np.zeros((NY, NX), dtype='f8')
+shdmax = np.zeros((NY, NX), dtype='f8')
+shdmin = np.zeros((NY, NX), dtype='f8')
 Tg     = np.full((NY, NX), 300.0, dtype='f8')
 
 # ==============================================================================
@@ -148,7 +203,7 @@ if USE_TAIWAN_TOPO and os.path.exists(SOURCE_TW_DATA):
     usgs_to_igbp[25:28] = 16 # Other specific terrains -> Barren
 
     COARSE_FACTOR = max(1, int(DX / 500.0))  
-    temp_height = np.zeros((NY, NX), dtype='f4')  
+    temp_height = np.zeros((NY, NX), dtype='f8')  
 
     with nc.Dataset(SOURCE_TW_DATA, 'r') as ds:
         raw_h = ds.variables['height'][:]
@@ -229,6 +284,9 @@ else:
     soil_ideal  = get_ideal_soiltype_data(NY, NX)
     slope_ideal = get_ideal_slopetype_data(NY, NX)
     Tg_ideal    = get_ideal_tg_data(NY, NX, value=305.0)
+    albedo_ideal    = get_albedo_data(NY, NX)
+    gvf_ideal    = get_gvf_data(NY, NX)
+    lai_ideal    = get_lai_data(NY, NX)
 
     # Assign generated fields and handle HALO offset
     for j in range(NY):
@@ -237,7 +295,9 @@ else:
             soil[j, i]   = soil_ideal[j, i]
             slope[j, i]  = slope_ideal[j, i]
             Tg[j, i]     = Tg_ideal[j, i]
-            albedo[j, i] = 15.0 # Typical land albedo
+            albedo[j, i] = albedo_ideal[j, i]
+            gvf[j, i] = gvf_ideal[j, i]
+            lai[j, i] = lai_ideal[j, i]
             
             is_land = (lu[j, i] != 17) # Check if it is land (not water body)
             
@@ -248,10 +308,13 @@ else:
                 # Sea is always 0
                 topo[j, i] = 0
 
+    shdmax = gvf
+    shdmin = gvf
+
 # ==============================================================================
 # Shared Post-processing: Auto-derive physical height & generate variables
 # ==============================================================================
-height = np.zeros((NY, NX), dtype='f4')
+height = np.zeros((NY, NX), dtype='f8')
 mask   = np.ones((NZ, NY, NX), dtype='i1')
 sea_land_ice_mask = np.ones((NY, NX), dtype='i4')
 
@@ -277,11 +340,11 @@ lon_2d, lat_2d = np.meshgrid(lon_1d, lat_1d)
 # ==============================================================================
 variables_config = {
     'lon': {
-        'data': lon_2d, 'dims': ('ny', 'nx'), 'units': 'degrees_east', 'dtype': 'f4',  
+        'data': lon_2d, 'dims': ('ny', 'nx'), 'units': 'degrees_east', 'dtype': 'f8',  
         'long_name': 'Longitude (2D matrix)'
     },
     'lat': {
-        'data': lat_2d, 'dims': ('ny', 'nx'), 'units': 'degrees_north', 'dtype': 'f4',  
+        'data': lat_2d, 'dims': ('ny', 'nx'), 'units': 'degrees_north', 'dtype': 'f8',  
         'long_name': 'Latitude (2D matrix)'
     },
     'topo': {
@@ -293,7 +356,7 @@ variables_config = {
         'long_name': '3D atmospheric mask (0 = terrain inside, 1 = free atmosphere)'
     },
     'height': {
-        'data': height, 'dims': ('ny', 'nx'), 'units': 'km', 'dtype': 'f4',  
+        'data': height, 'dims': ('ny', 'nx'), 'units': 'km', 'dtype': 'f8',  
         'long_name': 'Physical terrain height above sea level'
     },
     'sea_land_ice_mask': {
@@ -317,23 +380,23 @@ variables_config = {
         'long_name': 'Deep soil temperature / Ground temperature'
     },
     'albedo': {
-        'data': albedo, 'dims': ('ny', 'nx'), 'units': '%', 'dtype': 'f4',  
+        'data': albedo, 'dims': ('ny', 'nx'), 'units': '%', 'dtype': 'f8',  
         'long_name': 'Surface background snow-free albedo'
     },
     'gvf': {
-        'data': gvf, 'dims': ('ny', 'nx'), 'units': '%', 'dtype': 'f4',  
+        'data': gvf, 'dims': ('ny', 'nx'), 'units': '%', 'dtype': 'f8',  
         'long_name': 'Green vegetation fraction'
     },
     'lai': {
-        'data': lai, 'dims': ('ny', 'nx'), 'units': 'm2/m2', 'dtype': 'f4',  
+        'data': lai, 'dims': ('ny', 'nx'), 'units': 'm2/m2', 'dtype': 'f8',  
         'long_name': 'Leaf area index'
     },
     'shdmax': {
-        'data': shdmax, 'dims': ('ny', 'nx'), 'units': '%', 'dtype': 'f4',  
+        'data': shdmax, 'dims': ('ny', 'nx'), 'units': '%', 'dtype': 'f8',  
         'long_name': 'Maximum areal fractional coverage of green vegetation'
     },
     'shdmin': {
-        'data': shdmin, 'dims': ('ny', 'nx'), 'units': '%', 'dtype': 'f4',  
+        'data': shdmin, 'dims': ('ny', 'nx'), 'units': '%', 'dtype': 'f8',  
         'long_name': 'Minimum areal fractional coverage of green vegetation'
     }
 }

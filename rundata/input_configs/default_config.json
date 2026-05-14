@@ -13,7 +13,9 @@
             "y": "periodic",
             "__bc_option": "periodic, zero_gradient"
         },
-        "fix_lonlat": true
+        "fix_lonlat": true,
+        "vertical_coordinate_type": "taiwanvvm",
+        "__vertical_coordinate_type_options": "default, taiwanvvm"
     },
     "simulation": {
         "total_time_s": 1800.0,
