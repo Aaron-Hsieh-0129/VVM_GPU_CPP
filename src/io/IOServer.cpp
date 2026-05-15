@@ -73,7 +73,7 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
         for (const auto& varPair : varTypeMap) {
             std::string name = varPair.first;
             std::string type = varPair.second.at("Type");
-            if (type != "double" || type != "float") continue;
+            if (type != "double" && type != "float") continue;
 
             auto varIn = inIO.InquireVariable<VVM::Real>(name);
             auto shape = varIn.Shape();
