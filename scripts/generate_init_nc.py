@@ -307,7 +307,9 @@ else:
             
             if is_land:
                 # Land base starts at HALO, plus any extra mountain height
-                topo[j, i] = base_topo[j, i] + HALO
+                topo[j, i] = base_topo[j, i] + (HALO - 1)
+                if topo[j, i] < HALO:
+                    topo[j, i] = HALO
             else:
                 # Sea is always 0
                 topo[j, i] = 0
