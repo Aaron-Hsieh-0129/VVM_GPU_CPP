@@ -27,6 +27,10 @@
     "initial_conditions": {
         "format": "txt",
         "source_file": "../rundata/initial_conditions/profiles/amazon.txt",
+        "constant_upper_wind": {
+            "enable": true,
+            "pressure_threshold_Pa": 25000.0
+        },
         "perturbation": "3dbubble",
         "__perturbation": "none, 2dbubble, 3dbubble"
     },

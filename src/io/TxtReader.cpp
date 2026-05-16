@@ -65,6 +65,39 @@ void TxtReader::read_file() {
     // Check essential columns
     if (raw_data_.find("pbar") == raw_data_.end()) 
         throw std::runtime_error("Missing required column 'pbar' in input file.");
+
+    bool enable_constant_wind = config_.get_value<bool>("initial_conditions.constant_upper_wind.enable", false);
+    if (enable_constant_wind) {
+        VVM::Real p_threshold = config_.get_value<VVM::Real>("initial_conditions.constant_upper_wind.pressure_threshold_Pa", 25000.0);
+        
+        auto& P_in = raw_data_["pbar"];
+        bool has_u = raw_data_.find("U") != raw_data_.end();
+        bool has_v = raw_data_.find("V") != raw_data_.end();
+        
+        if (has_u && has_v) {
+            auto& U_in = raw_data_["U"];
+            auto& V_in = raw_data_["V"];
+            
+            int ik1 = -1;
+            
+            for (size_t k = 0; k < P_in.size(); ++k) {
+                if (P_in[k] <= p_threshold && ik1 == -1) {
+                    ik1 = k;
+                }
+                
+                if (ik1 != -1) {
+                    U_in[k] = U_in[ik1];
+                    V_in[k] = V_in[ik1];
+                }
+            }
+
+            int rank = grid_.get_mpi_rank();
+            if (rank == 0 && ik1 != -1) {
+                std::cout << "[TxtReader] Applied constant upper wind (U, V) above " 
+                          << p_threshold << " Pa (Data Index: " << ik1 << ")" << std::endl;
+            }
+        }
+    }
 }
 
 void TxtReader::calculate_input_heights() {
