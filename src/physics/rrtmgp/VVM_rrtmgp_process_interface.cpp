@@ -52,7 +52,7 @@ RRTMGPRadiation::RRTMGPRadiation(const VVM::Utils::ConfigurationManager& config,
 {
     // Initialize dimensions
     m_ncol = m_grid.get_local_physical_points_x() * m_grid.get_local_physical_points_y();
-    m_nlay = m_grid.get_local_physical_points_z();
+    m_nlay = m_grid.get_local_physical_points_z() + 1; // NOTE: Add a layer for TOA
 
     m_col_chunk_size = m_config.get_value<int>("physics.rrtmgp.column_chunk_size", m_ncol);
     
@@ -100,6 +100,10 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
     if (!state.has_field("lwdn")) state.add_field<3>("lwdn", {nz_total, ny_total, nx_total});
     if (!state.has_field("lwup")) state.add_field<3>("lwup", {nz_total, ny_total, nx_total});
 
+    if (!state.has_field("swdn_toa")) state.add_field<2>("swdn_toa", {ny_total, nx_total});
+    if (!state.has_field("lwup_toa")) state.add_field<2>("lwup_toa", {ny_total, nx_total});
+
+
     using PC = scream::physics::Constants<Real>;
 
     // Determine rad timestep, specified as number of atm steps
@@ -127,14 +131,15 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
     m_fixed_solar_zenith_angle = m_config.get_value<double>("physics.rrtmgp.fixed_solar_zenith_angle", -9999.0);
 
     // Get prescribed surface values of greenhouse gases
-    m_co2vmr     = m_config.get_value<double>("physics.rrtmgp.co2vmr", 388.717e-6);
-    m_n2ovmr     = m_config.get_value<double>("physics.rrtmgp.n2ovmr", 323.141e-9);
-    m_ch4vmr     = m_config.get_value<double>("physics.rrtmgp.ch4vmr", 1807.851e-9);
-    m_f11vmr     = m_config.get_value<double>("physics.rrtmgp.f11vmr", 768.7644e-12);
-    m_f12vmr     = m_config.get_value<double>("physics.rrtmgp.f12vmr", 531.2820e-12);
+    m_o2vmr      = m_config.get_value<double>("physics.rrtmgp.o2vmr", 0.209);
+    m_co2vmr     = m_config.get_value<double>("physics.rrtmgp.co2vmr", 355.03e-6);
+    m_n2ovmr     = m_config.get_value<double>("physics.rrtmgp.n2ovmr", 320e-9);
+    m_ch4vmr     = m_config.get_value<double>("physics.rrtmgp.ch4vmr", 1700e-9);
+    m_f11vmr     = m_config.get_value<double>("physics.rrtmgp.f11vmr", 0.);
+    m_f12vmr     = m_config.get_value<double>("physics.rrtmgp.f12vmr", 0.);
     m_n2vmr      = m_config.get_value<double>("physics.rrtmgp.n2vmr", 0.7906);
     m_covmr      = m_config.get_value<double>("physics.rrtmgp.covmr", 1.0e-7);
-    m_o3vmr      = m_config.get_value<double>("physics.rrtmgp.o3vmr", 0.48e-7);
+    m_o3vmr      = m_config.get_value<double>("physics.rrtmgp.o3vmr", 0.3017e-7);
 
     // Whether or not to do MCICA subcolumn sampling
     m_do_subcol_sampling = m_config.get_value<bool>("do_subcol_sampling",true);
@@ -187,6 +192,13 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
     const auto& nx = m_grid.get_local_physical_points_x();
     const auto& lon = state.get_field<2>("lon").get_device_data();
     const auto& lat = state.get_field<2>("lat").get_device_data();
+
+    const auto& lon_h = state.get_field<2>("lon").get_host_data();
+    const auto& lat_h = state.get_field<2>("lat").get_host_data();
+
+    std::cout << "(lon, lat): (" << lon_h(0,0) << ", " << lat_h(0,0) << ")" << std::endl;
+
+
     m_lat = Kokkos::View<double*>("m_lat", m_ncol);
     m_lon = Kokkos::View<double*>("m_lon", m_ncol);
     auto m_lat_view = m_lat; 
@@ -201,6 +213,36 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
             m_lat_view(k) = lat(iy + h, 0);
         }
     );
+
+    m_o3_profile  = Kokkos::View<Real*, DefaultDevice>("m_o3_profile", m_nlay);
+    m_co2_profile = Kokkos::View<Real*, DefaultDevice>("m_co2_profile", m_nlay);
+    m_ch4_profile = Kokkos::View<Real*, DefaultDevice>("m_ch4_profile", m_nlay);
+    m_n2o_profile = Kokkos::View<Real*, DefaultDevice>("m_n2o_profile", m_nlay);
+    m_o2_profile  = Kokkos::View<Real*, DefaultDevice>("m_o2_profile",  m_nlay);
+
+    auto h_o3  = Kokkos::create_mirror_view(m_o3_profile);
+    auto h_co2 = Kokkos::create_mirror_view(m_co2_profile);
+    auto h_ch4 = Kokkos::create_mirror_view(m_ch4_profile);
+    auto h_n2o = Kokkos::create_mirror_view(m_n2o_profile);
+    auto h_o2  = Kokkos::create_mirror_view(m_o2_profile);
+
+    for (int k = 0; k < m_nlay; ++k) {
+        if (k == 0) {
+            h_o3(k)  = 3.0e-6;
+        } 
+        else {
+            h_o3(k)  = 3.0170e-8; 
+        }
+        h_co2(k) = 3.5503e-4; 
+        h_ch4(k) = 1.7000e-6; 
+        h_n2o(k) = 3.2000e-7; 
+        h_o2(k)  = 0.2090; 
+    }
+    Kokkos::deep_copy(m_o3_profile,  h_o3);
+    Kokkos::deep_copy(m_co2_profile, h_co2);
+    Kokkos::deep_copy(m_ch4_profile, h_ch4);
+    Kokkos::deep_copy(m_n2o_profile, h_n2o);
+    Kokkos::deep_copy(m_o2_profile,  h_o2);
 
     init_buffers();
 }
@@ -361,6 +403,8 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
     auto& swdn = state.get_field<3>("swdn").get_mutable_device_data();
     auto& lwdn = state.get_field<3>("lwdn").get_mutable_device_data();
     auto& lwup = state.get_field<3>("lwup").get_mutable_device_data();
+    auto& swdn_toa = state.get_field<2>("swdn_toa").get_mutable_device_data();
+    auto& lwup_toa = state.get_field<2>("lwup_toa").get_mutable_device_data();
 
     // Orbital parameters and Zenith Angle
     double obliqr, lambm0, mvelpp;
@@ -427,26 +471,45 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
 
         // Pack data for this chunk
         const int nlay_local = m_nlay;
+        const int nz = m_nlay - 1;
+        const int h  = halo;
         Kokkos::parallel_for("pack_chunk_data", Kokkos::RangePolicy<>(0, ncol),
             KOKKOS_LAMBDA(int i) {
                 int col_idx = beg + i;
                 int ix = col_idx % nx;
                 int iy = col_idx / nx;
 
-                for (int k = 0; k < nlay_local; ++k) {
-                    int k_vvm = (nlay_local - 1) - k + halo;
+                buffer.p_lev_k(i, 0) = 1.01; // TOA pressure (1 Pa)
+                buffer.p_lev_k(i, 1) = pbar_up(h + nz - 1);
+                
+                buffer.p_lay_k(i, 0) = 0.5 * (buffer.p_lev_k(i, 0) + buffer.p_lev_k(i, 1));
+                buffer.p_del_k(i, 0) = buffer.p_lev_k(i, 1) - buffer.p_lev_k(i, 0);
+                buffer.d_dz(i, 0) = 0.0;
+                
+                int top_vvm = h + nz - 1; 
+                buffer.t_lay_k(i, 0) = th(top_vvm, iy + h, ix + h) * pibar(top_vvm);
+                
+                buffer.qc_k(i, 0) = 0.0;
+                buffer.nc_k(i, 0) = 0.0;
+                buffer.qi_k(i, 0) = 0.0;
+                buffer.cldfrac_tot_k(i, 0) = 0.0;
+                buffer.eff_radius_qc_k(i, 0) = 10.0;
+                buffer.eff_radius_qi_k(i, 0) = 50.0;
+
+                for (int k = 1; k <= nz; ++k) {
+                    int k_vvm = h + nz - k;
 
                     buffer.p_lay_k(i, k) = pbar(k_vvm); 
-                    buffer.t_lay_k(i, k) = th(k_vvm, iy + halo, ix + halo) * pibar(k_vvm);
-                    buffer.qc_k(i, k) = qc(k_vvm, iy + halo, ix + halo);
-                    buffer.nc_k(i, k) = nc(k_vvm, iy + halo, ix + halo);
-                    buffer.qi_k(i, k) = qi(k_vvm, iy + halo, ix + halo);
-                    buffer.eff_radius_qc_k(i,k) = diag_eff_radius_qc(k_vvm, iy+halo, ix+halo);
-                    buffer.eff_radius_qi_k(i,k) = diag_eff_radius_qi(k_vvm, iy+halo, ix+halo);
+                    buffer.t_lay_k(i, k) = th(k_vvm, iy + h, ix + h) * pibar(k_vvm);
+                    buffer.qc_k(i, k) = qc(k_vvm, iy + h, ix + h);
+                    buffer.nc_k(i, k) = nc(k_vvm, iy + h, ix + h);
+                    buffer.qi_k(i, k) = qi(k_vvm, iy + h, ix + h);
+                    buffer.eff_radius_qc_k(i, k) = diag_eff_radius_qc(k_vvm, iy+h, ix+h);
+                    buffer.eff_radius_qi_k(i, k) = diag_eff_radius_qi(k_vvm, iy+h, ix+h);
+                    buffer.p_del_k(i, k) = dpbar_mid(k_vvm); 
+                    buffer.d_dz(i, k) = dz_mid(k_vvm);
 
-                    
-
-                    if (buffer.qc_k(i,k) + buffer.qi_k(i,k) > 1e-12) {
+                    if (buffer.qc_k(i, k) + buffer.qi_k(i, k) > 1e-12) {
                         buffer.cldfrac_tot_k(i, k) = 1.0;
                     }
                     else {
@@ -454,17 +517,11 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                     }
                 }
                 
-                for (int k = 0; k <= nlay_local; ++k) {
-                    int k_vvm = nlay_local - k + halo;
-                    buffer.p_lev_k(i, k) = pbar_up(k_vvm); 
+                for (int k = 1; k <= nz+1; ++k) {
+                    int k_vvm = h + nz - k;
+                    buffer.p_lev_k(i, k) = pbar_up(k_vvm);
                 }
                 
-                for (int k = 0; k < nlay_local; ++k) {
-                    int k_vvm = (nlay_local - 1) - k + halo;
-                    buffer.p_del_k(i, k) = dpbar_mid(k_vvm); 
-                    buffer.d_dz(i, k) = dz_mid(k_vvm); 
-                }
-
                 // Initialize Broadband Surface Albedo  (TODO: Get from State)
                 // For now, assuming ocean-like albedo
                 buffer.sfc_alb_dir_vis_k(i) = 0.06;
@@ -472,7 +529,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 buffer.sfc_alb_dif_vis_k(i) = 0.06;
                 buffer.sfc_alb_dif_nir_k(i) = 0.06;
 
-                for(int k=0; k<nlay_local; ++k) {
+                for(int k=0; k < nlay_local; ++k) {
                     for(int b=0; b<nswbands; ++b) {
                         buffer.aero_tau_sw_k(i,k,b) = 0.0;
                         buffer.aero_ssa_sw_k(i,k,b) = 0.0;
@@ -528,37 +585,64 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
 
 
         m_gas_concs_k.ncol = ncol;
-        for (int igas = 0; igas < m_ngas; igas++) {
-             std::string name = m_gas_names[igas];
-             // We need a temporary view of the correct shape (ncol, nlay) to pass to set_vmr
-             auto vmr_view = Kokkos::subview(buffer.tmp2d_k, std::make_pair(0, ncol), Kokkos::ALL());
 
-             if (name == "h2o") {
-                 Kokkos::parallel_for("set_h2o_vmr", Kokkos::RangePolicy<>(0, ncol),
-                    KOKKOS_LAMBDA(int i) {
-                        int col_idx = beg + i;
-                        int ix = col_idx % nx;
-                        int iy = col_idx / nx;
-                        for (int k = 0; k < nlay; ++k) {
-                            int k_vvm = (nlay - 1) - k + halo;
-                            Real qv_val = qv(k_vvm, iy + halo, ix + halo);
-                            vmr_view(i, k) = PF::calculate_vmr_from_mmr(gas_mol_weights(igas), qv_val, qv_val);
-                        }
-                    });
-             } 
-             else {
-                 Real pres_val = 0.0;
-                 if (name == "co2") pres_val = m_co2vmr;
-                 else if (name == "n2o") pres_val = m_n2ovmr;
-                 else if (name == "ch4") pres_val = m_ch4vmr;
-                 else if (name == "f11") pres_val = m_f11vmr;
-                 else if (name == "f12") pres_val = m_f12vmr;
-                 else if (name == "n2")  pres_val = m_n2vmr;
-                 else if (name == "co")  pres_val = m_covmr;
-                 else if (name == "o3")  pres_val = m_o3vmr;
-                 Kokkos::deep_copy(vmr_view, pres_val);
-             }
-             m_gas_concs_k.set_vmr(name, vmr_view);
+        const auto co2_profile = m_co2_profile;
+        const auto ch4_profile = m_ch4_profile;
+        const auto n2o_profile = m_n2o_profile;
+        const auto o2_profile = m_o2_profile;
+        const auto o3_profile = m_o3_profile;
+        for (int igas = 0; igas < m_ngas; igas++) {
+            std::string name = m_gas_names[igas];
+            auto vmr_view = Kokkos::subview(buffer.tmp2d_k, std::make_pair(0, ncol), Kokkos::ALL());
+
+            if (name == "h2o") {
+                Kokkos::parallel_for("set_h2o_vmr", Kokkos::RangePolicy<>(0, ncol),
+                   KOKKOS_LAMBDA(int i) {
+                       int col_idx = beg + i;
+                       int ix = col_idx % nx;
+                       int iy = col_idx / nx;
+
+                       vmr_view(i, 0) = PF::calculate_vmr_from_mmr(gas_mol_weights(igas), 1e-6, 1e-6);
+
+                       for (int k = 1; k < nlay_local; ++k) {
+                           int k_vvm = h + nz - k; 
+                           Real qv_val = qv(k_vvm, iy + h, ix + h);
+                           vmr_view(i, k) = PF::calculate_vmr_from_mmr(gas_mol_weights(igas), qv_val, qv_val);
+                       }
+                   });
+            } 
+            else {
+                bool is_profile = false;
+                Kokkos::View<Real*, DefaultDevice> profile;
+                Real scalar_val = 0.0;
+
+                if      (name == "co2") { is_profile = true; profile = m_co2_profile; }
+                else if (name == "ch4") { is_profile = true; profile = m_ch4_profile; }
+                else if (name == "n2o") { is_profile = true; profile = m_n2o_profile; }
+                else if (name == "o2")  { is_profile = true; profile = m_o2_profile;  }
+                else if (name == "o3")  { is_profile = true; profile = m_o3_profile;  }
+                else if (name == "n2")  { scalar_val = m_n2vmr; }
+                else if (name == "co")  { scalar_val = m_covmr; }
+
+                if (is_profile) {
+                    Kokkos::parallel_for("set_gas_profile", Kokkos::RangePolicy<>(0, ncol),
+                       KOKKOS_LAMBDA(int i) {
+                           for (int k = 0; k < nlay_local; ++k) {
+                               vmr_view(i, k) = profile(k);
+                           }
+                       });
+                } 
+                else {
+                    Kokkos::parallel_for("set_gas_scalar", Kokkos::RangePolicy<>(0, ncol),
+                       KOKKOS_LAMBDA(int i) {
+                           for (int k = 0; k < nlay_local; ++k) {
+                               vmr_view(i, k) = scalar_val;
+                           }
+                       });
+                }
+            }
+
+            m_gas_concs_k.set_vmr(name, vmr_view);
         }
         std::shared_ptr<spdlog::logger> logger = nullptr;
 
@@ -594,34 +678,33 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 int col_idx = beg + i;
                 int ix = col_idx % nx;
                 int iy = col_idx / nx;
-                
-                for (int k = 0; k < nlay; ++k) {
-                    int k_vvm = (nlay - 1) - k + halo;
 
-                    Real net_heating_val = buffer.sw_heating_k(i, k) + buffer.lw_heating_k(i, k); // K/s
-                    // Update Potential Temperature (th = T / Pi)
-                    // d(th)/dt = (dT/dt) / Pi
-                    // th(k + halo, iy + halo, ix + halo) += net_heating_val * dt / pibar(k + halo);
+                swdn_toa(iy + h, ix + h) = buffer.sw_flux_dn_k(i, 0);
+                lwup_toa(iy + h, ix + h) = buffer.lw_flux_up_k(i, 0);
 
-                    sw_heating(k_vvm, iy + halo, ix + halo) = buffer.sw_heating_k(i, k);
-                    lw_heating(k_vvm, iy + halo, ix + halo) = buffer.lw_heating_k(i, k);
-                    net_heating(k_vvm, iy + halo, ix + halo) = net_heating_val;
+                for (int k = 1; k <= nz; ++k) {
+                    int k_vvm = h + nz - k;
+
+                    Real net_heating_val = buffer.sw_heating_k(i, k) + buffer.lw_heating_k(i, k); 
+                    sw_heating(k_vvm, iy + h, ix + h) = buffer.sw_heating_k(i, k);
+                    lw_heating(k_vvm, iy + h, ix + h) = buffer.lw_heating_k(i, k);
+                    net_heating(k_vvm, iy + h, ix + h) = net_heating_val;
                 }
 
-                for (int k = 0; k <= nlay; ++k) {
-                    // Net SW Flux (Down - Up)
+                for (int k = 1; k <= nz + 1; ++k) {
+                    int k_vvm = h + nz - k;
+                    
                     Real net_sw = buffer.sw_flux_dn_k(i, k) - buffer.sw_flux_up_k(i, k);
-                    // Net LW Flux (Down - Up)
                     Real net_lw = buffer.lw_flux_dn_k(i, k) - buffer.lw_flux_up_k(i, k);
 
-                    int k_vvm = nlay - k + halo;
-                    net_sw_flux(k_vvm, iy + halo, ix + halo) = net_sw;
-                    net_lw_flux(k_vvm, iy + halo, ix + halo) = net_lw;
-                    swdn(k_vvm, iy+halo, ix+halo) = buffer.sw_flux_dn_k(i, k);
-                    lwdn(k_vvm, iy+halo, ix+halo) = buffer.lw_flux_dn_k(i, k);
-                    lwup(k_vvm, iy+halo, ix+halo) = buffer.lw_flux_up_k(i, k);
-                 }
-        });
+                    net_sw_flux(k_vvm, iy + h, ix + h) = net_sw;
+                    net_lw_flux(k_vvm, iy + h, ix + h) = net_lw;
+                    swdn(k_vvm, iy + h, ix + h) = buffer.sw_flux_dn_k(i, k);
+                    lwdn(k_vvm, iy + h, ix + h) = buffer.lw_flux_dn_k(i, k);
+                    lwup(k_vvm, iy + h, ix + h) = buffer.lw_flux_up_k(i, k);
+                }
+            }
+        );
     }
 }
 

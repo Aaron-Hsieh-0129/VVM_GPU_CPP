@@ -128,6 +128,7 @@ public:
     GasConcsK<Real, layout_t, DefaultDevice> m_gas_concs_k;
 
     // Prescribed Gas Concentrations
+    Real m_o2vmr;
     Real m_co2vmr;
     Real m_n2ovmr;
     Real m_ch4vmr;
@@ -254,6 +255,12 @@ protected:
     Buffer m_buffer;
 
     VVM::Real calday_ = -1;
+
+    Kokkos::View<Real*, DefaultDevice> m_o3_profile;
+    Kokkos::View<Real*, DefaultDevice> m_co2_profile;
+    Kokkos::View<Real*, DefaultDevice> m_ch4_profile;
+    Kokkos::View<Real*, DefaultDevice> m_n2o_profile;
+    Kokkos::View<Real*, DefaultDevice> m_o2_profile;
 };
 
 } // namespace RRTMGP
