@@ -126,7 +126,7 @@ static void rrtmgp_initialize(
   load_cld_lutcoeff(*cloud_optics_lw_k, cloud_optics_file_lw);
 
   // initialize kokkos rrtmgp pool allocator
-  const size_t base_ref = 40000;
+  // const size_t base_ref = 40000;
   const size_t ncol = gas_concs.ncol;
   const size_t nlay = gas_concs.nlay;
   const size_t nlev = gas_concs.nlay+1;

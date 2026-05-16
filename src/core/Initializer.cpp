@@ -472,7 +472,7 @@ void Initializer::assign_vars() const {
 
     auto& lon = state_.get_field<2>("lon").get_mutable_device_data();
     auto& lat = state_.get_field<2>("lat").get_mutable_device_data();
-    if (config_.get_value<bool>("grid.fix_latlon", false)) {
+    if (config_.get_value<bool>("grid.fix_lonlat", false)) {
         Kokkos::deep_copy(lon, real(120.95));
         Kokkos::deep_copy(lat, real(23.458));
     }
