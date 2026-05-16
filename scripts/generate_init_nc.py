@@ -230,8 +230,10 @@ if USE_TAIWAN_TOPO and os.path.exists(SOURCE_TW_DATA):
         for i in range(ex, NX): lon_1d[i] = lon_1d[i - 1] + dum_lon
             
         dum_lat = lat_1d[sy + 1] - lat_1d[sy] if dy_len > 1 else DY / 6.37E6 / (2. * np.pi) * 360.
-        for j in range(sy - 1, -1, -1): lat_1d[j] = lat_1d[j + 1] - dum_lat
-        for j in range(ey, NY): lat_1d[j] = lat_1d[j - 1] + dum_lat
+        for j in range(sy - 1, -1, -1): 
+            lat_1d[j] = lat_1d[j + 1] - dum_lat
+        for j in range(ey, NY): 
+            lat_1d[j] = lat_1d[j - 1] + dum_lat
 
         # Coarsening and Variable Conversion
         temp_height[sy:ey, sx:ex] = get_mean_2d(raw_h, COARSE_FACTOR)[:dy_len, :dx_len]
@@ -252,17 +254,19 @@ if USE_TAIWAN_TOPO and os.path.exists(SOURCE_TW_DATA):
             if temp_height[j, i] > 9000.0:
                 temp_height[j, i] = 0.0
 
-            # Distinguish land and sea
-            is_land = (lu[j, i] != 17) or (temp_height[j, i] > 0.0)
+            topo[j, i] = 0
 
-            if is_land:
-                topo[j, i] = HALO # Base offset for land
-                if temp_height[j, i] > 0.0:
-                    best_k = int(np.argmin(np.abs(z_up - temp_height[j, i])))
-                    calculated_topo = best_k + (HALO - 1)
-                    topo[j, i] = max(topo[j, i], calculated_topo)
-            else:
-                topo[j, i] = 0
+            if temp_height[j, i] > 0.0:
+                topo_f = 2
+                for k_f in range(2, NZ - 1):
+                    k_p = k_f - 1
+                    if temp_height[j, i] >= z_up[k_p]:
+                        frac = (temp_height[j, i] - z_up[k_p]) / (z_up[k_p+1] - z_up[k_p])
+                        nint_frac = int(np.floor(frac + 0.5))
+                        topo_f = k_f + nint_frac
+                
+                calculated_topo = topo_f + (HALO - 2)
+                topo[j, i] = max(topo[j, i], calculated_topo)
 
     # Remove single-grid caves
     for j in range(1, NY - 1):
@@ -321,18 +325,21 @@ sea_land_ice_mask = np.ones((NY, NX), dtype='i4')
 for j in range(NY):
     for i in range(NX):
         k_cpp = topo[j, i]
-        
-        if k_cpp >= HALO:
-            k_phys = int(k_cpp - (HALO - 1))
-            safe_k = min(k_phys, NZ - 1)
-            # Convert back to km for height output
-            height[j, i] = z_up[safe_k] / 1000.0
-            mask[:safe_k, j, i] = 0
 
-        # Create sea_land_ice_mask based on final 'lu' assignment
+        if k_cpp >= HALO:
+            index_z = int(k_cpp - (HALO - 1))
+            safe_z = min(index_z, NZ - 1)
+            height[j, i] = z_up[safe_z] / 1000.0
+        else:
+            height[j, i] = 0.0
+
+        blocked_levels = int(k_cpp - (HALO - 1)) if k_cpp >= HALO else 1
+        safe_mask = min(blocked_levels, NZ)
+        mask[:safe_mask, j, i] = 0
+
         if lu[j, i] == 17:  # IGBP 17 = Water bodies
             sea_land_ice_mask[j, i] = 0
-
+        
 lon_2d, lat_2d = np.meshgrid(lon_1d, lat_1d)
 
 # ==============================================================================
