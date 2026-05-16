@@ -129,11 +129,23 @@ static void rrtmgp_initialize(
   const size_t base_ref = 40000;
   const size_t ncol = gas_concs.ncol;
   const size_t nlay = gas_concs.nlay;
-  const size_t nlev = gas_concs.nlay;
-  const size_t my_size_ref = ncol * nlay * nlev;
+  const size_t nlev = gas_concs.nlay+1;
+  // const size_t my_size_ref = ncol * nlay * nlev;
   // pool_t::init(2e6 * (float(my_size_ref) / base_ref) * multiplier);
-  // modify type to make it large enough
-  pool_t::init(static_cast<size_t>(2e6 * (double(my_size_ref) / base_ref) * multiplier));
+
+  const size_t nswgpts = k_dist_sw_k->get_ngpt();
+  const size_t nlwgpts = k_dist_lw_k->get_ngpt();
+  const size_t nswbands = k_dist_sw_k->get_nband();
+  const size_t nlwbands = k_dist_lw_k->get_nband();
+  size_t required_pool_size = ncol * nlay * (
+      12 * (nswgpts + nlwgpts) + 
+      20 * (nswbands + nlwbands) +
+      50
+  );
+  required_pool_size = static_cast<size_t>(required_pool_size * multiplier);
+
+  pool_t::init(required_pool_size);
+
 
   // We are now initialized!
   initialized_k = true;

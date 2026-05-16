@@ -75,11 +75,11 @@ public:
 
 
     // Dimensions
-    int m_ncol;
-    int m_num_col_chunks;
-    int m_col_chunk_size;
+    size_t m_ncol;
+    size_t m_num_col_chunks;
+    size_t m_col_chunk_size;
     std::vector<int> m_col_chunk_beg;
-    int m_nlay;
+    size_t m_nlay;
     Kokkos::View<double*> m_lat;
     Kokkos::View<double*> m_lon;
 

@@ -608,6 +608,31 @@ void DynamicalCore::update_vorticity(VVM::Real dt) {
     for (const auto& var_name : vorticity_vars_) {
         if (time_integrators_.count(var_name)) {
             time_integrators_.at(var_name)->step(state_, grid_, params_, dt);
+
+            auto& var_data = state_.get_field<3>(var_name).get_mutable_device_data();
+            const auto& max_topo_idx = params_.max_topo_idx;
+            const int h = grid_.get_halo_cells();
+            if (var_name == "xi") {
+                const auto& ITYPEV = state_.get_field<3>("ITYPEV").get_device_data();
+                Kokkos::parallel_for("mask_xi_topo",
+                    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {max_topo_idx+2, ny, nx}),
+                    KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                        if (ITYPEV(k, j, i) != 1) var_data(k, j, i) = real(0.0);
+                    }
+                );
+            } 
+            else if (var_name == "eta") {
+                const auto& ITYPEU = state_.get_field<3>("ITYPEU").get_device_data();
+                Kokkos::parallel_for("mask_eta_topo",
+                    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1, 0, 0}, {max_topo_idx+2, ny, nx}),
+                    KOKKOS_LAMBDA(const int k, const int j, const int i) {
+                        if (ITYPEU(k, j, i) != 1) var_data(k, j, i) = real(0.0);
+                    }
+                );
+            }
+
+
+
             halo_exchanger_.exchange_halos(state_.get_field<3>(var_name));
             bc_manager_.apply_horizontal_bcs(state_.get_field<3>(var_name));
         }

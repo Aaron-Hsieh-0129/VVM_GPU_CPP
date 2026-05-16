@@ -181,7 +181,7 @@ int main(int argc, char *argv[]) {
             state.increment_step();
             state.advance_time(dt);
 
-            std::cout << state.get_time() << std::endl;
+            if (split_rank == 0) std::cout << state.get_time() << std::endl;
 
              // Output data at specified intervals
             if (state.get_time() >= next_output_time) {
