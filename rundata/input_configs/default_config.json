@@ -36,6 +36,8 @@
     },
     "netcdf_reader": {
         "source_file": "../rundata/initial_conditions/spatial/bubble_amazon.nc",
+        "Tg_source": "netcdf",
+        "__Tg_source_options": "atmosphere, netcdf",
         "variables_to_read": {
             "2d": [
                 "lon", "lat",

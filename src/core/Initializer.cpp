@@ -499,14 +499,35 @@ void Initializer::assign_vars() const {
     const auto& pibar = state_.get_field<1>("pibar").get_device_data();
     auto& Tg = state_.get_field<2>("Tg").get_mutable_device_data();
 
-    Kokkos::parallel_for("Init_Tg", 
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {ny, nx}),
-        KOKKOS_LAMBDA(const int j, const int i) {
-            // NOTE: Fortran VVM uses hx rather than hxp here
-            int hx = topo(j, i);
-            Tg(j, i) = th(hx, j, i) * pibar(hx);
-        }
-    );
+    std::string Tg_source = config_.get_value<std::string>("netcdf_reader.Tg_source", "atmosphere");
+
+    if (Tg_source == "atmosphere") {
+        const auto& topo = state_.get_field<2>("topo").get_device_data();
+        const auto& pibar = state_.get_field<1>("pibar").get_device_data();
+        auto& Tg = state_.get_field<2>("Tg").get_mutable_device_data();
+
+        Kokkos::parallel_for("Init_Tg", 
+            Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {ny, nx}),
+            KOKKOS_LAMBDA(const int j, const int i) {
+                // NOTE: Fortran VVM uses hx rather than hxp here
+                int hx = topo(j, i);
+                Tg(j, i) = th(hx, j, i) * pibar(hx);
+            }
+        );
+        halo_exchanger_.exchange_halos(state_.get_field<2>("Tg"));
+        
+        int rank = grid_.get_mpi_rank();
+        if (rank == 0) std::cout << "  [Initializer] Initialized Tg from the lowest atmosphere level." << std::endl;
+
+    } 
+    else if (Tg_source == "netcdf") {
+        int rank = grid_.get_mpi_rank();
+        if (rank == 0) std::cout << "  [Initializer] Skipped Tg initialization (using values read from NetCDF)." << std::endl;
+    } 
+    else {
+        int rank = grid_.get_mpi_rank();
+        if (rank == 0) std::cerr << "  [Initializer] Warning: Unknown Tg_source '" << Tg_source << "'. Keeping existing Tg values." << std::endl;
+    }
     halo_exchanger_.exchange_halos(state_.get_field<2>("Tg"));
     return;
 }
