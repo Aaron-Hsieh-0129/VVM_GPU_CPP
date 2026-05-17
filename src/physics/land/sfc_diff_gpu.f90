@@ -234,24 +234,23 @@
 
                         if (ivegsrc .ge. 1) then
 
-                            ! Aaron - don't need this hard code
-         !                   if (vegtyper == 10) then
-         !                      z0max = exp(tem2*log01 + tem1*log07)
-         !                   elseif (vegtyper == 6) then
-         !                      z0max = exp(tem2*log01 + tem1*log05)
-         !                   elseif (vegtyper == 7) then
-         ! !           z0max = exp( tem2*log01 + tem1*log01 )
-         !                      z0max = 0.01
-         !                   elseif (vegtyper == 16) then
-         ! !           z0max = exp( tem2*log01 + tem1*log01 )
-         !                      z0max = 0.01
-         !                   else
-         !                      if (islimskr == 2) then
-         !                         z0max = exp(tem2*log(0.0002) + tem1*log(z0max))
-         !                      else
-         !                         z0max = exp(tem2*log01 + tem1*log(z0max))
-         !                      end if
-         !                   end if
+                           if (vegtyper == 10) then
+                              z0max = exp(tem2*log01 + tem1*log07)
+                           elseif (vegtyper == 6) then
+                              z0max = exp(tem2*log01 + tem1*log05)
+                           elseif (vegtyper == 7) then
+         !           z0max = exp( tem2*log01 + tem1*log01 )
+                              z0max = 0.01
+                           elseif (vegtyper == 16) then
+         !           z0max = exp( tem2*log01 + tem1*log01 )
+                              z0max = 0.01
+                           else
+                              if (islimskr == 2) then
+                                 z0max = exp(tem2*log(0.0002) + tem1*log(z0max))
+                              else
+                                 z0max = exp(tem2*log01 + tem1*log(z0max))
+                              end if
+                           end if
 
                         elseif (ivegsrc == 0) then
 
