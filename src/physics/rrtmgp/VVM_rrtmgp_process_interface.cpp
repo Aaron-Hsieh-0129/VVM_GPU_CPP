@@ -196,7 +196,8 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
     const auto& lon_h = state.get_field<2>("lon").get_host_data();
     const auto& lat_h = state.get_field<2>("lat").get_host_data();
 
-    std::cout << "(lon, lat): (" << lon_h(0,0) << ", " << lat_h(0,0) << ")" << std::endl;
+    int rank = m_grid.get_mpi_rank();
+    if (rank == 0) std::cout << "(lon, lat): (" << lon_h(0,0) << ", " << lat_h(0,0) << ")" << std::endl;
 
 
     m_lat = Kokkos::View<double*>("m_lat", m_ncol);
@@ -226,18 +227,24 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
     auto h_n2o = Kokkos::create_mirror_view(m_n2o_profile);
     auto h_o2  = Kokkos::create_mirror_view(m_o2_profile);
 
+    VVM::Real g1 = 3.6478, g2 = 0.83209, g3 = 11.3515;
+    const auto& h_pbar = state.get_field<1>("pbar").get_host_data(); 
     for (int k = 0; k < m_nlay; ++k) {
         if (k == 0) {
             h_o3(k)  = 3.0e-6;
         } 
         else {
-            h_o3(k)  = 3.0170e-8; 
+            // h_o3(k)  = g1 * std::pow(h_pbar(k)/100., g2) * std::exp(-h_pbar(k)/100. / g3) * 1e-6;
+            h_o3(k)  = 3.0170e-8;
         }
-        h_co2(k) = 3.5503e-4; 
-        h_ch4(k) = 1.7000e-6; 
-        h_n2o(k) = 3.2000e-7; 
+        h_co2(k) = 348.0e-6; 
+        h_ch4(k) = 1650.0e-9; 
+        h_n2o(k) = 306.0e-9; 
         h_o2(k)  = 0.2090; 
+
+        if (rank == 0) std::cout << "k = " << k << ", o3 = " << h_o3(k) << std::endl;
     }
+    std::cout << std::endl;
     Kokkos::deep_copy(m_o3_profile,  h_o3);
     Kokkos::deep_copy(m_co2_profile, h_co2);
     Kokkos::deep_copy(m_ch4_profile, h_ch4);

@@ -126,8 +126,10 @@ void LandProcess::init() {
                 m_stc(i, k, j) = m_t1(i, j); // soil temperature
                 // m_smc(i, k, j) = smc(vj, vi) / real(100.); // volumetric soil moisture content
                 // m_slc(i, k, j) = slc(vj, vi) / real(100.); // liquid soil moisture
-                m_smc(i, k, j) = 0.3415875; // volumetric soil moisture content
-                m_slc(i, k, j) = 0.3415875; // liquid soil moisture
+                // m_smc(i, k, j) = 0.3415875; // volumetric soil moisture content
+                // m_slc(i, k, j) = 0.3415875; // liquid soil moisture
+                m_smc(i, k, j) = 0.3054033; // volumetric soil moisture content
+                m_slc(i, k, j) = 0.3054033; // liquid soil moisture
 
             }
         }
