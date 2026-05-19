@@ -229,20 +229,20 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
 
     VVM::Real g1 = 3.6478, g2 = 0.83209, g3 = 11.3515;
     const auto& h_pbar = state.get_field<1>("pbar").get_host_data(); 
+    const int nz = m_grid.get_local_physical_points_z();
+    // NOTE: The gas should be upside down, which means low index representing high level.
     for (int k = 0; k < m_nlay; ++k) {
-        if (k == 0) {
-            h_o3(k)  = 3.0e-6;
-        } 
-        else {
-            // h_o3(k)  = g1 * std::pow(h_pbar(k)/100., g2) * std::exp(-h_pbar(k)/100. / g3) * 1e-6;
-            h_o3(k)  = 3.0170e-8;
-        }
+        int k_vvm = h + nz - k;
+        double p_val = h_pbar(k_vvm);
+        if (k == 0) p_val = 1.01; // TOA pressure
+        h_o3(k)  = g1 * std::pow(p_val/100., g2) * std::exp(-p_val/100. / g3) * 1e-6;
+        // h_o3(k)  = 3.0170e-8;
         h_co2(k) = 348.0e-6; 
         h_ch4(k) = 1650.0e-9; 
         h_n2o(k) = 306.0e-9; 
         h_o2(k)  = 0.2090; 
 
-        if (rank == 0) std::cout << "k = " << k << ", o3 = " << h_o3(k) << std::endl;
+        if (rank == 0) std::cout << "k = " << k << ", p_lay = " << p_val << ", o3 = " << h_o3(k) << std::endl;
     }
     std::cout << std::endl;
     Kokkos::deep_copy(m_o3_profile,  h_o3);
@@ -562,7 +562,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                     Real t_above = buffer.t_lay_k(i, k);
                     buffer.t_lev_k(i, k) = (t_below * dz_above + t_above * dz_below) / (dz_below + dz_above);
                 }
-                // Interface nlay is Top
+                // Interface nlay is Surface / Bottom
                 buffer.t_lev_k(i, nlay) = buffer.t_lay_k(i, nlay - 1);
             });
 
