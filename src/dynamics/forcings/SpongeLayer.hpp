@@ -49,6 +49,9 @@ private:
     Kokkos::View<const VVM::Real*> ref_profile_;
     VVM::Real sponge_base_height_;
     VVM::Real max_damping_coeff_;
+
+    bool damp_thermo_ = false;
+    bool damp_vort_ = false;
 };
 
 } // namespace Dynamics

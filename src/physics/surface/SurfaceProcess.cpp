@@ -13,6 +13,10 @@ SurfaceProcess::SurfaceProcess(const Utils::ConfigurationManager& config,
                                      Core::State& state)
     : config_(config), grid_(grid), params_(params), halo_exchanger_(halo_exchanger) {
 
+    v_coord_type_ = config_.get_value<std::string>("grid.vertical_coordinate_type", "default");
+
+    if (v_coord_type_ == "rcemip") speed1_filter_ = 1;
+    else speed1_filter_ = 1e-3;
     return;
 }
 
@@ -52,14 +56,14 @@ VVM::Real SurfaceProcess::compute_es(VVM::Real t) {
 
 KOKKOS_INLINE_FUNCTION
 void SurfaceProcess::sflux_2d(VVM::Real sigmau, VVM::Real thvm, VVM::Real thvsm, VVM::Real speed1, 
-                              VVM::Real zr, VVM::Real zrough, 
+                              VVM::Real zr, VVM::Real zrough,VVM::Real speed1_filter, 
                               VVM::Real& ustar, VVM::Real ventfc[2], VVM::Real& molen) {
     const VVM::Real bus = real(0.74);
     const VVM::Real crit = real(0.003);
     const int maxit = 5;
 
     bool stopit = false;
-    VVM::Real speedm = (speed1 > real(1.e-3)) ? speed1 : real(1.e-3);
+    VVM::Real speedm = (speed1 > speed1_filter) ? speed1 : speed1_filter;
 
     const VVM::Real vk = real(0.4);
     const VVM::Real pi = real(3.141592653589793);
@@ -319,6 +323,7 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
     const VVM::Real hlm = real(3.336e5);
     const VVM::Real delta = real(0.608);
 
+    const VVM::Real local_speed1_filter = this->speed1_filter_;
     if (mode_ == "sflux_2d") {
         Kokkos::parallel_for("SFlux_3D",
             Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
@@ -351,7 +356,7 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
                 VVM::Real sigmau = real(0.0);
                 VVM::Real ustar, molen;
                 VVM::Real ventfc[2];
-                sflux_2d(sigmau, thbar(hxp), thvsm, speedtp, ztmp, zrough(j, i), ustar, ventfc, molen);
+                sflux_2d(sigmau, thbar(hxp), thvsm, speedtp, ztmp, zrough(j, i), local_speed1_filter, ustar, ventfc, molen);
 
                 VVM::Real wt = ventfc[1] * (ts - T);
                 VVM::Real wq = ventfc[1] * std::abs(gwet(j, i)) * (qsfc - Q);

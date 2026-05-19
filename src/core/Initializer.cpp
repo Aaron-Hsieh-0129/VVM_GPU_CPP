@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <iostream>
 #include <string>
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
 
 namespace VVM {
 namespace Core {
@@ -150,6 +153,66 @@ void Initializer::initialize_grid() const {
         Kokkos::deep_copy(flex_height_coef_up_mutable, flex_height_coef_up_h);
         Kokkos::deep_copy(flex_height_coef_mid_mutable, flex_height_coef_mid_h);
     } 
+    else if (v_coord_type == "rcemip") {
+        std::string source_file = config_.get_value<std::string>("grid.rcemip_grid_data_path", "../rundata/initial_conditions/profiles/snd_rcemip_anal300_v3.txt");
+        std::ifstream infile(source_file);
+        
+        if (!infile.is_open()) {
+            throw std::runtime_error("[Initializer] Cannot open rcemip source file: " + source_file);
+        }
+
+        std::string line;
+        std::getline(infile, line);
+
+        z_up_mutable_h(h-1) = ZB;
+        z_mid_mutable_h(h-1) = ZB;
+
+        for (int k = h; k < nz - h; k++) {
+            if (!std::getline(infile, line)) {
+                throw std::runtime_error("[Initializer] Unexpected end of file in rcemip source file.");
+            }
+            std::istringstream iss(line);
+            VVM::Real zz_val, zt_val;
+            
+            if (!(iss >> zz_val >> zt_val)) {
+                throw std::runtime_error("[Initializer] Error reading data from rcemip source file.");
+            }
+            
+            z_up_mutable_h(k) = zz_val;
+            z_mid_mutable_h(k) = zt_val;
+        }
+        infile.close();
+
+        for (int k = nz - h; k < nz; k++) {
+            z_up_mutable_h(k) = real(2.) * z_up_mutable_h(k-1) - z_up_mutable_h(k-2);
+            z_mid_mutable_h(k) = real(2.) * z_mid_mutable_h(k-1) - z_mid_mutable_h(k-2);
+        }
+
+        for (int k = h - 2; k >= 0; k--) {
+            z_up_mutable_h(k) = z_up_mutable_h(k+1) - (z_up_mutable_h(k+2) - z_up_mutable_h(k+1));
+            z_mid_mutable_h(k) = z_mid_mutable_h(k+1) - (z_mid_mutable_h(k+2) - z_mid_mutable_h(k+1));
+        }
+
+        for (int k = 0; k < nz - 1; k++) {
+            flex_height_coef_up_h(k) = dz / (z_mid_mutable_h(k+1) - z_mid_mutable_h(k));
+        }
+        flex_height_coef_up_h(nz - 1) = flex_height_coef_up_h(nz - 2);
+
+        for (int k = 1; k < nz; k++) {
+            flex_height_coef_mid_h(k) = dz / (z_up_mutable_h(k) - z_up_mutable_h(k-1));
+        }
+        flex_height_coef_mid_h(0) = flex_height_coef_mid_h(1);
+
+        Kokkos::deep_copy(z_up_mutable, z_up_mutable_h);
+        Kokkos::deep_copy(z_mid_mutable, z_mid_mutable_h);
+        Kokkos::deep_copy(flex_height_coef_up_mutable, flex_height_coef_up_h);
+        Kokkos::deep_copy(flex_height_coef_mid_mutable, flex_height_coef_mid_h);
+        
+        int rank = grid_.get_mpi_rank();
+        if (rank == 0) {
+            std::cout << "  [Initializer] Initialized RCEMIP vertical coordinate from " << source_file << std::endl;
+        }
+    }
     else {
         for (int k = h; k < nz; k++) {
             z_up_mutable_h(k) = z_up_mutable_h(k-1) + dz;

@@ -66,6 +66,9 @@ void TxtReader::read_file() {
     if (raw_data_.find("pbar") == raw_data_.end()) 
         throw std::runtime_error("Missing required column 'pbar' in input file.");
 
+    if (raw_data_.find("Tbar") == raw_data_.end() && raw_data_.find("thbar") == raw_data_.end()) 
+        throw std::runtime_error("Missing required column 'Tbar' or 'thbar' in input file.");
+
     bool enable_constant_wind = config_.get_value<bool>("initial_conditions.constant_upper_wind.enable", false);
     if (enable_constant_wind) {
         VVM::Real p_threshold = config_.get_value<VVM::Real>("initial_conditions.constant_upper_wind.pressure_threshold_Pa", 25000.0);
@@ -102,8 +105,9 @@ void TxtReader::read_file() {
 
 void TxtReader::calculate_input_heights() {
     const auto& P_in  = raw_data_.at("pbar");
-    const auto& T_in  = raw_data_.at("Tbar"); 
     const auto& Qv_in = raw_data_.at("qvbar"); 
+
+    bool has_tbar = raw_data_.find("Tbar") != raw_data_.end();
     
     size_t n = P_in.size();
     input_z_.resize(n);
@@ -120,7 +124,16 @@ void TxtReader::calculate_input_heights() {
     for (size_t i = 0; i < n; ++i) {
         VVM::Real pi = std::pow(P_in[i] / P0, RbCp);
         pilog1[i] = std::log(pi);
-        tv1[i] = T_in[i] * (real(1.0) + real(0.608) * Qv_in[i]);
+
+        VVM::Real T_current;
+        if (has_tbar) {
+            T_current = raw_data_.at("Tbar")[i];
+        } 
+        else {
+            T_current = raw_data_.at("thbar")[i] * pi;
+        }
+
+        tv1[i] = T_current * (real(1.0) + real(0.608) * Qv_in[i]);
     }
 
     input_z_[0] = real(0.0); 
@@ -159,49 +172,119 @@ void TxtReader::initialize_thermodynamics(VVM::Core::State& state) {
     VVM::Real dz = config_.get_value<VVM::Real>("grid.dz");
     VVM::Real RbCp = Rd / Cp;
     VVM::Real GDZBCP = real(2.) * g * dz / Cp;
+
+    bool has_tbar = raw_data_.find("Tbar") != raw_data_.end();
+    size_t n_in = raw_data_.at("pbar").size();
+    std::vector<VVM::Real> T_in(n_in);
+    std::vector<VVM::Real> th_in(n_in);
+    for (size_t i = 0; i < n_in; ++i) {
+        VVM::Real pi = std::pow(raw_data_.at("pbar")[i] / P0, RbCp);
+        if (has_tbar) {
+            T_in[i] = raw_data_.at("Tbar")[i];
+            th_in[i] = T_in[i] / pi;
+        } 
+        else {
+            th_in[i] = raw_data_.at("thbar")[i];
+            T_in[i] = th_in[i] * pi;
+        }
+    }
     
     VVM::Real P_sfc_val = raw_data_.at("pbar")[0];
-    VVM::Real T_sfc_val = raw_data_.at("Tbar")[0];
     VVM::Real Qv_sfc_val = raw_data_.at("qvbar")[0];
+    VVM::Real T_sfc_val = T_in[0];
 
     pbar(h-1) = P_sfc_val;
     Tbar(h-1) = T_sfc_val;
     qvbar(h-1) = Qv_sfc_val;
-    
-    const auto& T_in = raw_data_.at("Tbar");
-    const auto& Qv_in = raw_data_.at("qvbar");
+    if (!has_tbar) thbar(h-1) = th_in[0];
 
-    for (int k = h; k < nz; ++k) {
-        VVM::Real z = z_mid(k);
-        Tbar(k) = interpolate(z, input_z_, T_in);
-        qvbar(k) = interpolate(z, input_z_, Qv_in);
-    }
+    std::string v_coord_type = config_.get_value<std::string>("grid.vertical_coordinate_type", "default");
 
-    std::vector<VVM::Real> pilog(nz);
-    
-    VVM::Real pi_sfc = std::pow(pbar(h-1) / P0, RbCp);
-    pibar(h-1) = pi_sfc;
-    pilog[h-1] = std::log(pi_sfc);
-    pibar_up(h-1) = pi_sfc;
-
-    for (int iter = 0; iter < 3; ++iter) {
-        for (int k = h-1; k < nz; ++k) {
+    if (v_coord_type == "rcemip") {
+        for (int k = h - 1; k < nz; ++k) {
+            int idx = k - (h - 1); 
+            
+            if (idx < n_in) {
+                pbar(k)  = raw_data_.at("pbar")[idx];
+                thbar(k) = th_in[idx];
+                qvbar(k) = raw_data_.at("qvbar")[idx]; 
+            } 
+            else {
+                if (k >= 2) {
+                    pbar(k) = pbar(k-1) * (pbar(k-1) / pbar(k-2));
+                } else {
+                    pbar(k) = pbar(k-1);
+                }
+                thbar(k) = thbar(k-1);
+                qvbar(k) = qvbar(k-1);
+            }
+            
+            pibar(k) = std::pow(pbar(k) / P0, RbCp);
+            
+            Tbar(k)  = thbar(k) * pibar(k);
             Tvbar(k) = Tbar(k) * (real(1.0) + real(0.608) * qvbar(k));
+            
+            rhobar(k) = pbar(k) / (Rd * thbar(k) * pibar(k));
         }
 
-        pilog[h] = pilog[h-1] - GDZBCP / (Tvbar(h-1) + Tvbar(h)) * (z_mid(h)-z_up(h-1)) / dz;
-        for (int k = h + 1; k < nz; ++k) {
-            pilog[k] = pilog[k-1] - GDZBCP/(Tvbar(k-1)+Tvbar(k)) / flex_height_coef_up(k-1); 
+        for (int k = h - 1; k < nz - 1; ++k) {
+            rhobar_up(k) = rhobar(k) + (rhobar(k+1) - rhobar(k)) / (z_mid(k+1) - z_mid(k)) * (z_up(k) - z_mid(k));
+            pibar_up(k) = real(0.5) * (pibar(k) + pibar(k+1));
         }
 
-        for (int k = h; k < nz; ++k) {
-            pibar(k) = std::exp(pilog[k]);
-            pbar(k) = P0 * std::pow(pibar(k), Cp/Rd);
-            thbar(k) = Tbar(k) / pibar(k);
-        }
-        thbar(h-1) = Tbar(h-1) / pibar(h-1);
+        rhobar_up(nz - 1) = rhobar_up(nz - 2) + 
+            (rhobar_up(nz - 2) - rhobar_up(nz - 3)) / (z_up(nz - 2) - z_up(nz - 3)) * (z_up(nz - 1) - z_up(nz - 2));
+        pibar_up(nz - 1) = pibar(nz - 1);
     }
+    else {
+        for (int k = h; k < nz; ++k) {
+            VVM::Real z = z_mid(k);
+            qvbar(k) = interpolate(z, input_z_, raw_data_.at("qvbar"));
+            
+            if (has_tbar) {
+                Tbar(k) = interpolate(z, input_z_, T_in);
+            } 
+            else {
+                thbar(k) = interpolate(z, input_z_, th_in);
+                Tbar(k) = interpolate(z, input_z_, T_in);
+            }
+        }
 
+        std::vector<VVM::Real> pilog(nz);
+        VVM::Real pi_sfc = std::pow(pbar(h-1) / P0, RbCp);
+        pibar(h-1) = pi_sfc;
+        pilog[h-1] = std::log(pi_sfc);
+        pibar_up(h-1) = pi_sfc;
+
+        for (int iter = 0; iter < 3; ++iter) {
+            for (int k = h-1; k < nz; ++k) {
+                Tvbar(k) = Tbar(k) * (real(1.0) + real(0.608) * qvbar(k));
+            }
+
+            pilog[h] = pilog[h-1] - GDZBCP / (Tvbar(h-1) + Tvbar(h)) * (z_mid(h)-z_up(h-1)) / dz;
+            for (int k = h + 1; k < nz; ++k) {
+                pilog[k] = pilog[k-1] - GDZBCP/(Tvbar(k-1)+Tvbar(k)) / flex_height_coef_up(k-1); 
+            }
+
+            for (int k = h; k < nz; ++k) {
+                pibar(k) = std::exp(pilog[k]);
+                pbar(k) = P0 * std::pow(pibar(k), Cp/Rd);
+                if (has_tbar) {
+                    thbar(k) = Tbar(k) / pibar(k);
+                } 
+                else {
+                    Tbar(k) = thbar(k) * pibar(k);
+                }
+            }
+            if (has_tbar) {
+                thbar(h-1) = Tbar(h-1) / pibar(h-1);
+            } 
+            else {
+                Tbar(h-1) = thbar(h-1) * pibar(h-1);
+            }
+        }
+    }
+    
     for (int k = h; k < nz; k++) {
         pibar_up(k) = real(0.5) * (pibar(k) + pibar(k+1));
     }
@@ -281,42 +364,72 @@ void TxtReader::initialize_forcing(VVM::Core::State& state) {
     VVM::Real secday = real(86400.0);
     VVM::Real gamfac = Lv / Cp;
 
+    std::string v_coord_type = config_.get_value<std::string>("grid.vertical_coordinate_type", "default");
+    size_t n_in = P_in.size();
+
     for (int k = h-1; k < nz; ++k) {
-        VVM::Real p_target = pbar(k);
+        if (v_coord_type == "rcemip") {
+            int idx = k - (h - 1);
 
-        if (has_u) U_h(k) = interpolate(p_target, P_in, raw_data_.at("U"), true);
-        if (has_v) V_h(k) = interpolate(p_target, P_in, raw_data_.at("V"), true);
+            VVM::Real u_val = 0, v_val = 0, q1_val = 0, q2_val = 0;
 
-        // Interpolate Q1, Q2
-        if (has_q1) {
-            VVM::Real q1_val = interpolate(p_target, P_in, raw_data_.at("Q1"), true);
-            // Unit Conv: K/day -> K/s (divided by Exner) -> Advective Form
-            Q1LS_h(k) = -real(1.0) * q1_val / pibar(k) / secday;
+            if (idx < n_in) {
+                if (has_u) u_val = raw_data_.at("U")[idx];
+                if (has_v) v_val = raw_data_.at("V")[idx];
+                if (has_q1) q1_val = raw_data_.at("Q1")[idx];
+                if (has_q2) q2_val = raw_data_.at("Q2")[idx];
+            } 
+            else {
+                if (n_in >= 2) {
+                    int last = n_in - 1;
+                    int prev = n_in - 2;
+                    int diff = idx - last;
+                    
+                    if (has_u) u_val = raw_data_.at("U")[last] + (raw_data_.at("U")[last] - raw_data_.at("U")[prev]) * diff;
+                    if (has_v) v_val = raw_data_.at("V")[last] + (raw_data_.at("V")[last] - raw_data_.at("V")[prev]) * diff;
+                    if (has_q1) q1_val = raw_data_.at("Q1")[last] + (raw_data_.at("Q1")[last] - raw_data_.at("Q1")[prev]) * diff;
+                    if (has_q2) q2_val = raw_data_.at("Q2")[last] + (raw_data_.at("Q2")[last] - raw_data_.at("Q2")[prev]) * diff;
+                } else {
+                    if (has_u) u_val = raw_data_.at("U")[0];
+                    if (has_v) v_val = raw_data_.at("V")[0];
+                    if (has_q1) q1_val = raw_data_.at("Q1")[0];
+                    if (has_q2) q2_val = raw_data_.at("Q2")[0];
+                }
+            }
+
+            if (has_u) U_h(k) = u_val;
+            if (has_v) V_h(k) = v_val;
+            if (has_q1) Q1LS_h(k) = -real(1.0) * q1_val / pibar(k) / secday;
+            if (has_q2) Q2LS_h(k) = q2_val / (gamfac * secday);
         }
-        if (has_q2) {
-            VVM::Real q2_val = interpolate(p_target, P_in, raw_data_.at("Q2"), true);
-            // Unit Conv: K/day -> kg/kg/s
-            Q2LS_h(k) = q2_val / (gamfac * secday);
+        else {
+            VVM::Real p_target = pbar(k);
+
+            if (has_u) U_h(k) = interpolate(p_target, P_in, raw_data_.at("U"), true);
+            if (has_v) V_h(k) = interpolate(p_target, P_in, raw_data_.at("V"), true);
+
+            if (has_q1) {
+                VVM::Real q1_val = interpolate(p_target, P_in, raw_data_.at("Q1"), true);
+                Q1LS_h(k) = -real(1.0) * q1_val / pibar(k) / secday;
+            }
+            if (has_q2) {
+                VVM::Real q2_val = interpolate(p_target, P_in, raw_data_.at("Q2"), true);
+                Q2LS_h(k) = q2_val / (gamfac * secday);
+            }
         }
     }
 
-    if (has_u) {
-        U_h(h-1) = U_h(h); U_h(nz-h) = U_h(nz-h-1);
-        Kokkos::deep_copy(U, U_h);
-    }
-    if (has_v) {
-        V_h(h-1) = V_h(h); V_h(nz-h) = V_h(nz-h-1);
-        Kokkos::deep_copy(V, V_h);
+    if (v_coord_type != "rcemip") {
+        if (has_u) { U_h(h-1) = U_h(h); U_h(nz-1) = U_h(nz-2); }
+        if (has_v) { V_h(h-1) = V_h(h); V_h(nz-1) = V_h(nz-2); }
+        if (has_q1) { Q1LS_h(h-1) = Q1LS_h(h); Q1LS_h(nz-1) = Q1LS_h(nz-2); }
+        if (has_q2) { Q2LS_h(h-1) = Q2LS_h(h); Q2LS_h(nz-1) = Q2LS_h(nz-2); }
     }
 
-    if (has_q1) {
-        Q1LS_h(h-1) = Q1LS_h(h); Q1LS_h(nz-h) = Q1LS_h(nz-h-1);
-        Kokkos::deep_copy(Q1LS, Q1LS_h);
-    }
-    if (has_q2) {
-        Q2LS_h(h-1) = Q2LS_h(h); Q2LS_h(nz-h) = Q2LS_h(nz-h-1);
-        Kokkos::deep_copy(Q2LS, Q2LS_h);
-    }
+    if (has_u) Kokkos::deep_copy(U, U_h);
+    if (has_v) Kokkos::deep_copy(V, V_h);
+    if (has_q1) Kokkos::deep_copy(Q1LS, Q1LS_h);
+    if (has_q2) Kokkos::deep_copy(Q2LS, Q2LS_h);
 }
 
 VVM::Real TxtReader::interpolate(VVM::Real target_x, const std::vector<VVM::Real>& x_vec, 

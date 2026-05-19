@@ -19,6 +19,9 @@ SpongeLayer::SpongeLayer(const Utils::ConfigurationManager& config,
         std::vector<std::string> p3_vars = {"qc", "qr", "qi", "nc", "nr", "ni", "bm", "qm"};
         thermodynamics_vars_.insert(thermodynamics_vars_.end(), p3_vars.begin(), p3_vars.end());
     }
+
+    damp_thermo_ = config.get_value<bool>("dynamics.forcings.sponge_layer.damp_thermo", false);
+    damp_vort_ = config.get_value<bool>("dynamics.forcings.sponge_layer.damp_vort", false);
 }
 
 void SpongeLayer::initialize(Core::State& state) {
@@ -97,6 +100,15 @@ void SpongeLayer::calculate_tendencies(Core::State& state,
                                        const std::string& var_name, 
                                        Core::Field<Dim>& out_tendency) 
 {
+    if (damp_vort_ == false && 
+        std::find(dynamics_vars_.begin(), dynamics_vars_.end(), var_name) != dynamics_vars_.end()) {
+        return;
+    }
+    if (damp_thermo_ == false && 
+        std::find(thermodynamics_vars_.begin(), thermodynamics_vars_.end(), var_name) != thermodynamics_vars_.end()) {
+        return;
+    }
+
     const auto& CGR_thermo = state.get_field<1>("CGR_thermo").get_device_data();
     const auto& CGR_vort = state.get_field<1>("CGR_vort").get_device_data();
     const auto& var = state.get_field<3>(var_name).get_device_data();

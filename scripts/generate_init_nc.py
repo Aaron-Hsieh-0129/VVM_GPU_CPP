@@ -16,78 +16,10 @@ from scipy import stats
 # ==============================================================================
 # Set to True : Read high-resolution Taiwan topography and perform coarsening
 # Set to False: Enter "Idealized Simulation" mode for user-defined ridge & land types
-USE_TAIWAN_TOPO = True
+USE_TAIWAN_TOPO = False
 
-CONFIG_PATH = '../rundata/input_configs/taiwanvvm.json'
+CONFIG_PATH = '../rundata/input_configs/rcemip.json'
 SOURCE_TW_DATA = '../rundata/land/topolsm_TW.nc'
-
-# ==============================================================================
-# Helper Functions for Idealized Simulation
-# ==============================================================================
-def get_ideal_topo_data(ny, nx):
-    ds = xr.open_dataset("/work/aaron900129/VVM_GPU_CPP/TOPO.nc")
-    topo_in = np.array(ds['topo'])
-    topo = np.zeros((ny, nx), dtype='i4')
-    topo = topo_in
-
-    # mountain_width = nx // 4
-    # start_col = nx - mountain_width
-    # peak_col = start_col + (mountain_width // 2)
-    # max_height = 7
-    # 
-    # cols_rise = np.arange(start_col, peak_col + 1)
-    # cols_fall = np.arange(peak_col + 1, nx)
-    # 
-    # rise_vals = np.round((cols_rise - start_col) * max_height / (peak_col - start_col))
-    # fall_vals = np.round((nx - cols_fall) * max_height / (nx - peak_col))
-    # 
-    # topo[:, cols_rise] = rise_vals.astype('i4')
-    # topo[:, cols_fall] = fall_vals.astype('i4')
-
-    return topo
-
-def get_ideal_vegtype_data(ny, nx):
-    vegtype = np.ones((ny, nx), dtype='i4')
-    vegtype[:, :nx//2] = 17         # IGBP 17 = Water Bodies (Aligned with standard)
-    vegtype[:, nx//2:nx//4*3] = 13  # IGBP 13 = Urban
-    vegtype[:, nx//4*3:] = 2        # IGBP 2 = Evergreen Broadleaf
-    return vegtype
-
-def get_ideal_soiltype_data(ny, nx):
-    soiltype = np.ones((ny, nx), dtype='i4') # STATSGO 1 = Sand
-    soiltype[:, :nx//2] = 14                 # STATSGO 14 = Water
-    soiltype[:, nx//2:nx//4*3] = 13          # STATSGO 13 = Organic Material
-    soiltype[:, nx//4*3:] = 2                # STATSGO 2 = Evergreen Broadleaf
-    return soiltype
-
-def get_ideal_slopetype_data(ny, nx):
-    slopetype = np.ones((ny, nx), dtype='i4')
-    slopetype[:,:] = 1
-    return slopetype
-
-def get_ideal_tg_data(ny, nx, value=305.0):
-    return np.full((ny, nx), value, dtype='f8')
-
-def get_albedo_data(ny, nx):
-    albedo = np.zeros((ny, nx), dtype='f8')
-    albedo[:, :nx//2] = 8
-    albedo[:, nx//2:nx//4*3] = 15
-    albedo[:, nx//4*3:] = 12
-    return albedo
-
-def get_gvf_data(ny, nx):
-    gvf = np.zeros((ny, nx), dtype='f8')
-    gvf[:, :nx//2] = 0
-    gvf[:, nx//2:nx//4*3] = 10
-    gvf[:, nx//4*3:] = 95
-    return gvf
-
-def get_lai_data(ny, nx):
-    lai = np.zeros((ny, nx), dtype='f8')
-    lai[:, :nx//2] = 0
-    lai[:, nx//2:nx//4*3] = 1
-    lai[:, nx//4*3:] = 6.48
-    return lai
 
 # ==============================================================================
 # Auto-read Configuration and Create Pure Physical Grid
@@ -140,6 +72,26 @@ if v_coord_type == 'taiwanvvm':
             z_up[KK] = z_up[KK-1] + DZ1
         if kc < NZ:
             z_up[kc] = z_up[kc-1] + DZ1
+elif v_coord_type == 'rcemip':
+    z_up[0] = 0.0  # Layer 0 is the surface (physical height 0)
+    
+    source_file = config['grid']['rcemip_grid_data_path']
+    
+    if not os.path.exists(source_file):
+        raise FileNotFoundError(f"RCEMIP source file not found: {source_file}")
+        
+    with open(source_file, 'r') as f:
+        lines = f.readlines()
+        
+    data_lines = lines[1:]
+    
+    for k in range(1, NZ):
+        if k - 1 < len(data_lines):
+            parts = data_lines[k-1].strip().split()
+            if len(parts) > 0:
+                z_up[k] = float(parts[0])
+        else:
+            z_up[k] = 2.0 * z_up[k-1] - z_up[k-2]
 else:
     # --- Default VVM Logic ---
     z_up[0] = 0.0  # Layer 0 is the surface (physical height 0)
@@ -148,6 +100,115 @@ else:
     for k in range(0, NZ):
         z_up[k] = z_up[k] * (cz1 + cz2 * z_up[k])
 
+# ==============================================================================
+# Helper Functions for Idealized Simulation
+# ==============================================================================
+def get_ideal_topo_data(ny, nx):
+    topo_idx = np.zeros((ny, nx), dtype='i4')
+    
+    # MI_GLOB = nx
+    # I = np.arange(1, MI_GLOB + 1)
+    # 
+    # profile_h = np.zeros(MI_GLOB, dtype='f8')
+    # cond = I < (MI_GLOB * 7 / 8)
+    # 
+    # profile_h[cond] = (I[cond] - MI_GLOB * 3 / 4) * 1000.0 / (MI_GLOB / 8.0)
+    # profile_h[~cond] = 1000.0 + (MI_GLOB * 7 / 8 - I[~cond]) * 1000.0 / (MI_GLOB / 8.0)
+    # 
+    # profile_h = np.maximum(profile_h, 0.0)
+    # profile_idx = np.argmin(np.abs(profile_h[:, None] - z_up[None, :]), axis=1)
+    # topo_idx[:] = profile_idx
+    
+    return topo_idx
+
+def get_ideal_vegtype_data(ny, nx):
+    vegtype = np.ones((ny, nx), dtype='i4')
+    # sea_urban_mountain
+    # vegtype[:, :nx//2] = 17         # IGBP 17 = Water Bodies (Aligned with standard)
+    # vegtype[:, nx//2:nx//4*3] = 13  # IGBP 13 = Urban
+    # vegtype[:, nx//4*3:] = 2        # IGBP 2 = Evergreen Broadleaf
+
+    # sea_grass_mountain
+    # vegtype[:, :nx//2] = 17         # IGBP 17 = Water Bodies (Aligned with standard)
+    # vegtype[:, nx//2:nx//4*3] = 10  # IGBP 10 = Grass
+    # vegtype[:, nx//4*3:] = 2        # IGBP 2 = Evergreen Broadleaf
+
+    # rcemip
+    vegtype[:, :] = 17         # IGBP 17 = Water Bodies (Aligned with standard)
+
+    return vegtype
+
+def get_ideal_soiltype_data(ny, nx):
+    soiltype = np.ones((ny, nx), dtype='i4') # STATSGO 1 = Sand
+    # sea_urban_mountain
+    # soiltype[:, :nx//2] = 14                 # STATSGO 14 = Water
+    # soiltype[:, nx//2:nx//4*3] = 13          # STATSGO 13 = Organic Material
+    # soiltype[:, nx//4*3:] = 13               # STATSGO 13 = Organic Material
+
+    # sea_grass_mountain
+    # soiltype[:, :nx//2] = 14                 # STATSGO 14 = Water
+    # soiltype[:, nx//2:nx//4*3] = 13          # STATSGO 13 = Organic Material
+    # soiltype[:, nx//4*3:] = 13               # STATSGO 13 = Organic Material
+
+    # rcemip
+    soiltype[:, :] = 14                 # STATSGO 14 = Water
+    return soiltype
+
+def get_ideal_slopetype_data(ny, nx):
+    slopetype = np.ones((ny, nx), dtype='i4')
+    slopetype[:,:] = 1
+    return slopetype
+
+def get_ideal_tg_data(ny, nx, value=300.0):
+    return np.full((ny, nx), value, dtype='f8')
+
+def get_albedo_data(ny, nx):
+    albedo = np.zeros((ny, nx), dtype='f8')
+    # sea_urban_mountain
+    # albedo[:, :nx//2] = 8
+    # albedo[:, nx//2:nx//4*3] = 15
+    # albedo[:, nx//4*3:] = 12
+
+    # sea_grass_mountain
+    # albedo[:, :nx//2] = 8
+    # albedo[:, nx//2:nx//4*3] = 19
+    # albedo[:, nx//4*3:] = 12
+
+    # rcemip
+    albedo[:, :] = 8
+    return albedo
+
+def get_gvf_data(ny, nx):
+    gvf = np.zeros((ny, nx), dtype='f8')
+    # sea_urban_mountain
+    # gvf[:, :nx//2] = 0
+    # gvf[:, nx//2:nx//4*3] = 10
+    # gvf[:, nx//4*3:] = 95
+
+    # sea_grass_mountain
+    # gvf[:, :nx//2] = 0
+    # gvf[:, nx//2:nx//4*3] = 80
+    # gvf[:, nx//4*3:] = 95
+
+    # rcemip
+    gvf[:, :] = 0
+    return gvf
+
+def get_lai_data(ny, nx):
+    lai = np.zeros((ny, nx), dtype='f8')
+    # sea_urban_mountain
+    # lai[:, :nx//2] = 0
+    # lai[:, nx//2:nx//4*3] = 1
+    # lai[:, nx//4*3:] = 6.48
+
+    # sea_grass_mountain
+    # lai[:, :nx//2] = 0
+    # lai[:, nx//2:nx//4*3] = 4
+    # lai[:, nx//4*3:] = 6.48
+
+    # rcemip
+    lai[:, :] = 0
+    return lai
 
 
 # Initialize default surface arrays (Using IGBP classification standard)
@@ -287,7 +348,7 @@ else:
     lu_ideal    = get_ideal_vegtype_data(NY, NX)
     soil_ideal  = get_ideal_soiltype_data(NY, NX)
     slope_ideal = get_ideal_slopetype_data(NY, NX)
-    Tg_ideal    = get_ideal_tg_data(NY, NX, value=305.0)
+    Tg_ideal    = get_ideal_tg_data(NY, NX, value=300.0)
     albedo_ideal    = get_albedo_data(NY, NX)
     gvf_ideal    = get_gvf_data(NY, NX)
     lai_ideal    = get_lai_data(NY, NX)
@@ -309,7 +370,7 @@ else:
                 # Land base starts at HALO, plus any extra mountain height
                 topo[j, i] = base_topo[j, i] + (HALO - 1)
                 if topo[j, i] < HALO:
-                    topo[j, i] = HALO
+                    topo[j, i] = 0
             else:
                 # Sea is always 0
                 topo[j, i] = 0
@@ -492,3 +553,4 @@ print("Initialization file generated successfully with detailed variable names!"
 #  7: 90 - 120%
 #  8: 120 - 150%
 #  9: > 150%      (Cliff)
+
