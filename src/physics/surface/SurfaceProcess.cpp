@@ -341,6 +341,7 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
                                 Kokkos::pow(v(hxp,j-1,i) + v(hxp,j,i), real(2))
                              );
 
+                // TODO: check compute_es
                 VVM::Real es1 = compute_es(Tg(j, i)); 
                 VVM::Real qsfc = es1 * real(0.622) / (pbar(hx1) - es1);
                 VVM::Real ts = cp * Tg(j, i) + grav() * z_up(hx1); 
@@ -435,7 +436,7 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
     }
     halo_exchanger_.exchange_halos(state.get_field<2>("VEN2D"));
 
-    bool has_topo = (params_.max_topo_idx > 0);
+    bool has_topo = (params_.max_topo_idx > h);
     Kokkos::parallel_for("SFlux_uv",
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
         KOKKOS_LAMBDA(const int j, const int i) {

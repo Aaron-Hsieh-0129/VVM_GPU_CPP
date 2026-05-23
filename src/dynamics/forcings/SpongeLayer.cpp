@@ -160,10 +160,11 @@ void SpongeLayer::calculate_tendencies(Core::State& state,
     } 
     else if constexpr (Dim == 2) {
         int NK2 = nz-h-1;
+        const auto& CRAD = CRAD_;
         Kokkos::parallel_for("Sponge_Tendency_" + var_name,
             Kokkos::MDRangePolicy<Kokkos::Rank<2>>({{h, h}}, {{ny-h, nx-h}}),
             KOKKOS_LAMBDA(const int j, const int i) {
-                tend(j, i) += -CGR_vort(NK2) * (var(NK2, j, i));
+                tend(j, i) += -CRAD * (var(NK2, j, i));
             }
         );
     }
