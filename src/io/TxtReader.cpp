@@ -219,7 +219,7 @@ void TxtReader::initialize_thermodynamics(VVM::Core::State& state) {
                 qvbar(k) = qvbar(k-1);
             }
             
-            pibar(k) = std::pow(pbar(k) / P0, RbCp);
+            pibar(k) = std::pow(pbar(k) / P0, 2./7.);
             
             Tbar(k)  = thbar(k) * pibar(k);
             Tvbar(k) = Tbar(k) * (real(1.0) + real(0.608) * qvbar(k));
@@ -283,23 +283,23 @@ void TxtReader::initialize_thermodynamics(VVM::Core::State& state) {
                 Tbar(h-1) = thbar(h-1) * pibar(h-1);
             }
         }
-    }
-    
-    for (int k = h; k < nz; k++) {
-        pibar_up(k) = real(0.5) * (pibar(k) + pibar(k+1));
-    }
 
-    for (int k = h-1; k < nz; ++k) {
-        rhobar(k) = pbar(k) / (Rd * Tvbar(k));
+        for (int k = h; k < nz; k++) {
+            pibar_up(k) = real(0.5) * (pibar(k) + pibar(k+1));
+        }
+
+        for (int k = h-1; k < nz; ++k) {
+            rhobar(k) = pbar(k) / (Rd * Tvbar(k));
+        }
+        
+        for (int k = h-1; k < nz - 1; ++k) {
+            VVM::Real alpha_k = real(1.0) / rhobar(k);
+            VVM::Real alpha_kp1 = real(1.0) / rhobar(k+1);
+            VVM::Real alpha_w = real(0.5) * (alpha_k + alpha_kp1);
+            rhobar_up(k) = real(1.0) / alpha_w;
+        }
+        rhobar_up(h-1) = rhobar(h-1); 
     }
-    
-    for (int k = h-1; k < nz - 1; ++k) {
-        VVM::Real alpha_k = real(1.0) / rhobar(k);
-        VVM::Real alpha_kp1 = real(1.0) / rhobar(k+1);
-        VVM::Real alpha_w = real(0.5) * (alpha_k + alpha_kp1);
-        rhobar_up(k) = real(1.0) / alpha_w;
-    }
-    rhobar_up(h-1) = rhobar(h-1); 
 
     for (int k = 0; k < h-1; ++k) {
         Tbar(k) = Tbar(h-1);
@@ -311,7 +311,7 @@ void TxtReader::initialize_thermodynamics(VVM::Core::State& state) {
         rhobar(k) = rhobar(h-1);
         rhobar_up(k) = rhobar_up(h-1);
     }
-
+    
     // Sync
     Kokkos::deep_copy(state.get_field<1>("Tbar").get_mutable_device_data(), Tbar);
     Kokkos::deep_copy(state.get_field<1>("qvbar").get_mutable_device_data(), qvbar);

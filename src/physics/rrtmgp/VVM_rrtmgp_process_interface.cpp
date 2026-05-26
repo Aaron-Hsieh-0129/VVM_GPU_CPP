@@ -397,9 +397,13 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
     auto& qi = state.get_field<3>("qi").get_device_data();
     auto& qv = state.get_field<3>("qv").get_device_data();
     auto& th = state.get_field<3>("th").get_device_data();
-    auto& pibar = state.get_field<1>("pibar").get_device_data(); 
+    const auto& pibar = state.get_field<1>("pibar").get_device_data(); 
+    const auto& thbar = state.get_field<1>("thbar").get_device_data();
     const auto& diag_eff_radius_qc = state.get_field<3>("diag_eff_radius_qc").get_device_data();
     const auto& diag_eff_radius_qi = state.get_field<3>("diag_eff_radius_qi").get_device_data();
+
+    VVM::Real Rd = m_config.get_value<VVM::Real>("constants.Rd");
+    VVM::Real g = m_config.get_value<VVM::Real>("constants.gravity");
 
     // Output fields
     auto& sw_heating = state.get_field<3>("sw_heating").get_mutable_device_data();
@@ -493,8 +497,11 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 buffer.p_del_k(i, 0) = buffer.p_lev_k(i, 1) - buffer.p_lev_k(i, 0);
                 buffer.d_dz(i, 0) = 0.0;
                 
-                int top_vvm = h + nz - 1; 
-                buffer.t_lay_k(i, 0) = th(top_vvm, iy + h, ix + h) * pibar(top_vvm);
+                int top_vvm = h + nz - 1;
+                int subtop_vvm = h + nz - 2;
+                Real t_top = th(top_vvm, iy + h, ix + h) * pibar(top_vvm);
+                Real t_subtop = th(subtop_vvm, iy + h, ix + h) * pibar(subtop_vvm);
+                buffer.t_lay_k(i, 0) = 2.0 * t_top - t_subtop;
                 
                 buffer.qc_k(i, 0) = 0.0;
                 buffer.nc_k(i, 0) = 0.0;
@@ -531,10 +538,10 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 
                 // Initialize Broadband Surface Albedo  (TODO: Get from State)
                 // For now, assuming ocean-like albedo
-                buffer.sfc_alb_dir_vis_k(i) = 0.06;
-                buffer.sfc_alb_dir_nir_k(i) = 0.06;
-                buffer.sfc_alb_dif_vis_k(i) = 0.06;
-                buffer.sfc_alb_dif_nir_k(i) = 0.06;
+                buffer.sfc_alb_dir_vis_k(i) = 0.3;
+                buffer.sfc_alb_dir_nir_k(i) = 0.3;
+                buffer.sfc_alb_dif_vis_k(i) = 0.3;
+                buffer.sfc_alb_dif_nir_k(i) = 0.3;
 
                 for(int k=0; k < nlay_local; ++k) {
                     for(int b=0; b<nswbands; ++b) {
@@ -555,14 +562,9 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 buffer.t_lev_k(i, 0) = buffer.t_lay_k(i, 0);
 
                 for (int k = 1; k < nlay; ++k) {
-                    // Interface k is between layer k-1 (below) and k (above)
-                    Real dz_below = buffer.d_dz(i, k-1);
-                    Real dz_above = buffer.d_dz(i, k);
-                    Real t_below = buffer.t_lay_k(i, k-1);
-                    Real t_above = buffer.t_lay_k(i, k);
-                    buffer.t_lev_k(i, k) = (t_below * dz_above + t_above * dz_below) / (dz_below + dz_above);
+                    buffer.t_lev_k(i, k) = 0.5 * (buffer.t_lay_k(i, k-1) + buffer.t_lay_k(i, k));
                 }
-                // Interface nlay is Surface / Bottom
+                buffer.t_lev_k(i, 0) = 2.0 * buffer.t_lay_k(i, 0) - buffer.t_lev_k(i, 1);
                 buffer.t_lev_k(i, nlay) = buffer.t_lay_k(i, nlay - 1);
             });
 
@@ -648,6 +650,12 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                        });
                 }
             }
+
+            Kokkos::parallel_for("copy_gas_to_toa", Kokkos::RangePolicy<>(0, ncol),
+                KOKKOS_LAMBDA(int i) {
+                    vmr_view(i, 0) = vmr_view(i, 1); 
+                }
+            );
 
             m_gas_concs_k.set_vmr(name, vmr_view);
         }
@@ -735,9 +743,7 @@ void RRTMGPRadiation::calculate_tendencies(VVM::Core::State& state) {
     );
 }
 
-
-
-
 } // namespace RRTMGP
 } // namespace Physics
 } // namespace VVM
+
