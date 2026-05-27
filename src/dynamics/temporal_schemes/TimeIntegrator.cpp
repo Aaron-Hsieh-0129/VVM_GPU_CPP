@@ -8,7 +8,9 @@ TimeIntegrator::TimeIntegrator(std::string var_name, bool has_ab2, bool has_fe)
     : variable_name_(std::move(var_name)), has_ab2_terms_(has_ab2),
       has_fe_terms_(has_fe) {}
 
-TimeIntegrator::~TimeIntegrator() = default; void TimeIntegrator::step(
+TimeIntegrator::~TimeIntegrator() = default; 
+
+void TimeIntegrator::step(
     Core::State& state,
     const Core::Grid& grid,
     const Core::Parameters& params,
