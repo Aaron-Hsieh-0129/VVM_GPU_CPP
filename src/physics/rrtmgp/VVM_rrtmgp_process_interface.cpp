@@ -397,7 +397,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
     auto& qi = state.get_field<3>("qi").get_device_data();
     auto& qv = state.get_field<3>("qv").get_device_data();
     auto& th = state.get_field<3>("th").get_device_data();
-    const auto& tg = state.get_field<2>("tg").get_device_data();
+    const auto& tg = state.get_field<2>("Tg").get_device_data();
     const auto& pibar = state.get_field<1>("pibar").get_device_data(); 
     const auto& thbar = state.get_field<1>("thbar").get_device_data();
     const auto& diag_eff_radius_qc = state.get_field<3>("diag_eff_radius_qc").get_device_data();
