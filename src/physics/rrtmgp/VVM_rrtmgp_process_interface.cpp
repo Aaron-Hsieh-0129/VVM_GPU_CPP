@@ -397,6 +397,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
     auto& qi = state.get_field<3>("qi").get_device_data();
     auto& qv = state.get_field<3>("qv").get_device_data();
     auto& th = state.get_field<3>("th").get_device_data();
+    const auto& tg = state.get_field<2>("tg").get_device_data();
     const auto& pibar = state.get_field<1>("pibar").get_device_data(); 
     const auto& thbar = state.get_field<1>("thbar").get_device_data();
     const auto& diag_eff_radius_qc = state.get_field<3>("diag_eff_radius_qc").get_device_data();
@@ -481,7 +482,6 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
         const int nlwbands = m_nlwbands;
 
         // Pack data for this chunk
-        const int nlay_local = m_nlay;
         const int nz = m_nlay - 1;
         const int h  = halo;
         Kokkos::parallel_for("pack_chunk_data", Kokkos::RangePolicy<>(0, ncol),
@@ -530,6 +530,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                         buffer.cldfrac_tot_k(i, k) = 0.0;
                     }
                 }
+                buffer.t_lev_k(i, nlay) = tg(iy + h, ix + h);
                 
                 for (int k = 1; k <= nz+1; ++k) {
                     int k_vvm = h + nz - k;
@@ -543,7 +544,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 buffer.sfc_alb_dif_vis_k(i) = 0.3;
                 buffer.sfc_alb_dif_nir_k(i) = 0.3;
 
-                for(int k=0; k < nlay_local; ++k) {
+                for(int k=0; k < nlay; ++k) {
                     for(int b=0; b<nswbands; ++b) {
                         buffer.aero_tau_sw_k(i,k,b) = 0.0;
                         buffer.aero_ssa_sw_k(i,k,b) = 0.0;
@@ -559,13 +560,10 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
         // Compute T_int Manually
         Kokkos::parallel_for("compute_t_int", Kokkos::RangePolicy<>(0, ncol),
             KOKKOS_LAMBDA(int i) {
-                buffer.t_lev_k(i, 0) = buffer.t_lay_k(i, 0);
-
                 for (int k = 1; k < nlay; ++k) {
                     buffer.t_lev_k(i, k) = 0.5 * (buffer.t_lay_k(i, k-1) + buffer.t_lay_k(i, k));
                 }
                 buffer.t_lev_k(i, 0) = 2.0 * buffer.t_lay_k(i, 0) - buffer.t_lev_k(i, 1);
-                buffer.t_lev_k(i, nlay) = buffer.t_lay_k(i, nlay - 1);
             });
 
         interface_t::mixing_ratio_to_cloud_mass(buffer.qc_k, buffer.cldfrac_tot_k, buffer.p_del_k, buffer.lwp_k);
@@ -613,7 +611,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
 
                        vmr_view(i, 0) = PF::calculate_vmr_from_mmr(gas_mol_weights(igas), 1e-6, 1e-6);
 
-                       for (int k = 1; k < nlay_local; ++k) {
+                       for (int k = 1; k < nlay; ++k) {
                            int k_vvm = h + nz - k; 
                            Real qv_val = qv(k_vvm, iy + h, ix + h);
                            vmr_view(i, k) = PF::calculate_vmr_from_mmr(gas_mol_weights(igas), qv_val, qv_val);
@@ -636,7 +634,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 if (is_profile) {
                     Kokkos::parallel_for("set_gas_profile", Kokkos::RangePolicy<>(0, ncol),
                        KOKKOS_LAMBDA(int i) {
-                           for (int k = 0; k < nlay_local; ++k) {
+                           for (int k = 0; k < nlay; ++k) {
                                vmr_view(i, k) = profile(k);
                            }
                        });
@@ -644,7 +642,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 else {
                     Kokkos::parallel_for("set_gas_scalar", Kokkos::RangePolicy<>(0, ncol),
                        KOKKOS_LAMBDA(int i) {
-                           for (int k = 0; k < nlay_local; ++k) {
+                           for (int k = 0; k < nlay; ++k) {
                                vmr_view(i, k) = scalar_val;
                            }
                        });

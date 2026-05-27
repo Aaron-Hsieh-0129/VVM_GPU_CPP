@@ -48,7 +48,7 @@ private:
 
     static KOKKOS_INLINE_FUNCTION
     void sflux_tc_2d(VVM::Real sigmau, VVM::Real thvm, VVM::Real thvsm, VVM::Real speed1, 
-                     VVM::Real zr, VVM::Real zrough, 
+                     VVM::Real zr, VVM::Real zrough, VVM::Real speed1_filter, 
                      VVM::Real& ustar, VVM::Real ventfc[2], VVM::Real& molen);
 
     static KOKKOS_INLINE_FUNCTION

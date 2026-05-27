@@ -56,7 +56,7 @@ VVM::Real SurfaceProcess::compute_es(VVM::Real t) {
 
 KOKKOS_INLINE_FUNCTION
 void SurfaceProcess::sflux_2d(VVM::Real sigmau, VVM::Real thvm, VVM::Real thvsm, VVM::Real speed1, 
-                              VVM::Real zr, VVM::Real zrough,VVM::Real speed1_filter, 
+                              VVM::Real zr, VVM::Real zrough, VVM::Real speed1_filter, 
                               VVM::Real& ustar, VVM::Real ventfc[2], VVM::Real& molen) {
     const VVM::Real bus = real(0.74);
     const VVM::Real crit = real(0.003);
@@ -130,7 +130,7 @@ void SurfaceProcess::sflux_2d(VVM::Real sigmau, VVM::Real thvm, VVM::Real thvsm,
             cu = real(1.0) / cui;
             ct = real(1.0) / cti;
             
-            if (std::abs(cu / custar - real(1.0)) <= crit && std::abs(ct / ctstar - real(1.0)) <= crit) {
+            if (Kokkos::abs(cu / custar - real(1.0)) <= crit && Kokkos::abs(ct / ctstar - real(1.0)) <= crit) {
                 stopit = true;
             }
         }
@@ -148,14 +148,14 @@ void SurfaceProcess::sflux_2d(VVM::Real sigmau, VVM::Real thvm, VVM::Real thvsm,
 
     // MONIN-OBUKHOV LENGTH
     VVM::Real zeta = -zr * ct * vk * grav * thvsm / (thvm * cu * cu * speedm * speedm);
-    zeta = Kokkos::max(Kokkos::abs(zeta), real(1e-6)) * std::copysign(real(1.), zeta);
+    zeta = Kokkos::max(Kokkos::abs(zeta), real(1e-6)) * Kokkos::copysign(real(1.), zeta);
     molen = zr / Kokkos::min(zeta, real(2.45));
 }
 
 
 KOKKOS_INLINE_FUNCTION
 void SurfaceProcess::sflux_tc_2d(VVM::Real sigmau, VVM::Real thvm, VVM::Real thvsm, VVM::Real speed1, 
-                                 VVM::Real zr, VVM::Real zrough, 
+                                 VVM::Real zr, VVM::Real zrough, VVM::Real speed1_filter, 
                                  VVM::Real& ustar, VVM::Real ventfc[2], VVM::Real& molen) {
     const VVM::Real crit = real(0.003);
     const int maxit = 20;
@@ -169,7 +169,7 @@ void SurfaceProcess::sflux_tc_2d(VVM::Real sigmau, VVM::Real thvm, VVM::Real thv
     const VVM::Real grav = real(9.806);
 
     bool stopit = false;
-    VVM::Real speedm = (speed1 > real(1.e-3)) ? speed1 : real(1.e-3);
+    VVM::Real speedm = (speed1 > speed1_filter) ? speed1 : speed1_filter;
 
     bool stable = (thvsm < 0.0);
 
@@ -273,7 +273,7 @@ void SurfaceProcess::sflux_tc_2d(VVM::Real sigmau, VVM::Real thvm, VVM::Real thv
     VVM::Real zeta = -zr * cs * vk * grav * thvsm / 
                   (thvm * Kokkos::pow(Kokkos::max(cd, verysmall), real(1.5)) * speedm * speedm);
                   
-    zeta = Kokkos::max(Kokkos::abs(zeta), real(1e-6)) * std::copysign(real(1.0), zeta);
+    zeta = Kokkos::max(Kokkos::abs(zeta), real(1e-6)) * Kokkos::copysign(real(1.0), zeta);
     molen = zr / Kokkos::min(zeta, real(2.45));
 }
 
@@ -360,7 +360,7 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
                 sflux_2d(sigmau, thbar(hxp), thvsm, speedtp, ztmp, zrough(j, i), local_speed1_filter, ustar, ventfc, molen);
 
                 VVM::Real wt = ventfc[1] * (ts - T);
-                VVM::Real wq = ventfc[1] * std::abs(gwet(j, i)) * (qsfc - Q);
+                VVM::Real wq = ventfc[1] * Kokkos::abs(gwet(j, i)) * (qsfc - Q);
                 VEN2D(j,i) = ventfc[0];
 
                 sfc_flux_qv(j,i) = wq * rhobar_up(hx1);
@@ -400,10 +400,10 @@ void SurfaceProcess::compute_coefficients(Core::State& state) {
                 VVM::Real sigmau = real(0.0);
                 VVM::Real ustar, molen;
                 VVM::Real ventfc[2];
-                sflux_tc_2d(sigmau, thbar(hxp), thvsm, speedtp, ztmp, zrough(j, i), ustar, ventfc, molen);
+                sflux_tc_2d(sigmau, thbar(hxp), thvsm, speedtp, ztmp, zrough(j, i), local_speed1_filter, ustar, ventfc, molen);
 
                 VVM::Real wt = ventfc[1] * (ts - T);
-                VVM::Real wq = ventfc[1] * std::abs(gwet(j, i)) * (qsfc - Q);
+                VVM::Real wq = ventfc[1] * Kokkos::abs(gwet(j, i)) * (qsfc - Q);
                 VEN2D(j,i) = ventfc[0];
 
                 sfc_flux_qv(j,i) = wq * rhobar_up(hx1);
