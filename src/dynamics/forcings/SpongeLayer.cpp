@@ -20,8 +20,8 @@ SpongeLayer::SpongeLayer(const Utils::ConfigurationManager& config,
         thermodynamics_vars_.insert(thermodynamics_vars_.end(), p3_vars.begin(), p3_vars.end());
     }
 
-    damp_thermo_ = config.get_value<bool>("dynamics.forcings.sponge_layer.damp_thermo", false);
-    damp_vort_ = config.get_value<bool>("dynamics.forcings.sponge_layer.damp_vort", false);
+    damp_thermo_ = config.get_value<bool>("dynamics.forcings.sponge_layer.damp_thermo", true);
+    damp_vort_ = config.get_value<bool>("dynamics.forcings.sponge_layer.damp_vort", true);
 }
 
 void SpongeLayer::initialize(Core::State& state) {

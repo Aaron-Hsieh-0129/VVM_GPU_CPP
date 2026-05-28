@@ -894,10 +894,10 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
                             qm_3d(k_vvm, iy_vvm, ix_vvm) = qm_pack[k_vec];
                             ni_3d(k_vvm, iy_vvm, ix_vvm) = ni_pack[k_vec];
                             bm_3d(k_vvm, iy_vvm, ix_vvm) = bm_pack[k_vec];
-                            th_3d(k_vvm, iy_vvm, ix_vvm) = T_pack[k_vec] / pibar(k_vvm);
+                            th_3d(k_vvm, iy_vvm, ix_vvm) = th_pack[k_vec];
                             qv_3d(k_vvm, iy_vvm, ix_vvm) = qv_pack[k_vec];
                             
-                            T_3d(k_vvm, iy_vvm, ix_vvm)  = T_pack[k_vec]; 
+                            T_3d(k_vvm, iy_vvm, ix_vvm)  = th_pack[k_vec] * pibar(k_vvm);
 
                             qp_3d(k_vvm, iy_vvm, ix_vvm) = qc_pack[k_vec] + qr_pack[k_vec] + qi_pack[k_vec];
 
