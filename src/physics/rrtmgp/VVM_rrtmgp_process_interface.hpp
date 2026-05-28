@@ -173,7 +173,6 @@ public:
         ureal2dk z_del_k;
         ureal2dk p_del_k;
         ureal2dk qc_k;
-        ureal2dk nc_k;
         ureal2dk qi_k;
         ureal2dk cldfrac_tot_k;
         ureal2dk eff_radius_qc_k;

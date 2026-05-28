@@ -311,7 +311,6 @@ void RRTMGPRadiation::init_buffers() {
     m_buffer.z_del_k = alloc_2d(m_col_chunk_size, m_nlay);
     m_buffer.p_del_k = alloc_2d(m_col_chunk_size, m_nlay);
     m_buffer.qc_k = alloc_2d(m_col_chunk_size, m_nlay);
-    m_buffer.nc_k = alloc_2d(m_col_chunk_size, m_nlay);
     m_buffer.qi_k = alloc_2d(m_col_chunk_size, m_nlay);
     m_buffer.cldfrac_tot_k = alloc_2d(m_col_chunk_size, m_nlay);
     m_buffer.eff_radius_qc_k = alloc_2d(m_col_chunk_size, m_nlay);
@@ -504,7 +503,6 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 buffer.t_lay_k(i, 0) = 2.0 * t_top - t_subtop;
                 
                 buffer.qc_k(i, 0) = 0.0;
-                buffer.nc_k(i, 0) = 0.0;
                 buffer.qi_k(i, 0) = 0.0;
                 buffer.cldfrac_tot_k(i, 0) = 0.0;
                 buffer.eff_radius_qc_k(i, 0) = 10.0;
@@ -515,9 +513,8 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
 
                     buffer.p_lay_k(i, k) = pbar(k_vvm); 
                     buffer.t_lay_k(i, k) = th(k_vvm, iy + h, ix + h) * pibar(k_vvm);
-                    buffer.qc_k(i, k) = qc(k_vvm, iy + h, ix + h);
-                    buffer.nc_k(i, k) = nc(k_vvm, iy + h, ix + h);
-                    buffer.qi_k(i, k) = qi(k_vvm, iy + h, ix + h);
+                    buffer.qc_k(i, k) = Kokkos::max(qc(k_vvm, iy + h, ix + h), real(1e-7));
+                    buffer.qi_k(i, k) = Kokkos::max(qi(k_vvm, iy + h, ix + h), real(1e-8));
                     buffer.eff_radius_qc_k(i, k) = diag_eff_radius_qc(k_vvm, iy+h, ix+h);
                     buffer.eff_radius_qi_k(i, k) = diag_eff_radius_qi(k_vvm, iy+h, ix+h);
                     buffer.p_del_k(i, k) = dpbar_mid(k_vvm); 
@@ -613,7 +610,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
 
                        for (int k = 1; k < nlay; ++k) {
                            int k_vvm = h + nz - k; 
-                           Real qv_val = qv(k_vvm, iy + h, ix + h);
+                           Real qv_val = Kokkos::max(qv(k_vvm, iy + h, ix + h), real(1e-6));
                            vmr_view(i, k) = PF::calculate_vmr_from_mmr(gas_mol_weights(igas), qv_val, qv_val);
                        }
                    });

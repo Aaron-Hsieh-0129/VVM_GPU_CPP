@@ -671,34 +671,34 @@ void VVM_P3_Interface::preprocessing_and_packing(VVM::Core::State& state) {
                         int k_vvm = (nz_phys - 1) - k_phys + halo;
 
                         Real qv_in = qv_3d(k_vvm, iy_vvm, ix_vvm);
-                        if (qv_in < 0) { qv_in = 0; qv_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+                        // if (qv_in < 0) { qv_in = 0; qv_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
 
                         Real qv_prev_in = qvm_3d(k_vvm, iy_vvm, ix_vvm);
-                        if (qv_prev_in < 0) { qv_prev_in = 0; qvm_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+                        // if (qv_prev_in < 0) { qv_prev_in = 0; qvm_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
                         
                         Real qc_in = qc_3d(k_vvm, iy_vvm, ix_vvm);
-                        if (qc_in < 0) { qc_in = 0; qc_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+                        // if (qc_in < 0) { qc_in = 0; qc_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
 
                         Real qr_in = qr_3d(k_vvm, iy_vvm, ix_vvm);
-                        if (qr_in < 0) { qr_in = 0; qr_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+                        // if (qr_in < 0) { qr_in = 0; qr_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
 
                         Real qi_in = qi_3d(k_vvm, iy_vvm, ix_vvm);
-                        if (qi_in < 0) { qi_in = 0; qi_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+                        // if (qi_in < 0) { qi_in = 0; qi_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
 
                         Real nc_in = nc_3d(k_vvm, iy_vvm, ix_vvm);
-                        if (nc_in < 0) { nc_in = 0; nc_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+                        // if (nc_in < 0) { nc_in = 0; nc_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
 
                         Real ni_in = ni_3d(k_vvm, iy_vvm, ix_vvm);
-                        if (ni_in < 0) { ni_in = 0; ni_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+                        // if (ni_in < 0) { ni_in = 0; ni_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
 
                         Real nr_in = nr_3d(k_vvm, iy_vvm, ix_vvm);
-                        if (nr_in < 0) { nr_in = 0; nr_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+                        // if (nr_in < 0) { nr_in = 0; nr_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
 
                         Real qm_in = qm_3d(k_vvm, iy_vvm, ix_vvm);
-                        if (qm_in < 0) { qm_in = 0; qm_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+                        // if (qm_in < 0) { qm_in = 0; qm_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
 
                         Real bm_in = bm_3d(k_vvm, iy_vvm, ix_vvm);
-                        if (bm_in < 0) { bm_in = 0; bm_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
+                        // if (bm_in < 0) { bm_in = 0; bm_3d(k_vvm, iy_vvm, ix_vvm) = 0; }
 
                         Real th_in = th_3d(k_vvm, iy_vvm, ix_vvm);
                         Real thm_in = thm_3d(k_vvm, iy_vvm, ix_vvm);
