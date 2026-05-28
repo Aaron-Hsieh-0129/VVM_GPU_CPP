@@ -324,6 +324,7 @@ void Model::run_step(VVM::Real dt) {
         if (predict_uvtopmn_) dycore_->compute_uvtopmn();
         if (area_mean_nudging_) area_mean_nudging_->apply_uvtopmn(state_, dt);
         dycore_->compute_wind_fields();
+        dycore_->compute_diagnostic_fields(); 
     }
 }
 

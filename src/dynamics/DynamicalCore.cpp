@@ -469,8 +469,6 @@ void DynamicalCore::compute_uvtopmn() {
 
 
 void DynamicalCore::calculate_thermo_tendencies() {
-    compute_diagnostic_fields(); 
-
     for (const auto& var_name : thermo_vars_) {
         std::string fe_name = "fe_tendency_" + var_name;
         if (state_.has_field(fe_name)) {
@@ -642,15 +640,6 @@ void DynamicalCore::update_vorticity(VVM::Real dt) {
  
     if (config_.get_value<std::string>("simulation.idealized_test", "none") != "twisting") {
         compute_zeta_vertical_structure(state_);
-    }
-
-    // Zero up the forward tendency to prevent double counting.
-    for (const auto& var_name : thermo_vars_) {
-        state_.get_field<3>("fe_tendency_" + var_name).set_to_zero();
-    }
-    for (const auto& var_name : vorticity_vars_) {
-        if (var_name == "zeta") state_.get_field<2>("fe_tendency_" + var_name).set_to_zero();
-        else state_.get_field<3>("fe_tendency_" + var_name).set_to_zero();
     }
 }
 
