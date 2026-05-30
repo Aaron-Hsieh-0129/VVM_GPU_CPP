@@ -1,6 +1,6 @@
 # I/O management
 
-GVVM writes simulation fields through **ADIOS2**. The configuration file (`output` section) selects the engine, directory, filename prefix, and which fields to write.
+GPUVVM writes simulation fields through **ADIOS2**. The configuration file (`output` section) selects the engine, directory, filename prefix, and which fields to write.
 
 ## Synchronous I/O (typical)
 

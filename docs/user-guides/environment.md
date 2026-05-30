@@ -1,5 +1,5 @@
-# GVVM Installation Guide
-This guide provides step-by-step instructions for building the dependencies required for GVVM from source.
+# GPUVVM Installation Guide
+This guide provides step-by-step instructions for building the dependencies required for GPUVVM from source.
 
 ## 0. Preparation
 To make this guide easy to copy and paste, please define your target installation directory first. All libraries will be installed under this directory.
@@ -22,7 +22,7 @@ unset LIBRARY_PATH LD_LIBRARY_PATH
 ## 1. Compiler & Core Tools
 
 ### GCC 11.4
-GVVM requires C++17 support. If your system GCC is too old, build GCC 11.4:
+GPUVVM requires C++17 support. If your system GCC is too old, build GCC 11.4:
 
 ```bash
 wget https://ftp.gnu.org/gnu/gcc/gcc-11.4.0/gcc-11.4.0.tar.gz
@@ -203,7 +203,7 @@ cd ../..
 ---
 
 ## 4. Environment Setup Script
-To avoid cluttering your `.bashrc`, create a file named `env_setup.sh` in your workspace. Source this file (`source env_setup.sh`) every time before compiling or running GVVM.
+To avoid cluttering your `.bashrc`, create a file named `env_setup.sh` in your workspace. Source this file (`source env_setup.sh`) every time before compiling or running GPUVVM.
 **env_setup.sh:**
 
 ```bash
@@ -236,14 +236,14 @@ for LIB in hdf5 netcdf-c pnetcdf netcdf-fortran kokkos adios2; do
     export LD_LIBRARY_PATH=$INSTALL_DIR/$LIB/lib64:$INSTALL_DIR/$LIB/lib:$LD_LIBRARY_PATH
 done
 
-echo "GVVM Environment Loaded Successfully!"
+echo "GPUVVM Environment Loaded Successfully!"
 
 ```
 
 ---
 
-## 5. Running GVVM
-Once compiled, you can run GVVM using MPI. Here are some examples of execution commands:
+## 5. Running GPUVVM
+Once compiled, you can run GPUVVM using MPI. Here are some examples of execution commands:
 **Standard run (binding to cores):**
 
 ```bash

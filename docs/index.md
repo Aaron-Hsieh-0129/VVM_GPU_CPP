@@ -1,6 +1,6 @@
-# GVVM (GPU-accelerated Vector Vorticity Model)
+# GPUVVM (GPU-accelerated Vector Vorticity Model)
 
-**GVVM** is a GPU-accelerated, [Kokkos](https://kokkos.org/)-based C++ implementation of the **Vector Vorticity equation cloud-resolving Model (VVM)**. It uses **MPI** for domain decomposition, **CUDA** (via Kokkos) on NVIDIA GPUs in current configurations, and **ADIOS2** for I/O.
+**GPUVVM** is a GPU-accelerated, [Kokkos](https://kokkos.org/)-based C++ implementation of the **Vector Vorticity equation cloud-resolving Model (VVM)**. It uses **MPI** for domain decomposition, **CUDA** (via Kokkos) on NVIDIA GPUs in current configurations, and **ADIOS2** for I/O.
 
 The source code is at [VVM_GPU_CPP](https://github.com/Aaron-Hsieh-0129/VVM_GPU_CPP).
 

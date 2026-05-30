@@ -1,11 +1,11 @@
 # Restoring Fortran P3 Conversions in EAMxx C++ Framework
 
-The GVVM microphysics core utilizes the Kokkos-based **P3 microphysics scheme** ported from the E3SM EAMxx project. However, to couple effectively with the Vector Vorticity Model (VVM) dynamics, a major architectural modification was necessary.
+The GPUVVM microphysics core utilizes the Kokkos-based **P3 microphysics scheme** ported from the E3SM EAMxx project. However, to couple effectively with the Vector Vorticity Model (VVM) dynamics, a major architectural modification was necessary.
 
 ## Background: The Missing qv ↔ qc Conversions
 In the E3SM EAMxx architecture, explicit condensation, evaporation processes between water vapor ($q_v$) and cloud water($q_c$) are offloaded to a separate **macrophysics** (saturation adjustment) module. Consequently, these processes were stripped out of their C++ P3 implementation.
 
-Because GVVM requires these processes to be handled internally during the microphysics step, **we have explicitly restored these conversions based on the original Fortran P3 formulation** (e.g., *Morrison and Milbrandt, 2015*).
+Because GPUVVM requires these processes to be handled internally during the microphysics step, **we have explicitly restored these conversions based on the original Fortran P3 formulation** (e.g., *Morrison and Milbrandt, 2015*).
 
 ## Key Modifications & Additions
 

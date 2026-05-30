@@ -1,4 +1,4 @@
-# GVVM (GPU-accelerated Vector Vorticity Model)
+# GPUVVM (GPU-accelerated Vector Vorticity Model)
 
 [![C++](https://img.shields.io/badge/C++-17%2B-blue.svg)](https://isocpp.org/)
 [![Kokkos](https://img.shields.io/badge/Kokkos-Performance_Portability-blueviolet.svg)](https://kokkos.org/)

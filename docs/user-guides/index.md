@@ -1,6 +1,6 @@
 # User guides
 
-These guides describe how to configure and run **GVVM** (GPU-accelerated Vector Vorticity Model) without diving into implementation details.
+These guides describe how to configure and run **GPUVVM** (GPU-accelerated Vector Vorticity Model) without diving into implementation details.
 
 | Guide | Contents |
 | ------ | -------- |

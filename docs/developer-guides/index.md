@@ -1,6 +1,6 @@
 # Developer guides
 
-These pages summarize how GVVM is structured in this repository and how major subsystems fit together.
+These pages summarize how GPUVVM is structured in this repository and how major subsystems fit together.
 
 | Guide | Contents |
 | ------ | -------- |

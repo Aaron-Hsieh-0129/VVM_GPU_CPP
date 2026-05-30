@@ -1,6 +1,6 @@
 # Examples
 
-This section describes representative ways to use GVVM: **idealized benchmarks** (including automated regression tests), **Taiwan-oriented** real-data workflows, and a **[video gallery](gallery.md)** of YouTube embeds for dynamics tests and full-physics cases.
+This section describes representative ways to use GPUVVM: **idealized benchmarks** (including automated regression tests), **Taiwan-oriented** real-data workflows, and a **[video gallery](gallery.md)** of YouTube embeds for dynamics tests and full-physics cases.
 
 | Example | Description |
 | ------- | ----------- |

@@ -1,6 +1,6 @@
 # Quick Start
 
-This guide covers dependencies, building GVVM, and running the `vvm` executable.
+This guide covers dependencies, building GPUVVM, and running the `vvm` executable.
 
 ## Requirements
 
@@ -16,7 +16,7 @@ This guide covers dependencies, building GVVM, and running the `vvm` executable.
 
 ### Libraries
 
-This guide covers dependencies, building GVVM, and running the `vvm` executable. For detailed instructions on building the full dependency stack from source, please refer to the **[Environment Installation Guide](user-guides/environment.md)**.
+This guide covers dependencies, building GPUVVM, and running the `vvm` executable. For detailed instructions on building the full dependency stack from source, please refer to the **[Environment Installation Guide](user-guides/environment.md)**.
 
 | Library | Minimum (tested) | Role |
 | ------- | ------------------ | ---- |
@@ -78,7 +78,7 @@ Full key reference: [Model configuration](user-guides/configuration.md).
 
 ## Run
 
-Instead of calling the executable and mpirun manually, GVVM provides an intelligent Python wrapper (submit.py) in the root directory. It safely handles SLURM resource allocation, local execution, and asynchronous I/O task separation.
+Instead of calling the executable and mpirun manually, GPUVVM provides an intelligent Python wrapper (submit.py) in the root directory. It safely handles SLURM resource allocation, local execution, and asynchronous I/O task separation.
 
 ### Interactive Setup (Recommended for beginners):
 ```bash
