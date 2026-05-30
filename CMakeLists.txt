@@ -4,6 +4,19 @@ project(VVM LANGUAGES CXX C Fortran)
 
 cmake_policy(SET CMP0135 NEW)
 
+if(NOT DEFINED ENV{VVM_ROOT})
+    message(FATAL_ERROR "
+    [Error] VVM_ROOT environment variable is not set!
+    Please set the project root directory path before running CMake.
+    Example: export VVM_ROOT=/path/to/VVM_GPU_CPP
+    Please ensure you have sourced your env_setup.sh file.
+    ")
+endif()
+
+message(STATUS "Detected VVM_ROOT: $ENV{VVM_ROOT}")
+add_compile_definitions(VVM_ROOT_DIR="$ENV{VVM_ROOT}")
+
+
 # ==========================================
 # Auto-setup Git Hooks
 # Automatically configures Git to use .githooks/ when a developer runs CMake

@@ -5,11 +5,23 @@
 
 import json
 import os
+import sys
 
 import netCDF4 as nc
 import numpy as np
 import xarray as xr
 from scipy import stats
+
+VVM_ROOT = os.environ.get("VVM_ROOT")
+if not VVM_ROOT:
+    print("[Error] Can't find environment variable `VVM_ROOT`! ")
+    print("Please set your VVM_ROOT such as: ")
+    print("  export VVM_ROOT=/path/to/VVM_GPU_CPP")
+    print("[Recommend] add it to envs/<your_env_scripts> or bashrc/zshrc")
+    sys.exit(1)
+
+os.chdir(VVM_ROOT)
+print(f"[Info] Change to VVM_ROOT: {VVM_ROOT}")
 
 # ==============================================================================
 # Experimental Mode Switch (User Toggle)
@@ -18,8 +30,8 @@ from scipy import stats
 # Set to False: Enter "Idealized Simulation" mode for user-defined ridge & land types
 USE_TAIWAN_TOPO = True
 
-CONFIG_PATH = '../rundata/input_configs/taiwanvvm.json'
-SOURCE_TW_DATA = '../rundata/land/topolsm_TW.nc'
+CONFIG_PATH = './rundata/input_configs/taiwanvvm.json'
+SOURCE_TW_DATA = './rundata/land/topolsm_TW.nc'
 
 # ==============================================================================
 # Auto-read Configuration and Create Pure Physical Grid

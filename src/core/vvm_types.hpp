@@ -26,5 +26,8 @@ constexpr Real real(const T val) {
     return static_cast<Real>(val);
 }
 
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+
 } // namespace VVM
 #endif

@@ -367,7 +367,7 @@ typename Functions<S,D>::P3LookupTables Functions<S,D>
   auto version = P3C::p3_version;
   auto p3_lookup_base = P3C::p3_lookup_base;
   // static const char* dir = SCREAM_DATA_DIR "/tables";
-  static const char* dir = "../rundata/p3/";
+  static const char* dir = VVM_ROOT_DIR "/rundata/p3/";
   // p3_init_a (reads ice_table, collect_table)
   read_ice_lookup_tables<S>(masterproc, p3_lookup_base, version, lookup_tables.ice_table_vals, lookup_tables.collect_table_vals, P3C::densize, P3C::rimsize, P3C::liqsize, P3C::isize, P3C::rcollsize);
   if (write_tables) {

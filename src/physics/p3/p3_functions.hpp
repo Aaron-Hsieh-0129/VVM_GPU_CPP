@@ -4,6 +4,7 @@
 #include "share/physics/physics_constants.hpp"
 
 #include "share/core/eamxx_types.hpp"
+#include "core/vvm_types.hpp"
 
 #include <ekat_pack_kokkos.hpp>
 #include <ekat_parameter_list.hpp>
@@ -54,7 +55,7 @@ template <typename ScalarT, typename DeviceT> struct Functions {
         // 4.135985029041767e+00; // 1.0/(0.1*log10(261.7))
         3.444606e+00; // Aaron - aligning with Fortran P3
     // static constexpr const char *p3_lookup_base = SCREAM_DATA_DIR "/tables/p3_lookup_table_1.dat-v";
-    static constexpr const char *p3_lookup_base = "../rundata/p3/p3_lookup_table_1.dat-v";
+    static constexpr const char *p3_lookup_base = VVM_ROOT_DIR "/rundata/p3/p3_lookup_table_1.dat-v";
 
     static constexpr const char *p3_version =
         // Aaron - Change the loaded lookup table from 4.1.1 to v6.4

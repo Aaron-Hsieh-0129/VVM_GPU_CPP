@@ -22,6 +22,9 @@
 #include "driver/Model.hpp"
 #include "io/IOServer.hpp"
 
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+
 #if defined(ENABLE_NCCL)
 void init_nccl(ncclComm_t* comm, int rank, int size, MPI_Comm mpi_comm) {
     ncclUniqueId id;
@@ -77,7 +80,7 @@ int main(int argc, char *argv[]) {
     Kokkos::initialize(args);
 
     // Load configuration file
-    std::string config_file_path = "../rundata/input_configs/default_config.json";
+    std::string config_file_path = TOSTRING(VVM_ROOT_DIR) "/rundata/input_configs/default_config.json";
     for(int i=1; i<argc; ++i) {
         std::string arg = argv[i];
         if(arg == "--io-tasks") { i++; continue; } 
