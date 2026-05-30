@@ -78,6 +78,33 @@ Full key reference: [Model configuration](user-guides/configuration.md).
 
 ## Run
 
+Instead of calling the executable and mpirun manually, GVVM provides an intelligent Python wrapper (submit.py) in the root directory. It safely handles SLURM resource allocation, local execution, and asynchronous I/O task separation.
+
+### Interactive Setup (Recommended for beginners):
+```bash
+./submit.py
+```
+
+### Command-Line Execution:
+From the project root directory:
+```bash
+# Local test run without SLURM (4 MPI tasks)
+./submit.py -c rundata/input_configs/default_config.json --compute 4 --local
+
+# Submit to SLURM (16 Compute tasks, 1 Node)
+./submit.py -c rundata/input_configs/default_config.json --compute 16 --nodes 1 --gpus 16
+```
+
+### Asynchronous I/O (optional)
+If you configure output.engine as SST in your JSON, ADIOS2 requires dedicated I/O tasks. The submit.py script will automatically detect the SST engine and prompt you to allocate IO tasks, or you can specify them directly:
+
+```bash
+# 16 simulation tasks + 4 I/O tasks across 4 nodes, 20 gpus in total
+./submit.py -c my_config.json --compute 16 --io 4 --nodes 4 --gpus 5
+```
+
+## Run (without submit.py)
+
 From the **build directory** (so relative paths like `../rundata/...` resolve):
 
 ```bash

@@ -80,7 +80,7 @@ cmake --build build -j<core_number>
     
 - **Initial Conditions**:
     
-    - Generate initial input files using the Python scripts located under `scripts/`.
+    - Generate initial input files using the Python scripts located under `tools/`.
         
     - Specify your generated spatial file path (typically placed in `rundata/initial_conditions/spatial/`) within `default_config.json`.
         
@@ -88,6 +88,36 @@ cmake --build build -j<core_number>
 
 ### Step 5: Execute
 
+We provide a user-friendly wrapper script (submit.py) located in the root directory to handle both local execution and SLURM job submission. It automatically manages MPI tasks, GPU allocations, and directory creation.
+
+#### Option A: Using the Submission Wrapper (Recommended)
+
+**Interactive Mode:**
+
+Simply run the script without any arguments and follow the guided prompts:
+
+```bash
+./submit.py
+```
+
+**Command-Line Mode (Quick Start)**
+
+For automated workflows or quick executions, you can pass arguments directly.
+
+- Local Execution (HDF5 Engine):
+
+```bash
+./submit.py -c rundata/input_configs/default_config.json --compute 4 --local
+```
+
+- SLURM Submission (SST Engine with Asynchronous I/O):
+
+```bash
+./submit.py -c rundata/input_configs/default_config.json --compute 16 --io 4 --nodes 4 --gpus 5 -t 24:00:00
+```
+
+
+#### Option B: Manual Execution (Advanced)
 Run the model from the `build` directory:
 
 ```bash
@@ -95,8 +125,7 @@ cd build
 mpirun -np 1 ./vvm
 ```
 
-
-#### Asynchronous I/O (Optional)
+##### Asynchronous I/O (Optional)
 
 To use asynchronous output, specify the SST engine in `default_config.json`. You can then allocate dedicated tasks for I/O.
 
