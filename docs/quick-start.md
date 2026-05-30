@@ -39,7 +39,16 @@ git clone https://github.com/Aaron-Hsieh-0129/VVM_GPU_CPP.git
 cd VVM_GPU_CPP
 ```
 
-### 2. Configure CMake presets
+### 2. Environment Setup (Required)
+
+Before compiling or running the model, you must define the `VVM_ROOT` environment variable. Add this line to your `~/.bashrc` or execute it in your current session:
+
+```bash
+export VVM_ROOT=/absolute/path/to/your/VVM_GPU_CPP
+```
+
+
+### 3. Configure CMake presets
 
 Edit `CMakePresets.json` (or pass cache variables on the command line) so that:
 
@@ -49,9 +58,10 @@ Edit `CMakePresets.json` (or pass cache variables on the command line) so that:
 
 `find_package(ADIOS2 REQUIRED CXX MPI)` must succeed using your `CMAKE_PREFIX_PATH` or install layout.
 
-### 3. Configure and compile
+### 4. Configure and compile
 
 ```bash
+cd $VVM_ROOT
 cmake --preset <your_preset_name> -DBUILD_TESTS=ON
 cmake --build build -j$(nproc)
 ```
@@ -71,7 +81,8 @@ The main binary is **`build/vvm`** (`RUNTIME_OUTPUT_DIRECTORY` is the build root
 5. Optional: pass a different config path as the **first non-option argument**:
 
    ```bash
-   mpirun -np 1 ./vvm /path/to/my_config.json
+   cd $VVM_ROOT
+   mpirun -np 1 ./build/vvm /path/to/my_config.json
    ```
 
 Full key reference: [Model configuration](user-guides/configuration.md).
@@ -82,23 +93,26 @@ Instead of calling the executable and mpirun manually, GPUVVM provides an intell
 
 ### Interactive Setup (Recommended for beginners):
 ```bash
+cd $VVM_ROOT
 ./submit.py
 ```
 
 ### Command-Line Execution:
 From the project root directory:
 ```bash
+cd $VVM_ROOT
 # Local test run without SLURM (4 MPI tasks)
-./submit.py -c rundata/input_configs/default_config.json --compute 4 --local
+./submit.py -c ./rundata/input_configs/default_config.json --compute 4 --local
 
 # Submit to SLURM (16 Compute tasks, 1 Node)
-./submit.py -c rundata/input_configs/default_config.json --compute 16 --nodes 1 --gpus 16
+./submit.py -c ./rundata/input_configs/default_config.json --compute 16 --nodes 1 --gpus 16
 ```
 
 ### Asynchronous I/O (optional)
 If you configure output.engine as SST in your JSON, ADIOS2 requires dedicated I/O tasks. The submit.py script will automatically detect the SST engine and prompt you to allocate IO tasks, or you can specify them directly:
 
 ```bash
+cd $VVM_ROOT
 # 16 simulation tasks + 4 I/O tasks across 4 nodes, 20 gpus in total
 ./submit.py -c my_config.json --compute 16 --io 4 --nodes 4 --gpus 5
 ```
@@ -108,8 +122,8 @@ If you configure output.engine as SST in your JSON, ADIOS2 requires dedicated I/
 From the **build directory** (so relative paths like `../rundata/...` resolve):
 
 ```bash
-cd build
-mpirun -np 1 ./vvm
+cd $VVM_ROOT
+mpirun -np 1 ./build/vvm
 ```
 
 ### Asynchronous I/O (optional)
@@ -117,11 +131,12 @@ mpirun -np 1 ./vvm
 Reserve ranks for dedicated I/O servers that consume an ADIOS2 **SST** stream and write HDF5 (`output.engine` must be `SST`). Example:
 
 ```bash
+cd $VVM_ROOT
 # 1 simulation rank + 1 I/O rank
-mpirun -np 2 ./vvm --io-tasks 1
+mpirun -np 2 ./build/vvm --io-tasks 1
 
 # 2 simulation ranks + 2 I/O ranks
-mpirun -np 4 ./vvm --io-tasks 2
+mpirun -np 4 ./build/vvm --io-tasks 2
 ```
 
 Details: [I/O management](user-guides/io-management.md).
