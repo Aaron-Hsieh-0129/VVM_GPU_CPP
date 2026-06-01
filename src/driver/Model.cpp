@@ -83,15 +83,15 @@ Model::Model(const Utils::ConfigurationManager& config,
             land_ = std::make_unique<Physics::LandProcess>(config_, grid_, params_, halo_exchanger_, state_, ocean_scheme);
         }
 
-        VVM::Real surface_process_s = config_.get_value<VVM::Real>("physics.surface_process.frequency_s", 1);
+        surface_process_s_ = config_.get_value<VVM::Real>("physics.surface_process.frequency_s", 1);
 
-        VVM::Real remainder = std::fmod(surface_process_s, dt_s);
+        VVM::Real remainder = std::fmod(surface_process_s_, dt_s);
 
         if (remainder > epsilon && (dt_s - remainder) > epsilon) {
             throw std::runtime_error("Error: surface process calling frequency can't be evenly divided by dt.");
         }
 
-        surface_process_steps_ = static_cast<int>(std::round(surface_process_s / dt_s));
+        surface_process_steps_ = static_cast<int>(std::round(surface_process_s_ / dt_s));
     }
 }
 
@@ -180,7 +180,8 @@ void Model::run_step(VVM::Real dt) {
         bool is_compute_step = (state_.get_step()-1) % surface_process_steps_ == 0;
         if (is_compute_step) {
             // NOTE: Even the configuration specified tco_ocean model which is not from surface_, surface_ stil calculates surface friction for xi and eta. 
-            if (land_) land_->run(dt);
+            // note that the dt for land module should be calling time step because the soil T needs to be updated
+            if (land_) land_->run(surface_process_s_);
             surface_->compute_coefficients(state_);
         }
 

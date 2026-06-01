@@ -56,6 +56,7 @@ private:
 
     int rad_freq_in_steps_;
     int surface_process_steps_;
+    double surface_process_s_;
     // int surface_freq_in_steps_;
     // int land_freq_in_steps_;
 
