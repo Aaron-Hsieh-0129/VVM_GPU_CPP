@@ -15,7 +15,7 @@ extern "C" {
         int* islimsk, int* vegtype, int* soiltyp, int* slopetyp,
         VVM::Real* sigmaf, VVM::Real* sfemis, VVM::Real* alb, VVM::Real* shdmin, VVM::Real* shdmax,
         VVM::Real* t1, VVM::Real* q1, VVM::Real* u1, VVM::Real* v1, VVM::Real* ps, 
-        VVM::Real* prcp, VVM::Real* swdn, VVM::Real* lwdn, VVM::Real* hgt, VVM::Real* prslki_in,
+        VVM::Real* prcp, VVM::Real* swdn, VVM::Real* lwdn, VVM::Real* swnet, VVM::Real* hgt, VVM::Real* prslki_in,
         VVM::Real* stc, VVM::Real* smc, VVM::Real* slc, VVM::Real* tskin, VVM::Real* canopy, VVM::Real* snwdph, VVM::Real* sneqv,
         VVM::Real* hflux, VVM::Real* qflux, VVM::Real* evap, VVM::Real* zorl, VVM::Real* cmx, VVM::Real* lai, bool rdlai2d);
 }
@@ -69,7 +69,7 @@ private:
 
     view_2d_int_ll m_islimsk, m_vegtype, m_soiltype, m_slopetype;
 
-    view_2d_ll m_t1, m_q1, m_u1, m_v1, m_ps, m_prcp, m_swdn, m_lwdn, m_hgt, m_prslki;
+    view_2d_ll m_t1, m_q1, m_u1, m_v1, m_ps, m_prcp, m_swdn, m_swnet, m_lwdn, m_hgt, m_prslki;
     view_2d_ll m_sigmaf, m_sfemis, m_alb, m_shdmin, m_shdmax;
 
     view_3d_ll m_stc, m_smc, m_slc;

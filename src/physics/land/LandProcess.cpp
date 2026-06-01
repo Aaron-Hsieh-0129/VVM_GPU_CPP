@@ -37,6 +37,7 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
     m_ps = view_2d_ll("lsm_ps", m_nx, m_ny);
     m_prcp = view_2d_ll("lsm_prcp", m_nx, m_ny);
     m_swdn = view_2d_ll("lsm_swdn", m_nx, m_ny);
+    m_swnet = view_2d_ll("lsm_swnet", m_nx, m_ny);
     m_lwdn = view_2d_ll("lsm_lwdn", m_nx, m_ny);
     m_hgt = view_2d_ll("lsm_hgt", m_nx, m_ny);
     m_prslki = view_2d_ll("lsm_prslki", m_nx, m_ny);
@@ -83,6 +84,10 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
     if (!state.has_field("gvf")) state.add_field<2>("gvf", {ny, nx});
     if (!state.has_field("lai")) state.add_field<2>("lai", {ny, nx});
     if (!state.has_field("stc")) state.add_field<3>("stc", {m_nsoil, ny, nx});
+    if (!state.has_field("st1")) state.add_field<2>("st1", {ny, nx});
+    if (!state.has_field("st2")) state.add_field<2>("st2", {ny, nx});
+    if (!state.has_field("st3")) state.add_field<2>("st3", {ny, nx});
+    if (!state.has_field("st4")) state.add_field<2>("st4", {ny, nx});
     if (!state.has_field("smc")) state.add_field<3>("smc", {m_nsoil, ny, nx});
     if (!state.has_field("slc")) state.add_field<3>("slc", {m_nsoil, ny, nx});
     if (!state.has_field("sfemis")) state.add_field<2>("sfemis", {ny, nx});
@@ -194,6 +199,7 @@ void LandProcess::preprocessing_and_packing() {
     auto& v_v  = state_.get_field<3>("v").get_device_data();
     auto& qv_v = state_.get_field<3>("qv").get_device_data();
     auto& swdn_v = state_.get_field<3>("swdn").get_device_data();
+    auto& swnet_v = state_.get_field<3>("net_sw_flux").get_device_data();
     auto& lwdn_v = state_.get_field<3>("lwdn").get_device_data();
     auto& th_v = state_.get_field<3>("th").get_device_data();
 
@@ -222,6 +228,7 @@ void LandProcess::preprocessing_and_packing() {
             m_q1(i, j) = qv_v(hxp, vj, vi);
 
             m_swdn(i,j) = swdn_v(hxp, vj, vi);
+            m_swnet(i,j) = swnet_v(hxp, vj, vi);
             m_lwdn(i,j) = lwdn_v(hxp, vj, vi);
             m_prcp(i,j) = precip_liq_surf_2d(vj, vi) + precip_ice_surf_2d(vj, vi);
         }
@@ -236,6 +243,10 @@ void LandProcess::postprocessing_and_unpacking() {
     auto& snwdph_v = state_.get_field<2>("snwdph").get_mutable_device_data();
     auto& sneqv_v = state_.get_field<2>("sneqv").get_mutable_device_data();
     auto& stc_v    = state_.get_field<3>("stc").get_mutable_device_data();
+    auto& st1_v    = state_.get_field<2>("st1").get_mutable_device_data();
+    auto& st2_v    = state_.get_field<2>("st2").get_mutable_device_data();
+    auto& st3_v    = state_.get_field<2>("st3").get_mutable_device_data();
+    auto& st4_v    = state_.get_field<2>("st4").get_mutable_device_data();
     auto& smc_v    = state_.get_field<3>("smc").get_mutable_device_data();
     auto& slc_v    = state_.get_field<3>("slc").get_mutable_device_data();
     auto& Tg = state_.get_field<2>("Tg").get_mutable_device_data(); 
@@ -261,11 +272,15 @@ void LandProcess::postprocessing_and_unpacking() {
             // sneqv_v(vj, vi) = m_sneqv(i, j);
             // zorl(vj, vi) = m_zorl(i, j);
             // sfemis(vj, vi) = m_sfemis(i, j);
-            // for(int k=0; k<m_nsoil; ++k) {
-            //     stc_v(k, vj, vi) = m_stc(i, k, j);
+            for(int k=0; k<m_nsoil; ++k) {
+                stc_v(k, vj, vi) = m_stc(i, k, j);
             //     smc_v(k, vj, vi) = m_smc(i, k, j);
             //     slc_v(k, vj, vi) = m_slc(i, k, j);
-            // }
+            }
+            st1_v(vj, vi) = m_stc(i, 0, j);
+            st2_v(vj, vi) = m_stc(i, 1, j);
+            st3_v(vj, vi) = m_stc(i, 2, j);
+            st4_v(vj, vi) = m_stc(i, 3, j);
         }
     );
 }
@@ -287,7 +302,7 @@ void LandProcess::run(VVM::Real dt) {
         m_islimsk.data(), m_vegtype.data(), m_soiltype.data(), m_slopetype.data(),
         m_sigmaf.data(), m_sfemis.data(), m_alb.data(), m_shdmin.data(), m_shdmax.data(),
         m_t1.data(), m_q1.data(), m_u1.data(), m_v1.data(), m_ps.data(), 
-        m_prcp.data(), m_swdn.data(), m_lwdn.data(), m_hgt.data(), m_prslki.data(),
+        m_prcp.data(), m_swdn.data(), m_lwdn.data(), m_swnet.data(), m_hgt.data(), m_prslki.data(),
         m_stc.data(), m_smc.data(), m_slc.data(), m_tskin.data(), 
         m_canopy.data(), m_snwdph.data(), m_sneqv.data(),
         m_hflux.data(), m_qflux.data(), m_evap.data(), m_zorl.data(), m_cmx.data(), 
@@ -300,7 +315,7 @@ void LandProcess::finalize() {
     unregister_openacc();
     m_islimsk = {}; m_vegtype = {}; m_soiltype = {}; m_slopetype = {};
     m_zorl = {}; m_cmx = {}; m_t1 = {}; m_q1 = {}; m_u1 = {}; m_v1 = {};
-    m_ps = {}; m_prcp = {}; m_swdn = {}; m_lwdn = {};
+    m_ps = {}; m_prcp = {}; m_swdn = {}; m_lwdn = {}; m_swnet = {};
     m_stc = {}; m_smc = {}; m_slc = {};
     m_tskin = {}; m_canopy = {}; m_snwdph = {}; m_sneqv = {};
     m_hflux = {}; m_qflux = {}; m_evap = {}; m_lai = {};
@@ -312,7 +327,7 @@ void LandProcess::register_openacc() {
     MAP_KOKKOS_DEVICE(m_t1); MAP_KOKKOS_DEVICE(m_q1); 
     MAP_KOKKOS_DEVICE(m_u1); MAP_KOKKOS_DEVICE(m_v1);
     MAP_KOKKOS_DEVICE(m_ps); MAP_KOKKOS_DEVICE(m_prcp); 
-    MAP_KOKKOS_DEVICE(m_swdn); MAP_KOKKOS_DEVICE(m_lwdn); MAP_KOKKOS_DEVICE(m_hgt); MAP_KOKKOS_DEVICE(m_prslki);
+    MAP_KOKKOS_DEVICE(m_swdn); MAP_KOKKOS_DEVICE(m_lwdn); MAP_KOKKOS_DEVICE(m_swnet); MAP_KOKKOS_DEVICE(m_hgt); MAP_KOKKOS_DEVICE(m_prslki);
     MAP_KOKKOS_DEVICE(m_sigmaf); MAP_KOKKOS_DEVICE(m_sfemis); MAP_KOKKOS_DEVICE(m_alb); MAP_KOKKOS_DEVICE(m_shdmin); MAP_KOKKOS_DEVICE(m_shdmax); MAP_KOKKOS_DEVICE(m_lai);
     MAP_KOKKOS_DEVICE(m_stc); MAP_KOKKOS_DEVICE(m_smc); MAP_KOKKOS_DEVICE(m_slc);
     MAP_KOKKOS_DEVICE(m_tskin); MAP_KOKKOS_DEVICE(m_canopy); MAP_KOKKOS_DEVICE(m_snwdph); MAP_KOKKOS_DEVICE(m_sneqv);
@@ -325,7 +340,7 @@ void LandProcess::unregister_openacc() {
     UNMAP_KOKKOS_DEVICE(m_t1); UNMAP_KOKKOS_DEVICE(m_q1); 
     UNMAP_KOKKOS_DEVICE(m_u1); UNMAP_KOKKOS_DEVICE(m_v1);
     UNMAP_KOKKOS_DEVICE(m_ps); UNMAP_KOKKOS_DEVICE(m_prcp); 
-    UNMAP_KOKKOS_DEVICE(m_swdn); UNMAP_KOKKOS_DEVICE(m_lwdn); UNMAP_KOKKOS_DEVICE(m_hgt); UNMAP_KOKKOS_DEVICE(m_prslki);
+    UNMAP_KOKKOS_DEVICE(m_swdn); UNMAP_KOKKOS_DEVICE(m_lwdn); UNMAP_KOKKOS_DEVICE(m_swnet); UNMAP_KOKKOS_DEVICE(m_hgt); UNMAP_KOKKOS_DEVICE(m_prslki);
     UNMAP_KOKKOS_DEVICE(m_sigmaf); UNMAP_KOKKOS_DEVICE(m_sfemis); UNMAP_KOKKOS_DEVICE(m_alb); UNMAP_KOKKOS_DEVICE(m_shdmin); UNMAP_KOKKOS_DEVICE(m_shdmax); UNMAP_KOKKOS_DEVICE(m_lai);
     UNMAP_KOKKOS_DEVICE(m_stc); UNMAP_KOKKOS_DEVICE(m_smc); UNMAP_KOKKOS_DEVICE(m_slc);
     UNMAP_KOKKOS_DEVICE(m_tskin); UNMAP_KOKKOS_DEVICE(m_canopy); UNMAP_KOKKOS_DEVICE(m_snwdph); UNMAP_KOKKOS_DEVICE(m_sneqv);

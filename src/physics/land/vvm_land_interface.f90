@@ -20,7 +20,7 @@ contains
     subroutine run_vvm_land_wrapper(use_tco_ocean, nx, ny, nsoil, dt, &
         islimsk, vegtype, soiltyp, slopetyp, &
         sigmaf, sfemis, alb, shdmin, shdmax, &
-        t1, q1, u1, v1, ps, prcp, swdn, lwdn, hgt, prslki_in, &
+        t1, q1, u1, v1, ps, prcp, swdn, lwdn, swnet, hgt, prslki_in, &
         stc, smc, slc, tskin, canopy, snwdph, sneqv, &
         hflux, qflux, evap, zorl, cmx, & 
         lai, rdlai2d) bind(c, name="run_vvm_land_wrapper")
@@ -31,7 +31,7 @@ contains
         
         integer(c_int), intent(in)    :: islimsk(nx,ny), vegtype(nx,ny), soiltyp(nx,ny), slopetyp(nx,ny)
         real(c_vvm_real), intent(in)    :: t1(nx,ny), q1(nx,ny), u1(nx,ny), v1(nx,ny)
-        real(c_vvm_real), intent(in)    :: ps(nx,ny), prcp(nx,ny), swdn(nx,ny), lwdn(nx,ny)
+        real(c_vvm_real), intent(in)    :: ps(nx,ny), prcp(nx,ny), swdn(nx,ny), lwdn(nx,ny), swnet(nx,ny)
         real(c_vvm_real), intent(in)    :: hgt(nx,ny) ! VVM height (m)
         real(c_vvm_real), intent(in)    :: prslki_in(nx,ny) ! VVM portion (pi(sfc)/pi(air)) 
 
@@ -63,16 +63,16 @@ contains
         real(c_vvm_real) :: tsurf(nx,ny)
         logical        :: flag_iter(nx,ny), flag_guess(nx,ny)
         
-        real(c_double) :: qsurf(nx,ny), gfx(nx,ny), ep1d(nx,ny)
-        real(c_double) :: tgclim(nx,ny)
-        real(c_double) :: snoalb(nx,ny), albedo2(nx,ny)
-        real(c_double) :: tprcp(nx,ny), srflag(nx,ny), sncover(nx,ny)
-        real(c_double) :: drain(nx,ny), runof(nx,ny)
-        real(c_double) :: zice(nx,ny), cice(nx,ny), xtice(nx,ny), snomt(nx,ny)
+        real(c_vvm_real) :: qsurf(nx,ny), gfx(nx,ny), ep1d(nx,ny)
+        real(c_vvm_real) :: tgclim(nx,ny)
+        real(c_vvm_real) :: snoalb(nx,ny), albedo2(nx,ny)
+        real(c_vvm_real) :: tprcp(nx,ny), srflag(nx,ny), sncover(nx,ny)
+        real(c_vvm_real) :: drain(nx,ny), runof(nx,ny)
+        real(c_vvm_real) :: zice(nx,ny), cice(nx,ny), xtice(nx,ny), snomt(nx,ny)
         
-        real(c_double) :: u10(nx,ny), v10(nx,ny), t2(nx,ny), q2(nx,ny)
-        real(c_double) :: rh2(nx,ny), rh10(nx,ny)
-        real(c_double) :: ro2(nx,ny)
+        real(c_vvm_real) :: u10(nx,ny), v10(nx,ny), t2(nx,ny), q2(nx,ny)
+        real(c_vvm_real) :: rh2(nx,ny), rh10(nx,ny)
+        real(c_vvm_real) :: ro2(nx,ny)
         
         jlistnum = ny
         my_max = ny
@@ -98,7 +98,7 @@ contains
 
         !$acc data present(islimsk, vegtype, soiltyp, slopetyp, &
         !$acc              sigmaf, sfemis, alb, shdmin, shdmax, &
-        !$acc              t1, q1, u1, v1, ps, prcp, swdn, lwdn, hgt, &
+        !$acc              t1, q1, u1, v1, ps, prcp, swdn, lwdn, swnet, hgt, &
         !$acc              stc, smc, slc, tskin, canopy, snwdph, sneqv, hflux, qflux, evap, zorl, cmx) &
         !$acc      create(psi, prsl1, prslki, tg, z0rl, cd, cdq, rb, stress, &
         !$acc             fm, fh, ustar, sfcw, ddvel, fm10, fh2, fh10, &
@@ -190,7 +190,7 @@ contains
             end if
                  
             call sfc_drv_gpu(myim, nx, nsoil, 1, ncld, psi, u1, v1, t1, q1, soiltyp, &
-                 vegtype, sigmaf, sfemis, lwdn, swdn, swdn, dt, &
+                 vegtype, sigmaf, sfemis, lwdn, swdn, swnet, dt, &
                  tgclim, cd, cdq, prsl1, prslki, hgt, islimsk, ddvel, slopetyp, &
                  shdmin, shdmax, snoalb, alb, flag_iter, flag_guess, isot, ivegsrc, sneqv, &
                  snwdph, tg, tprcp, srflag, smc, stc, slc, &
@@ -198,7 +198,7 @@ contains
                  hflux, ep1d, runof, albedo2, 1, 1, 1, lai, rdlai2d, async_id)
                  
             call sfc_sice_gpu(myim, nx, nsoil, 1, ncld, psi, u1, v1, t1, q1, dt, sfemis, lwdn, &
-                 swdn, swdn, srflag, cd, cdq, prsl1, prslki, islimsk, ddvel, &
+                 swdn, swnet, srflag, cd, cdq, prsl1, prslki, islimsk, ddvel, &
                  flag_iter, mom4ice, lsm, zice, cice, xtice, sneqv, &
                  tg, tprcp, stc, ep1d, snwdph, qsurf, snomt, gfx, &
                  qflux, hflux, async_id)
