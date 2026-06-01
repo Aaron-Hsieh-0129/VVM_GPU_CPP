@@ -1005,7 +1005,7 @@ end subroutine check_boundary
 !   --- ...  ztfc: ratio of zoh/zom  less or equal than 1                                 !%g
 !            czil: constant c in zilitinkevich, s. s.1995,:note about zt                  !%g
          ! zilfc = -czil*vkrm*sqvisc                                                        !%g
-         zilfc = 10.0_kind_phys ** (-0.40_kind_phys * (z0(i, jj) / 0.07_kind_phys)) * vkrm * sqvisc
+         zilfc = -10.0_kind_phys ** (-0.40_kind_phys * (z0(i, jj) / 0.07_kind_phys)) * vkrm * sqvisc
                                                                                           !%g
          zu = z0(i, jj)                                                                   !%g
                                                                                           !%g
