@@ -202,12 +202,12 @@ cd ../..
 ```
 
 
-### ADIOS2 2.10.0
+### ADIOS2 2.11.0
 
 ```bash
 git clone https://github.com/ornladios/ADIOS2.git
 cd ADIOS2
-git checkout tags/v2.10.0
+git checkout tags/v2.11.0
 mkdir build && cd build
 cmake .. \
     -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR \
@@ -224,6 +224,8 @@ make install
 cd ../..
 
 ```
+
+Warning: If using less than 2.11.0, some errors may appear when compiling VVM. You need to modify adios2/cxx/KokkosView.h to adios2/cxx11/KokkosView.h in the code and cmakelist.
 
 ---
 
