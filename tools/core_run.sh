@@ -5,13 +5,8 @@
 # ==============================================================================
 set -e
 
-if [ -f "$VVM_ENV_SCRIPT" ]; then
-    echo "Sourcing environment from: $VVM_ENV_SCRIPT"
-    source "$VVM_ENV_SCRIPT"
-else
-    echo "[Error] Environment script not found: $VVM_ENV_SCRIPT"
-    exit 1
-fi
+export OMP_PROC_BIND=spread 
+export OMP_PLACES=threads
 
 export OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}
 
@@ -20,10 +15,35 @@ if [ "$VVM_IO_ENGINE" == "SST" ]; then
     VVM_ARGS="--io-tasks $VVM_IO_TASKS"
 fi
 
-echo "Starting VVM..."
-mpirun -np $VVM_TOTAL_TASKS \
- -x NCCL_DEBUG=INFO \
- -x HDF5_USE_FILE_LOCKING=FALSE \
- --mca io ompio \
- --mca sharedfp ^lockedfile,individual \
- ./build/vvm "$VVM_CONFIG_FILE" $VVM_ARGS
+# ==============================================================================
+# VVM Execution Block
+# ==============================================================================
+echo "Preparing to start VVM..."
+
+export NCCL_DEBUG=INFO
+export HDF5_USE_FILE_LOCKING=FALSE
+export OMPI_MCA_io=ompio
+export OMPI_MCA_sharedfp="^lockedfile,individual"
+
+if [ -n "$SLURM_JOB_NUM_NODES" ]; then
+    TASKS_PER_NODE=$(( VVM_TOTAL_TASKS / SLURM_JOB_NUM_NODES ))
+    
+    CHUNK_SIZE=$(( VVM_COMPUTE_TASKS / SLURM_JOB_NUM_NODES ))
+    if [ "$CHUNK_SIZE" -lt 1 ]; then CHUNK_SIZE=1; fi
+
+    echo "--> SLURM environment detected."
+    echo "--> Forcing exactly $TASKS_PER_NODE tasks per node (Plane chunk size: $CHUNK_SIZE)."
+    
+    srun --mpi=pmix \
+         --ntasks-per-node=$TASKS_PER_NODE \
+         --distribution=plane=$CHUNK_SIZE \
+         -n $VVM_TOTAL_TASKS \
+         ./build/vvm "$VVM_CONFIG_FILE" $VVM_ARGS
+
+else
+    echo "--> Local environment detected (No SLURM)."
+    echo "--> Using mpirun."
+    
+    mpirun --bind-to none -np $VVM_TOTAL_TASKS \
+        ./build/vvm "$VVM_CONFIG_FILE" $VVM_ARGS
+fi

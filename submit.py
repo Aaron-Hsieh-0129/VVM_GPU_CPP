@@ -29,7 +29,7 @@ def setup_environment(preset_name):
     env = os.environ.copy()
     vvm_root = get_vvm_root()
     env["VVM_ROOT"] = vvm_root
-    
+     
     preset_file = os.path.join(vvm_root, "CMakePresets.json")
     if not os.path.exists(preset_file):
         print(f"[Warning] {preset_file} not found. Environment may be incomplete.")
@@ -38,17 +38,17 @@ def setup_environment(preset_name):
     try:
         with open(preset_file, 'r') as f:
             presets_data = json.load(f)
-        
+         
         cache_vars = {}
         for p in presets_data.get("configurePresets", []):
             if p.get("name") == preset_name:
                 cache_vars = p.get("cacheVariables", {})
                 break
-                
+                 
         if not cache_vars:
             print(f"[Warning] Preset '{preset_name}' not found in CMakePresets.json.")
             return env
-            
+             
         print(f"[Info] Successfully loaded environment from CMake Preset: '{preset_name}'")
 
         # 1. Dynamically extract HPCX_HOME from the CXX Compiler path
@@ -57,11 +57,11 @@ def setup_environment(preset_name):
             hpcx_home = cxx_compiler.split("/ompi/bin/")[0]
             my_plugin_path = f"{hpcx_home}/nccl_rdma_sharp_plugin/lib"
             sharp_lib_path = f"{hpcx_home}/sharp/lib"
-            
+             
             env["HPCX_HOME"] = hpcx_home
             env["MY_PLUGIN_PATH"] = my_plugin_path
             env["SHARP_LIB_PATH"] = sharp_lib_path
-            
+             
             env["VVM_PRE_RUN_CMD"] = f"source {hpcx_home}/hpcx-init.sh"
             env["PATH"] = f"{hpcx_home}/ompi/bin:" + env.get("PATH", "")
 
@@ -72,13 +72,13 @@ def setup_environment(preset_name):
             if val:
                 lib_dirs.append(f"{val}/lib")
                 lib_dirs.append(f"{val}/lib64")
-        
+         
         if lib_dirs:
             env["LD_LIBRARY_PATH"] = ":".join(lib_dirs) + ":" + env.get("LD_LIBRARY_PATH", "")
 
     except Exception as e:
         print(f"[Warning] Error parsing CMakePresets.json: {e}")
-        
+         
     return env
 
 # Pre-defined Defaults
@@ -107,14 +107,14 @@ def peek_io_engine(config_path):
 
 def create_code_snapshot(repo_root, snapshot_dir, config_path, prof_path, spat_path, out_dir_raw):
     print(f"\n[Info] Creating code snapshot at: {snapshot_dir}")
-    
+     
     if os.path.exists(snapshot_dir):
         shutil.rmtree(snapshot_dir)
-        
+         
     out_base = os.path.normpath(out_dir_raw).split(os.sep)[0]
-    if out_base in [".", "..", ""]: 
-        out_base = "output"  
-        
+    if out_base in [".", "..", ""]:  
+        out_base = "output"   
+         
     ignore_patterns = shutil.ignore_patterns(
         '.git', 'build', 'log', 'rundata', 'tests', 'docs', 'externals', 'tags', '*.o', 'output', out_base
     )
@@ -172,8 +172,7 @@ def interactive_wizard():
 
     args.local = ask("Run locally without SLURM? (y/N)", "N").upper() == "Y"
     args.config = ask("Configuration file", DEFAULT_CONFIG)
-    
-    # --- 動態 Preset 選單 ---
+     
     if presets:
         print("\n Available CMake Presets:")
         for i, p in enumerate(presets):
@@ -189,27 +188,27 @@ def interactive_wizard():
 
     io_engine = peek_io_engine(args.config)
     args.compute = int(ask("\nCompute Tasks (MPI ranks)", DEFAULT_COMPUTE))
-    
+     
     if io_engine == "SST":
         print("\n[Notice] SST engine detected in config. ADIOS2 SST requires dedicated IO tasks.")
         args.io = int(ask("IO Tasks (MPI ranks)", "1"))
     else:
         args.io = 0
-        
+         
     total_tasks = args.compute + args.io
     args.cpus = int(ask("CPUs per task (OpenMP threads)", DEFAULT_CPUS))
-    
+     
     if not args.local:
         args.nodes = int(ask("\nNumber of Nodes", DEFAULT_NODES))
     else:
         args.nodes = 1
-        
+         
     tasks_per_node = math.ceil(total_tasks / args.nodes)
     print(f"\n[Recommendation] You have {total_tasks} total task(s) across {args.nodes} node(s).")
     print(f"                 To ensure 1 Task = 1 GPU (Best Performance), request {tasks_per_node} GPU(s) per node.")
-    
+     
     args.gpus = int(ask("GPUs per Node", tasks_per_node))
-    
+     
     if args.gpus < tasks_per_node:
         print(f"  -> [WARNING] Some MPI ranks will SHARE a GPU. This may degrade performance!\n")
 
@@ -228,7 +227,34 @@ def interactive_wizard():
         args.out = DEFAULT_OUT
         args.err = DEFAULT_ERR
 
-    print("\n--- Setup Complete ---\n")
+    # --- NEW: Construct the equivalent full command line string ---
+    cmd_parts = [sys.argv[0]]
+    if args.local:
+        cmd_parts.append("--local")
+    
+    cmd_parts.append(f'-c "{args.config}"')
+    cmd_parts.append(f'--preset "{args.preset}"')
+    cmd_parts.append(f'--compute {args.compute}')
+    cmd_parts.append(f'--io {args.io}')
+    cmd_parts.append(f'--nodes {args.nodes}')
+    cmd_parts.append(f'--gpus {args.gpus}')
+    cmd_parts.append(f'--cpus {args.cpus}')
+    
+    if not args.local:
+        if args.time: cmd_parts.append(f'-t "{args.time}"')
+        if args.out: cmd_parts.append(f'--out "{args.out}"')
+        if args.err: cmd_parts.append(f'--err "{args.err}"')
+        if args.job_name: cmd_parts.append(f'--job-name "{args.job_name}"')
+        if args.account: cmd_parts.append(f'-A "{args.account}"')
+        if args.partition: cmd_parts.append(f'-p "{args.partition}"')
+
+    full_cmd = " ".join(cmd_parts)
+
+    print("\n--- Setup Complete ---")
+    print("\n[Tip] You can skip this wizard in the future by running the following command directly:\n")
+    print(f"  {full_cmd}\n")
+    print("----------------------\n")
+    
     return args
 
 def parse_args():
@@ -255,20 +281,19 @@ def parse_args():
     if not args.config:
         print("[Error] --config is required in command-line mode.")
         sys.exit(1)
-        
-    # 如果使用者用指令列沒給 preset，自動拿 CMakePresets 裡的第一個當預設值
+         
     if not args.preset:
         presets = get_available_presets(get_vvm_root())
         args.preset = presets[0] if presets else "unknown"
-        
+         
     return args
 
 def main():
     args = parse_args()
-    
+     
     env = setup_environment(args.preset)
     VVM_ROOT = env.get("VVM_ROOT")
-    
+     
     if not VVM_ROOT:
         print("\n[Error] Failed to detect VVM_ROOT. Ensure script is run from project root.\n")
         sys.exit(1)
@@ -290,7 +315,7 @@ def main():
     output_info = config_data.get("output", {})
     io_engine = output_info.get("engine", "HDF5")
     out_dir_raw = output_info.get("output_dir", "")
-    
+     
     prof_file = config_data.get("initial_conditions", {}).get("source_file", "")
     spat_file = config_data.get("netcdf_reader", {}).get("source_file", "")
 
@@ -307,7 +332,7 @@ def main():
     spat_path = os.path.abspath(spat_file) if spat_file else ""
 
     os.makedirs(out_dir_abs, exist_ok=True)
-    
+     
     log_out_dir = os.path.dirname(os.path.abspath(args.out))
     if log_out_dir: os.makedirs(log_out_dir, exist_ok=True)
     log_err_dir = os.path.dirname(os.path.abspath(args.err))
@@ -317,7 +342,7 @@ def main():
     create_code_snapshot(VVM_ROOT, snapshot_dir, config_path_user, prof_path, spat_path, out_dir_raw)
 
     total_tasks = args.compute + args.io
-    
+     
     env["VVM_CONFIG_FILE"] = config_path_user
     env["VVM_COMPUTE_TASKS"] = str(args.compute)
     env["VVM_IO_TASKS"] = str(args.io)
@@ -345,11 +370,13 @@ def main():
         print(f" Preset : {args.preset}")
         print(f" Tasks: {total_tasks} | GPUs/node: {args.gpus} | CPUs/task: {args.cpus}")
         print("=========================================")
+        tasks_per_node = math.ceil(total_tasks / args.nodes)
         cmd = [
             "sbatch",
             f"--job-name={args.job_name}",
             f"--nodes={args.nodes}",
             f"--ntasks={total_tasks}",
+            f"--ntasks-per-node={tasks_per_node}",
             f"--gpus-per-node={args.gpus}",
             f"--cpus-per-task={args.cpus}",
             f"--time={args.time}",
@@ -362,7 +389,7 @@ def main():
             cmd.append(f"--partition={args.partition}")
 
         cmd.append(script_path)
-    
+     
     try:
         subprocess.run(cmd, env=env, check=True)
     except subprocess.CalledProcessError as e:
