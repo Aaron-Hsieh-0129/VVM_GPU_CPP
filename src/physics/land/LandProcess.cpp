@@ -225,7 +225,7 @@ void LandProcess::preprocessing_and_packing() {
             m_v1(i, j) = real(0.5) * (v_v(hxp, vj, vi) + v_v(hxp, vj-1, vi));
             // m_u1(i, j) = u_v(hxp, vj, vi);
             // m_v1(i, j) = v_v(hxp, vj, vi);
-            m_q1(i, j) = qv_v(hxp, vj, vi);
+            m_q1(i, j) = qv_v(hxp, vj, vi) / (1 + qv_v(hxp, vj, vi));
 
             m_swdn(i,j) = swdn_v(hxp, vj, vi);
             m_swnet(i,j) = swnet_v(hxp, vj, vi);

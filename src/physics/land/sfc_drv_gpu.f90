@@ -288,8 +288,9 @@
                   snowc(i, jj)  = 0.0
                   snohf(i, jj)  = 0.0
    !  --- ...  initialize variables
+                  ! Aaron: modify the lower bound to be 1e-2
                   wind(i, jj) = max(sqrt( u1(i, lev, jj)*u1(i, lev, jj) + v1(i, lev, jj)*v1(i, lev, jj) )               & 
-                              + max(0.0, min(ddvel(i, jj), 30.0)), 1.0)
+                              + max(0.0, min(ddvel(i, jj), 30.0)), 0.01)
 
                   q0r   = max(q1(i, lev, jj), 1.e-8)   !* q1=specific humidity at level 1 (kg/kg)
                   theta1(i, jj) = t1(i, lev, jj) * prslki(i, jj) !* adiabatic temp at level 1 (k)

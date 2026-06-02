@@ -189,9 +189,13 @@
                      windr = max(sqrt((cpl_u1r-ssur)**2 + (cpl_v1r-ssvr)**2) &
                              + max(0.0, min(ddvelr, 30.0)), 1.0)
 #else
+                     ! windr = max(sqrt(u1r*u1r &
+                     !               + v1r*v1r) &
+                     !               + max(0.0, min(ddvelr, 30.0)), 1.0)
+                     ! Aaron: modify the lower bound to be 1e-2
                      windr = max(sqrt(u1r*u1r &
                                    + v1r*v1r) &
-                                   + max(0.0, min(ddvelr, 30.0)), 1.0)
+                                   + max(0.0, min(ddvelr, 30.0)), 0.01)
 #endif
                      tem1 = 1.0 + rvrdm1*max(q1r, 1.e-8)
                      thv1 = t1r*prslkir*tem1

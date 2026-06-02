@@ -36,9 +36,9 @@ contains
         real(c_vvm_real), intent(in)    :: prslki_in(nx,ny) ! VVM portion (pi(sfc)/pi(air)) 
 
         real(c_vvm_real), intent(in)    :: sigmaf(nx,ny)
-        real(c_vvm_real), intent(in)    :: alb(nx,ny), shdmin(nx,ny), shdmax(nx,ny)
+        real(c_vvm_real), intent(in)    :: shdmin(nx,ny), shdmax(nx,ny)
 
-        real(c_vvm_real), intent(inout) :: sfemis(nx,ny)
+        real(c_vvm_real), intent(inout) :: alb(nx,ny), sfemis(nx,ny)
         real(c_vvm_real), intent(inout) :: stc(nx,nsoil,ny), smc(nx,nsoil,ny), slc(nx,nsoil,ny)
         real(c_vvm_real), intent(inout) :: tskin(nx,ny), canopy(nx,ny), snwdph(nx,ny), sneqv(nx,ny), zorl(nx,ny), cmx(nx, ny)
         real(c_vvm_real), intent(inout) :: hflux(nx,ny), qflux(nx,ny), evap(nx,ny)
@@ -64,6 +64,7 @@ contains
         logical        :: flag_iter(nx,ny), flag_guess(nx,ny)
         
         real(c_vvm_real) :: qsurf(nx,ny), gfx(nx,ny), ep1d(nx,ny)
+        real(c_vvm_real) :: lwdn_eff(nx,ny), swnet_eff(nx,ny)
         real(c_vvm_real) :: tgclim(nx,ny)
         real(c_vvm_real) :: snoalb(nx,ny), albedo2(nx,ny)
         real(c_vvm_real) :: tprcp(nx,ny), srflag(nx,ny), sncover(nx,ny)
@@ -103,6 +104,7 @@ contains
         !$acc      create(psi, prsl1, prslki, tg, z0rl, cd, cdq, rb, stress, &
         !$acc             fm, fh, ustar, sfcw, ddvel, fm10, fh2, fh10, &
         !$acc             tsurf, flag_iter, flag_guess, qsurf, &
+        !$acc             lwdn_eff, swnet_eff, &
         !$acc             gfx, ep1d, tgclim, snoalb, albedo2, &
         !$acc             tprcp, srflag, sncover, drain, runof, zice, cice, xtice, snomt, &
         !$acc             u10, v10, t2, q2, rh2, rh10, ro2)
@@ -162,6 +164,9 @@ contains
                 else
                     sfemis(i,j) = 0.98D0
                 end if
+
+                lwdn_eff(i,j) = lwdn(i,j) * sfemis(i,j)
+                swnet_eff(i,j) = swdn(i,j) * (1.0_c_vvm_real - alb(i,j))
             end do
         end do
         
@@ -190,15 +195,15 @@ contains
             end if
                  
             call sfc_drv_gpu(myim, nx, nsoil, 1, ncld, psi, u1, v1, t1, q1, soiltyp, &
-                 vegtype, sigmaf, sfemis, lwdn, swdn, swnet, dt, &
+                 vegtype, sigmaf, sfemis, lwdn_eff, swdn, swnet_eff, dt, &
                  tgclim, cd, cdq, prsl1, prslki, hgt, islimsk, ddvel, slopetyp, &
                  shdmin, shdmax, snoalb, alb, flag_iter, flag_guess, isot, ivegsrc, sneqv, &
                  snwdph, tg, tprcp, srflag, smc, stc, slc, &
                  canopy, tsurf, z0rl, sncover, qsurf, gfx, drain, qflux, &
                  hflux, ep1d, runof, albedo2, 1, 1, 1, lai, rdlai2d, async_id)
                  
-            call sfc_sice_gpu(myim, nx, nsoil, 1, ncld, psi, u1, v1, t1, q1, dt, sfemis, lwdn, &
-                 swdn, swnet, srflag, cd, cdq, prsl1, prslki, islimsk, ddvel, &
+            call sfc_sice_gpu(myim, nx, nsoil, 1, ncld, psi, u1, v1, t1, q1, dt, sfemis, lwdn_eff, &
+                 swdn, swnet_eff, srflag, cd, cdq, prsl1, prslki, islimsk, ddvel, &
                  flag_iter, mom4ice, lsm, zice, cice, xtice, sneqv, &
                  tg, tprcp, stc, ep1d, snwdph, qsurf, snomt, gfx, &
                  qflux, hflux, async_id)
@@ -243,6 +248,8 @@ contains
                 end if
 
                 cmx(i,j) = cd(i,j) * sfcw(i,j)
+
+                alb(i,j) = albedo2(i,j)
             end do
         end do
         
