@@ -100,9 +100,15 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
     if (!state.has_field("lwdn")) state.add_field<3>("lwdn", {nz_total, ny_total, nx_total});
     if (!state.has_field("lwup")) state.add_field<3>("lwup", {nz_total, ny_total, nx_total});
 
+    if (!state.has_field("swup_toa")) state.add_field<2>("swup_toa", {ny_total, nx_total});
     if (!state.has_field("swdn_toa")) state.add_field<2>("swdn_toa", {ny_total, nx_total});
     if (!state.has_field("lwup_toa")) state.add_field<2>("lwup_toa", {ny_total, nx_total});
+    if (!state.has_field("lwdn_toa")) state.add_field<2>("lwdn_toa", {ny_total, nx_total});
 
+    if (!state.has_field("swup_sfc")) state.add_field<2>("swup_sfc", {ny_total, nx_total});
+    if (!state.has_field("swdn_sfc")) state.add_field<2>("swdn_sfc", {ny_total, nx_total});
+    if (!state.has_field("lwup_sfc")) state.add_field<2>("lwup_sfc", {ny_total, nx_total});
+    if (!state.has_field("lwdn_sfc")) state.add_field<2>("lwdn_sfc", {ny_total, nx_total});
 
     using PC = scream::physics::Constants<Real>;
 
@@ -121,7 +127,6 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
     m_orbital_eccen = m_config.get_value<VVM::Real>("physics.rrtmgp.orbital_eccentricity", -9999.0);
     m_orbital_obliq = m_config.get_value<VVM::Real>("physics.rrtmgp.orbital_obliquity", -9999.0);
     m_orbital_mvelp = m_config.get_value<VVM::Real>("physics.rrtmgp.orbital_mvelp", -9999.0);
-
 
     // Value for prescribing an invariant solar constant (i.e. total solar irradiance at
     // TOA).  Used for idealized experiments such as RCE. Disabled when value is less than 0.
@@ -414,8 +419,17 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
     auto& swdn = state.get_field<3>("swdn").get_mutable_device_data();
     auto& lwdn = state.get_field<3>("lwdn").get_mutable_device_data();
     auto& lwup = state.get_field<3>("lwup").get_mutable_device_data();
+    auto& swup_toa = state.get_field<2>("swup_toa").get_mutable_device_data();
     auto& swdn_toa = state.get_field<2>("swdn_toa").get_mutable_device_data();
     auto& lwup_toa = state.get_field<2>("lwup_toa").get_mutable_device_data();
+    auto& lwdn_toa = state.get_field<2>("lwdn_toa").get_mutable_device_data();
+
+    auto& swup_sfc = state.get_field<2>("swup_sfc").get_mutable_device_data();
+    auto& swdn_sfc = state.get_field<2>("swdn_sfc").get_mutable_device_data();
+    auto& lwup_sfc = state.get_field<2>("lwup_sfc").get_mutable_device_data();
+    auto& lwdn_sfc = state.get_field<2>("lwdn_sfc").get_mutable_device_data();
+
+    const auto& topo = state.get_field<2>("topo").get_device_data();
 
     // Orbital parameters and Zenith Angle
     double obliqr, lambm0, mvelpp;
@@ -689,8 +703,18 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 int ix = col_idx % nx;
                 int iy = col_idx / nx;
 
+                swup_toa(iy + h, ix + h) = buffer.sw_flux_up_k(i, 0);
                 swdn_toa(iy + h, ix + h) = buffer.sw_flux_dn_k(i, 0);
                 lwup_toa(iy + h, ix + h) = buffer.lw_flux_up_k(i, 0);
+                lwdn_toa(iy + h, ix + h) = buffer.lw_flux_dn_k(i, 0);
+
+                // This considers topography
+                int hx = topo(iy + h, ix + h); 
+                int k_sfc = h + nz - hx;
+                swdn_sfc(iy + h, ix + h) = buffer.sw_flux_dn_k(i, k_sfc);
+                swup_sfc(iy + h, ix + h) = buffer.sw_flux_up_k(i, k_sfc);
+                lwdn_sfc(iy + h, ix + h) = buffer.lw_flux_dn_k(i, k_sfc);
+                lwup_sfc(iy + h, ix + h) = buffer.lw_flux_up_k(i, k_sfc);
 
                 for (int k = 1; k <= nz; ++k) {
                     int k_vvm = h + nz - k;

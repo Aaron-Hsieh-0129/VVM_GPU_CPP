@@ -111,7 +111,6 @@ void LandProcess::init() {
             int hx = topo_v(vj, vi);
             int hxp = topo_v(vj, vi) + 1;
 
-            m_tskin(i, j) = Tg(vj, vi);
 
 
             // NOTE: These values will be overwritten in preprocessing_and_packing
@@ -127,6 +126,8 @@ void LandProcess::init() {
             m_sneqv(i, j) = 0.0;
 
             m_t1(i, j) = th_v(hx, vj, vi) * pibar_v(hx);
+            m_tskin(i, j) = m_t1(i, j); // It it supposed to be equal to Tg but Fortran VVM use m_t1 so we follow it.
+
             for(int k=0; k<m_nsoil; ++k) {
                 m_stc(i, k, j) = m_t1(i, j); // soil temperature
                 // m_smc(i, k, j) = smc(vj, vi) / real(100.); // volumetric soil moisture content
@@ -146,6 +147,8 @@ void LandProcess::init() {
 void LandProcess::prepare_static_data() {
     auto& topo_v = state_.get_field<2>("topo").get_device_data();
     auto& pbar_v = state_.get_field<1>("pbar").get_device_data();
+    auto& pbar_up_v = state_.get_field<1>("pbar_up").get_device_data();
+
     auto z_mid_v = params_.z_mid.get_device_data();
     auto z_up_v = params_.z_up.get_device_data();
 
@@ -173,7 +176,7 @@ void LandProcess::prepare_static_data() {
             VVM::Real dz = z_mid_v(hxp) - z_up_v(hx);
             m_hgt(i, j) = (dz < real(2.0)) ? real(2.0) : dz;
 
-            m_ps(i, j) = pbar_v(hxp); 
+            m_ps(i, j) = pbar_up_v(hx); 
             m_prslki(i, j) = pibar_up_v(hx) / pibar_v(hxp);
 
             m_sigmaf(i, j) = gvf(vj, vi) / real(100.);  // Green Vegetation Fraction
@@ -198,9 +201,10 @@ void LandProcess::preprocessing_and_packing() {
     auto& u_v  = state_.get_field<3>("u").get_device_data();
     auto& v_v  = state_.get_field<3>("v").get_device_data();
     auto& qv_v = state_.get_field<3>("qv").get_device_data();
-    auto& swdn_v = state_.get_field<3>("swdn").get_device_data();
-    auto& swnet_v = state_.get_field<3>("net_sw_flux").get_device_data();
-    auto& lwdn_v = state_.get_field<3>("lwdn").get_device_data();
+    // The surface radiation has considered topography
+    auto& swdn_sfc_v = state_.get_field<2>("swdn_sfc").get_device_data();
+    auto& swup_sfc_v = state_.get_field<2>("swup_sfc").get_device_data();
+    auto& lwdn_sfc_v = state_.get_field<2>("lwdn_sfc").get_device_data();
     auto& th_v = state_.get_field<3>("th").get_device_data();
 
     auto& pibar_v = state_.get_field<1>("pibar").get_device_data();
@@ -227,9 +231,9 @@ void LandProcess::preprocessing_and_packing() {
             // m_v1(i, j) = v_v(hxp, vj, vi);
             m_q1(i, j) = qv_v(hxp, vj, vi) / (1 + qv_v(hxp, vj, vi));
 
-            m_swdn(i,j) = swdn_v(hxp, vj, vi);
-            m_swnet(i,j) = swnet_v(hxp, vj, vi);
-            m_lwdn(i,j) = lwdn_v(hxp, vj, vi);
+            m_swdn(i,j) = swdn_sfc_v(vj, vi);
+            m_swnet(i,j) = swdn_sfc_v(vj, vi) - swup_sfc_v(vj, vi);
+            m_lwdn(i,j) = lwdn_sfc_v(vj, vi);
             m_prcp(i,j) = precip_liq_surf_2d(vj, vi) + precip_ice_surf_2d(vj, vi);
         }
     );
