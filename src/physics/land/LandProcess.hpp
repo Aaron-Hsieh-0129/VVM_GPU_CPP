@@ -17,7 +17,7 @@ extern "C" {
         VVM::Real* t1, VVM::Real* q1, VVM::Real* u1, VVM::Real* v1, VVM::Real* ps, 
         VVM::Real* prcp, VVM::Real* swdn, VVM::Real* lwdn, VVM::Real* swnet, VVM::Real* hgt, VVM::Real* prslki_in,
         VVM::Real* stc, VVM::Real* smc, VVM::Real* slc, VVM::Real* tskin, VVM::Real* canopy, VVM::Real* snwdph, VVM::Real* sneqv,
-        VVM::Real* hflux, VVM::Real* qflux, VVM::Real* evap, VVM::Real* zorl, VVM::Real* cmx, VVM::Real* lai, bool rdlai2d);
+        VVM::Real* hflux, VVM::Real* qflux, VVM::Real* evap, VVM::Real* gfx, VVM::Real* zorl, VVM::Real* cmx, VVM::Real* lai, bool rdlai2d);
 }
 
 namespace VVM {
@@ -75,7 +75,7 @@ private:
     view_3d_ll m_stc, m_smc, m_slc;
     view_2d_ll m_tskin, m_canopy, m_snwdph, m_sneqv, m_zorl, m_cmx, m_lai;
 
-    view_2d_ll m_hflux, m_qflux, m_evap;
+    view_2d_ll m_hflux, m_qflux, m_evap, m_gfx;
 };
 
 } // namespace Physics
