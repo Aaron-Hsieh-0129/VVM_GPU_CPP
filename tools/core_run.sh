@@ -13,9 +13,13 @@ fi
 # Calculate total tasks per node
 TASKS_PER_NODE=$(( VVM_COMPUTE_PER_NODE + VVM_IO_PER_NODE ))
 
-# Determine execution mode and allocate CPU cores (PE)
+# ==============================================================================
+# Dynamic Binding Strategy
+# ==============================================================================
 if [ -n "$SLURM_JOB_ID" ]; then
-    # SLURM Mode: Auto-tune to utilize all available cores per node
+    # ---------------------------------------------------------
+    # SLURM Mode (Exclusive): Strict binding for maximum performance
+    # ---------------------------------------------------------
     if [ -n "$SLURM_JOB_CPUS_PER_NODE" ]; then
         TOTAL_CORES=$(echo $SLURM_JOB_CPUS_PER_NODE | awk -F'[(x]' '{print $1}')
     else
@@ -24,11 +28,19 @@ if [ -n "$SLURM_JOB_ID" ]; then
     PE=$(( TOTAL_CORES / TASKS_PER_NODE ))
     if [ "$PE" -lt 1 ]; then PE=1; fi
     RUN_MODE="SLURM Auto-Tuning"
+    
+    MPI_MAP_ARGS="--map-by ppr:${TASKS_PER_NODE}:node:PE=${PE}"
+    OMP_BIND_ARGS="-x OMP_PROC_BIND=close -x OMP_PLACES=cores"
 else
-    # Local Mode: Respect user-defined limits to share resources
+    # ---------------------------------------------------------
+    # Local Mode (Shared): Floating binding to avoid busy CPUs
+    # ---------------------------------------------------------
     PE=${OMP_NUM_THREADS:-1}
     TOTAL_CORES=$(( PE * TASKS_PER_NODE ))
-    RUN_MODE="Local Shared Mode"
+    RUN_MODE="Local Shared Mode (Floating Cores)"
+    
+    MPI_MAP_ARGS="--map-by ppr:${TASKS_PER_NODE}:node --bind-to none"
+    OMP_BIND_ARGS="-x OMP_PROC_BIND=false"
 fi
 
 echo "========================================================="
@@ -43,20 +55,14 @@ if [ "$VVM_IO_ENGINE" == "SST" ]; then
 fi
 
 # ==============================================================================
-# Inline Wrapper: 
-# Dynamically masks GPUs for IO tasks to save memory context, 
-# while binding Compute tasks to specific GPUs.
+# Inline Wrapper for GPU Masking
 # ==============================================================================
 INLINE_WRAPPER='
 if [ "$OMPI_COMM_WORLD_LOCAL_RANK" -lt "$VVM_COMPUTE_PER_NODE" ]; then
-    # Compute Rank: Bind to assigned GPU
     export CUDA_VISIBLE_DEVICES=$(( OMPI_COMM_WORLD_LOCAL_RANK % VVM_GPUS ))
 else
-    # IO Rank: Mask GPUs to prevent 300MB CUDA context overhead
     export CUDA_VISIBLE_DEVICES=""
 fi
-
-# Execute the core program
 exec ./build/vvm "$@"
 '
 
@@ -64,10 +70,9 @@ exec ./build/vvm "$@"
 # Run MPI Job
 # ==============================================================================
 mpirun -np $VVM_TOTAL_TASKS \
- --map-by ppr:${TASKS_PER_NODE}:node:PE=${PE} \
+ $MPI_MAP_ARGS \
  -x OMP_NUM_THREADS=${PE} \
- -x OMP_PROC_BIND=close \
- -x OMP_PLACES=cores \
+ $OMP_BIND_ARGS \
  -x NCCL_DEBUG=INFO \
  -x HDF5_USE_FILE_LOCKING=FALSE \
  -x VVM_GPUS \
