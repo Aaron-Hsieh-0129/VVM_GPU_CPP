@@ -5,45 +5,45 @@
 # ==============================================================================
 set -e
 
-export OMP_PROC_BIND=spread 
-export OMP_PLACES=threads
+if [ -f "$VVM_ENV_SCRIPT" ]; then
+    source "$VVM_ENV_SCRIPT"
+fi
 
-export OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}
+TASKS_PER_NODE=$(( VVM_COMPUTE_PER_NODE + VVM_IO_PER_NODE ))
+
+if [ -n "$SLURM_JOB_ID" ]; then
+    if [ -n "$SLURM_JOB_CPUS_PER_NODE" ]; then
+        TOTAL_CORES=$(echo $SLURM_JOB_CPUS_PER_NODE | awk -F'[(x]' '{print $1}')
+    else
+        TOTAL_CORES=$(nproc --all)
+    fi
+    PE=$(( TOTAL_CORES / TASKS_PER_NODE ))
+    if [ "$PE" -lt 1 ]; then PE=1; fi
+    RUN_MODE="SLURM Auto-Tuning"
+else
+    PE=${OMP_NUM_THREADS:-1}
+    TOTAL_CORES=$(( PE * TASKS_PER_NODE ))
+    RUN_MODE="Local Shared Mode"
+fi
+
+echo "========================================================="
+echo "[$RUN_MODE]"
+echo " Nodes: ${SLURM_JOB_NUM_NODES:-1} | Tasks/Node: $TASKS_PER_NODE"
+echo " Total Cores Used/Node: $TOTAL_CORES | Allocated Cores/Task (PE): $PE"
+echo "========================================================="
 
 VVM_ARGS=""
 if [ "$VVM_IO_ENGINE" == "SST" ]; then
     VVM_ARGS="--io-tasks $VVM_IO_TASKS"
 fi
 
-# ==============================================================================
-# VVM Execution Block
-# ==============================================================================
-echo "Preparing to start VVM..."
-
-export NCCL_DEBUG=INFO
-export HDF5_USE_FILE_LOCKING=FALSE
-export OMPI_MCA_io=ompio
-export OMPI_MCA_sharedfp="^lockedfile,individual"
-
-if [ -n "$SLURM_JOB_NUM_NODES" ]; then
-    TASKS_PER_NODE=$(( VVM_TOTAL_TASKS / SLURM_JOB_NUM_NODES ))
-    
-    CHUNK_SIZE=$(( VVM_COMPUTE_TASKS / SLURM_JOB_NUM_NODES ))
-    if [ "$CHUNK_SIZE" -lt 1 ]; then CHUNK_SIZE=1; fi
-
-    echo "--> SLURM environment detected."
-    echo "--> Forcing exactly $TASKS_PER_NODE tasks per node (Plane chunk size: $CHUNK_SIZE)."
-    
-    srun --mpi=pmix \
-         --ntasks-per-node=$TASKS_PER_NODE \
-         --distribution=plane=$CHUNK_SIZE \
-         -n $VVM_TOTAL_TASKS \
-         ./build/vvm "$VVM_CONFIG_FILE" $VVM_ARGS
-
-else
-    echo "--> Local environment detected (No SLURM)."
-    echo "--> Using mpirun."
-    
-    mpirun --bind-to none -np $VVM_TOTAL_TASKS \
-        ./build/vvm "$VVM_CONFIG_FILE" $VVM_ARGS
-fi
+mpirun -np $VVM_TOTAL_TASKS \
+ --map-by ppr:${TASKS_PER_NODE}:node:PE=${PE} \
+ -x OMP_NUM_THREADS=${PE} \
+ -x OMP_PROC_BIND=close \
+ -x OMP_PLACES=cores \
+ -x NCCL_DEBUG=INFO \
+ -x HDF5_USE_FILE_LOCKING=FALSE \
+ -x VVM_GPUS \
+ -x VVM_COMPUTE_PER_NODE \
+ ./tools/vvm_wrapper.sh ./build/vvm "$VVM_CONFIG_FILE" $VVM_ARGS

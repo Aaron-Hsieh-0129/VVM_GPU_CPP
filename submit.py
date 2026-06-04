@@ -86,7 +86,7 @@ DEFAULT_CONFIG = "rundata/input_configs/taiwanvvm.json"
 DEFAULT_COMPUTE = 1
 DEFAULT_IO = 0
 DEFAULT_NODES = 1
-DEFAULT_CPUS = 8
+DEFAULT_CPUS = 1
 DEFAULT_TIME = "24:00:00"
 DEFAULT_OUT = "log/%j.out"
 DEFAULT_ERR = "log/%j.err"
@@ -342,14 +342,21 @@ def main():
     create_code_snapshot(VVM_ROOT, snapshot_dir, config_path_user, prof_path, spat_path, out_dir_raw)
 
     total_tasks = args.compute + args.io
+
+    compute_per_node = math.ceil(args.compute / args.nodes)
+    io_per_node = math.ceil(args.io / args.nodes)
+    tasks_per_node = compute_per_node + io_per_node
      
     env["VVM_CONFIG_FILE"] = config_path_user
     env["VVM_COMPUTE_TASKS"] = str(args.compute)
     env["VVM_IO_TASKS"] = str(args.io)
     env["VVM_TOTAL_TASKS"] = str(total_tasks)
+    env["VVM_COMPUTE_PER_NODE"] = str(compute_per_node)
+    env["VVM_IO_PER_NODE"] = str(io_per_node)
     env["VVM_IO_ENGINE"] = io_engine
     env["VVM_OUTPUT_DIR"] = out_dir_abs
     env["OMP_NUM_THREADS"] = str(args.cpus)
+    env["VVM_GPUS"] = str(args.gpus)
 
     script_path = os.path.join(VVM_ROOT, "tools", "core_run.sh")
     if not os.path.isfile(script_path):
@@ -378,7 +385,7 @@ def main():
             f"--ntasks={total_tasks}",
             f"--ntasks-per-node={tasks_per_node}",
             f"--gpus-per-node={args.gpus}",
-            f"--cpus-per-task={args.cpus}",
+            f"--exclusive",
             f"--time={args.time}",
             f"--output={os.path.abspath(args.out)}",
             f"--error={os.path.abspath(args.err)}"

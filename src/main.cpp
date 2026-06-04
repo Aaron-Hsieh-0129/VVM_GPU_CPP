@@ -50,35 +50,6 @@ int main(int argc, char *argv[]) {
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
-    MPI_Comm node_comm;
-    MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, world_rank, MPI_INFO_NULL, &node_comm);
-
-    int node_rank, node_size;
-    MPI_Comm_rank(node_comm, &node_rank);
-    MPI_Comm_size(node_comm, &node_size);
-    MPI_Comm_free(&node_comm);
-
-    long total_cores = sysconf(_SC_NPROCESSORS_ONLN);
-    int threads_per_rank = total_cores / node_size;
-    if (threads_per_rank < 1) threads_per_rank = 1;
-    omp_set_num_threads(threads_per_rank);
-    if (world_rank == 0) {
-        std::cout << "[System] Node Cores: " << total_cores 
-                  << " | Ranks per Node: " << node_size 
-                  << " | OpenMP Threads per Rank: " << threads_per_rank << std::endl;
-    }
-
-    int num_gpus = 0;
-    cudaError_t err = cudaGetDeviceCount(&num_gpus);
-    if (err != cudaSuccess || num_gpus == 0) {
-        num_gpus = 1; 
-    }
-    int gpu_id = node_rank % num_gpus;
-    Kokkos::InitializationSettings args;
-    args.set_device_id(gpu_id);
-
-    Kokkos::initialize(args);
-
     // Load configuration file
     std::string config_file_path = TOSTRING(VVM_ROOT_DIR) "/rundata/input_configs/default_config.json";
     for(int i=1; i<argc; ++i) {
@@ -88,6 +59,7 @@ int main(int argc, char *argv[]) {
     }
     VVM::Utils::ConfigurationManager config(config_file_path);
 
+    // clean existing SST file to prevent errors
     if (world_rank == 0) {
         std::string engine = config.get_value<std::string>("output.engine", "HDF5");
         if (engine == "SST") {
@@ -102,38 +74,63 @@ int main(int argc, char *argv[]) {
     }
     MPI_Barrier(MPI_COMM_WORLD);
 
+    // Split Compute and IO jobs
     int num_io_tasks = get_io_tasks(argc, argv);
     int num_sim_tasks = world_size - num_io_tasks;
-
     if (num_sim_tasks <= 0) {
         if (world_rank == 0) std::cerr << "Error: Not enough ranks for simulation!" << std::endl;
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
     int color = (world_rank < num_sim_tasks) ? 0 : 1;
-    
     MPI_Comm split_comm;
     MPI_Comm_split(MPI_COMM_WORLD, color, world_rank, &split_comm);
-
     int split_rank, split_size;
     MPI_Comm_rank(split_comm, &split_rank);
     MPI_Comm_size(split_comm, &split_size);
 
     if (color == 1) {
         VVM::IO::run_io_server(split_comm, config);
-
-        Kokkos::finalize();
         MPI_Comm_free(&split_comm);
         MPI_Finalize();
         return 0;
     }
 
+    int threads_per_rank = 1;
+    if (const char* env_p = std::getenv("OMP_NUM_THREADS")) {
+        threads_per_rank = std::stoi(env_p);
+    }
+    omp_set_num_threads(threads_per_rank);
+
+    if (split_rank == 0) {
+        std::cout << "[System] CPU Threads per Rank set to: " << threads_per_rank << std::endl;
+    }
+
+    // compute rank
+    MPI_Comm compute_node_comm;
+    MPI_Comm_split_type(split_comm, MPI_COMM_TYPE_SHARED, split_rank, MPI_INFO_NULL, &compute_node_comm);
+    int compute_node_rank, compute_node_size;
+    MPI_Comm_rank(compute_node_comm, &compute_node_rank);
+    MPI_Comm_size(compute_node_comm, &compute_node_size);
+    MPI_Comm_free(&compute_node_comm);
+
+    int num_gpus = 0;
+    cudaError_t err = cudaGetDeviceCount(&num_gpus);
+    if (err != cudaSuccess || num_gpus == 0) num_gpus = 1;
+
+    int gpu_id = compute_node_rank % num_gpus;
+    Kokkos::InitializationSettings args;
+    args.set_device_id(gpu_id);
+    Kokkos::initialize(args);
+
+    if (split_rank == 0) {
+        std::cout << "[System] Compute Ranks per Node: " << compute_node_size << std::endl;
+    }
+
+
 #if defined(ENABLE_NCCL)
     ncclComm_t nccl_comm;
     init_nccl(&nccl_comm, split_rank, split_size, split_comm);
-
-    int device_id;
-    cudaGetDevice(&device_id);
 #endif
 
     {
