@@ -63,12 +63,14 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
     m_hflux = view_2d_ll("lsm_hflux", m_nx, m_ny);
     m_qflux = view_2d_ll("lsm_qflux", m_nx, m_ny);
     m_evap = view_2d_ll("lsm_evap", m_nx, m_ny);
+    m_gfx = view_2d_ll("lsm_gfx", m_nx, m_ny);
 
     int ny = m_ny+2*m_halo_y;
     int nx = m_nx+2*m_halo_x;
 
     if (!state.has_field("hfx")) state.add_field<2>("hfx", {ny, nx});
     if (!state.has_field("le")) state.add_field<2>("le", {ny, nx});
+    if (!state.has_field("gfx")) state.add_field<2>("gfx", {ny, nx});
     if (!state.has_field("sea_land_ice_mask")) state.add_field<2>("sea_land_ice_mask", {ny, nx});
     if (!state.has_field("canopy")) state.add_field<2>("canopy", {ny, nx});
     if (!state.has_field("snwdph")) state.add_field<2>("snwdph", {ny, nx});
@@ -242,6 +244,7 @@ void LandProcess::preprocessing_and_packing() {
 void LandProcess::postprocessing_and_unpacking() {
     auto& hfx_v    = state_.get_field<2>("hfx").get_mutable_device_data();
     auto& le_v     = state_.get_field<2>("le").get_mutable_device_data();
+    auto& gfx_v     = state_.get_field<2>("gfx").get_mutable_device_data();
     
     auto& canopy_v = state_.get_field<2>("canopy").get_mutable_device_data();
     auto& snwdph_v = state_.get_field<2>("snwdph").get_mutable_device_data();
@@ -267,6 +270,8 @@ void LandProcess::postprocessing_and_unpacking() {
 
             hfx_v(vj, vi) = m_hflux(i, j);
             le_v(vj, vi)  = m_evap(i, j);
+            gfx_v(vj, vi)  = m_gfx(i, j);
+
 
             Tg(vj, vi) = m_tskin(i, j);
             cmx(vj, vi) = m_cmx(i, j);
@@ -309,7 +314,7 @@ void LandProcess::run(VVM::Real dt) {
         m_prcp.data(), m_swdn.data(), m_lwdn.data(), m_swnet.data(), m_hgt.data(), m_prslki.data(),
         m_stc.data(), m_smc.data(), m_slc.data(), m_tskin.data(), 
         m_canopy.data(), m_snwdph.data(), m_sneqv.data(),
-        m_hflux.data(), m_qflux.data(), m_evap.data(), m_zorl.data(), m_cmx.data(), 
+        m_hflux.data(), m_qflux.data(), m_evap.data(), m_gfx.data(), m_zorl.data(), m_cmx.data(), 
         m_lai.data(), true);
 
     postprocessing_and_unpacking();
@@ -322,7 +327,7 @@ void LandProcess::finalize() {
     m_ps = {}; m_prcp = {}; m_swdn = {}; m_lwdn = {}; m_swnet = {};
     m_stc = {}; m_smc = {}; m_slc = {};
     m_tskin = {}; m_canopy = {}; m_snwdph = {}; m_sneqv = {};
-    m_hflux = {}; m_qflux = {}; m_evap = {}; m_lai = {};
+    m_hflux = {}; m_qflux = {}; m_evap = {}; m_gfx = {}; m_lai = {};
 }
 
 void LandProcess::register_openacc() {
@@ -335,7 +340,7 @@ void LandProcess::register_openacc() {
     MAP_KOKKOS_DEVICE(m_sigmaf); MAP_KOKKOS_DEVICE(m_sfemis); MAP_KOKKOS_DEVICE(m_alb); MAP_KOKKOS_DEVICE(m_shdmin); MAP_KOKKOS_DEVICE(m_shdmax); MAP_KOKKOS_DEVICE(m_lai);
     MAP_KOKKOS_DEVICE(m_stc); MAP_KOKKOS_DEVICE(m_smc); MAP_KOKKOS_DEVICE(m_slc);
     MAP_KOKKOS_DEVICE(m_tskin); MAP_KOKKOS_DEVICE(m_canopy); MAP_KOKKOS_DEVICE(m_snwdph); MAP_KOKKOS_DEVICE(m_sneqv);
-    MAP_KOKKOS_DEVICE(m_hflux); MAP_KOKKOS_DEVICE(m_qflux); MAP_KOKKOS_DEVICE(m_evap);
+    MAP_KOKKOS_DEVICE(m_hflux); MAP_KOKKOS_DEVICE(m_qflux); MAP_KOKKOS_DEVICE(m_evap); MAP_KOKKOS_DEVICE(m_gfx);
 }
 
 void LandProcess::unregister_openacc() {
@@ -348,7 +353,7 @@ void LandProcess::unregister_openacc() {
     UNMAP_KOKKOS_DEVICE(m_sigmaf); UNMAP_KOKKOS_DEVICE(m_sfemis); UNMAP_KOKKOS_DEVICE(m_alb); UNMAP_KOKKOS_DEVICE(m_shdmin); UNMAP_KOKKOS_DEVICE(m_shdmax); UNMAP_KOKKOS_DEVICE(m_lai);
     UNMAP_KOKKOS_DEVICE(m_stc); UNMAP_KOKKOS_DEVICE(m_smc); UNMAP_KOKKOS_DEVICE(m_slc);
     UNMAP_KOKKOS_DEVICE(m_tskin); UNMAP_KOKKOS_DEVICE(m_canopy); UNMAP_KOKKOS_DEVICE(m_snwdph); UNMAP_KOKKOS_DEVICE(m_sneqv);
-    UNMAP_KOKKOS_DEVICE(m_hflux); UNMAP_KOKKOS_DEVICE(m_qflux); UNMAP_KOKKOS_DEVICE(m_evap);
+    UNMAP_KOKKOS_DEVICE(m_hflux); UNMAP_KOKKOS_DEVICE(m_qflux); UNMAP_KOKKOS_DEVICE(m_evap); UNMAP_KOKKOS_DEVICE(m_gfx);
 }
 
 

@@ -22,7 +22,7 @@ contains
         sigmaf, sfemis, alb, shdmin, shdmax, &
         t1, q1, u1, v1, ps, prcp, swdn, lwdn, swnet, hgt, prslki_in, &
         stc, smc, slc, tskin, canopy, snwdph, sneqv, &
-        hflux, qflux, evap, zorl, cmx, & 
+        hflux, qflux, evap, gfx, zorl, cmx, & 
         lai, rdlai2d) bind(c, name="run_vvm_land_wrapper")
         
         integer(c_int), value :: use_tco_ocean
@@ -41,7 +41,7 @@ contains
         real(c_vvm_real), intent(inout) :: alb(nx,ny), sfemis(nx,ny)
         real(c_vvm_real), intent(inout) :: stc(nx,nsoil,ny), smc(nx,nsoil,ny), slc(nx,nsoil,ny)
         real(c_vvm_real), intent(inout) :: tskin(nx,ny), canopy(nx,ny), snwdph(nx,ny), sneqv(nx,ny), zorl(nx,ny), cmx(nx, ny)
-        real(c_vvm_real), intent(inout) :: hflux(nx,ny), qflux(nx,ny), evap(nx,ny)
+        real(c_vvm_real), intent(inout) :: hflux(nx,ny), qflux(nx,ny), evap(nx,ny), gfx(nx,ny)
 
         real(c_vvm_real), intent(inout) :: lai(nx, ny)
         logical(c_bool), value          :: rdlai2d
@@ -63,7 +63,7 @@ contains
         real(c_vvm_real) :: tsurf(nx,ny)
         logical        :: flag_iter(nx,ny), flag_guess(nx,ny)
         
-        real(c_vvm_real) :: qsurf(nx,ny), gfx(nx,ny), ep1d(nx,ny)
+        real(c_vvm_real) :: qsurf(nx,ny), ep1d(nx,ny)
         real(c_vvm_real) :: lwdn_eff(nx,ny), swnet_eff(nx,ny)
         real(c_vvm_real) :: tgclim(nx,ny)
         real(c_vvm_real) :: snoalb(nx,ny), albedo2(nx,ny)
@@ -100,12 +100,12 @@ contains
         !$acc data present(islimsk, vegtype, soiltyp, slopetyp, &
         !$acc              sigmaf, sfemis, alb, shdmin, shdmax, &
         !$acc              t1, q1, u1, v1, ps, prcp, swdn, lwdn, swnet, hgt, &
-        !$acc              stc, smc, slc, tskin, canopy, snwdph, sneqv, hflux, qflux, evap, zorl, cmx) &
+        !$acc              stc, smc, slc, tskin, canopy, snwdph, sneqv, hflux, qflux, evap, gfx, zorl, cmx) &
         !$acc      create(psi, prsl1, prslki, tg, z0rl, cd, cdq, rb, stress, &
         !$acc             fm, fh, ustar, sfcw, ddvel, fm10, fh2, fh10, &
         !$acc             tsurf, flag_iter, flag_guess, qsurf, &
         !$acc             lwdn_eff, swnet_eff, &
-        !$acc             gfx, ep1d, tgclim, snoalb, albedo2, &
+        !$acc             ep1d, tgclim, snoalb, albedo2, &
         !$acc             tprcp, srflag, sncover, drain, runof, zice, cice, xtice, snomt, &
         !$acc             u10, v10, t2, q2, rh2, rh10, ro2)
 
@@ -145,7 +145,6 @@ contains
                 tg(i,j) = tskin(i,j)
                 ddvel(i,j) = 0.0_c_vvm_real
                 qsurf(i,j) = 0.0_c_vvm_real
-                gfx(i,j) = 0.0_c_vvm_real
                 drain(i,j) = 0.0_c_vvm_real
                 runof(i,j) = 0.0_c_vvm_real
                 ep1d(i,j) = 0.0_c_vvm_real
