@@ -155,6 +155,36 @@
         "SCREAM_P3_SMALL_KERNELS": "OFF",
         "SCREAM_SMALL_PACK_SIZE": "1"
       }
+    },
+    {
+      "name": "nano4",
+      "displayName": "NVHPC 25.9 on nano5",
+      "description": "Custom environment NVHPC on nano4",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+
+        "NVHPC_DIR": "/work/aaron900129/nvhpc_25_9/Linux_x86_64/25.9",
+
+        "CMAKE_CXX_COMPILER": "/work/aaron900129/nvhpc_25_9/Linux_x86_64/25.9/comm_libs/13.0/hpcx/hpcx-2.24/ompi/bin/mpic++",
+        "CMAKE_C_COMPILER":   "/work/aaron900129/nvhpc_25_9/Linux_x86_64/25.9/comm_libs/13.0/hpcx/hpcx-2.24/ompi/bin/mpicc",
+        "CMAKE_Fortran_COMPILER": "/work/aaron900129/nvhpc_25_9/Linux_x86_64/25.9/comm_libs/13.0/hpcx/hpcx-2.24/ompi/bin/mpifort",
+
+        "HDF5_DIR": "/work/aaron900129/VVM_libs",
+        "NETCDF_C_DIR": "/work/aaron900129/VVM_libs",
+        "NETCDF_Fortran_DIR": "/work/aaron900129/VVM_libs",
+        "PNETCDF_DIR": "/work/aaron900129/VVM_libs",
+
+        "VVM_USE_DOUBLE_PRECISION": "ON",
+        "ENABLE_NCCL": "ON",
+        "EAMXX_ENABLE_GPU": "ON",
+        "Kokkos_ENABLE_CUDA": "ON",
+        "SCREAM_DOUBLE_PRECISION": "ON",
+        "SCREAM_PACK_SIZE": "1",
+        "SCREAM_P3_SMALL_KERNELS": "OFF",
+        "SCREAM_SMALL_PACK_SIZE": "1"
+      }
     }
   ]
 }

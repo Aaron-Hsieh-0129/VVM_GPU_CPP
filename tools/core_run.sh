@@ -5,43 +5,23 @@
 # ==============================================================================
 set -e
 
-# Source environment variables if available
-if [ -f "$VVM_ENV_SCRIPT" ]; then
-    source "$VVM_ENV_SCRIPT"
-fi
-
-# Calculate total tasks per node
 TASKS_PER_NODE=$(( VVM_COMPUTE_PER_NODE + VVM_IO_PER_NODE ))
 
-# ==============================================================================
-# Dynamic Binding Strategy
-# ==============================================================================
 if [ -n "$SLURM_JOB_ID" ]; then
-    # ---------------------------------------------------------
-    # SLURM Mode (Exclusive): Strict binding for maximum performance
-    # ---------------------------------------------------------
     if [ -n "$SLURM_JOB_CPUS_PER_NODE" ]; then
         TOTAL_CORES=$(echo $SLURM_JOB_CPUS_PER_NODE | awk -F'[(x]' '{print $1}')
     else
         TOTAL_CORES=$(nproc --all)
     fi
-    PE=$(( TOTAL_CORES / TASKS_PER_NODE ))
-    if [ "$PE" -lt 1 ]; then PE=1; fi
-    RUN_MODE="SLURM Auto-Tuning"
-    
-    MPI_MAP_ARGS="--map-by ppr:${TASKS_PER_NODE}:node:PE=${PE}"
-    OMP_BIND_ARGS="-x OMP_PROC_BIND=close -x OMP_PLACES=cores"
+    RUN_MODE="SLURM Exclusive Mode"
 else
-    # ---------------------------------------------------------
-    # Local Mode (Shared): Floating binding to avoid busy CPUs
-    # ---------------------------------------------------------
     PE=${OMP_NUM_THREADS:-1}
     TOTAL_CORES=$(( PE * TASKS_PER_NODE ))
-    RUN_MODE="Local Shared Mode (Floating Cores)"
-    
-    MPI_MAP_ARGS="--map-by ppr:${TASKS_PER_NODE}:node --bind-to none"
-    OMP_BIND_ARGS="-x OMP_PROC_BIND=false"
+    RUN_MODE="Local Shared Mode"
 fi
+
+PE=$(( TOTAL_CORES / TASKS_PER_NODE ))
+if [ "$PE" -lt 1 ]; then PE=1; fi
 
 echo "========================================================="
 echo "[$RUN_MODE]"
@@ -54,27 +34,24 @@ if [ "$VVM_IO_ENGINE" == "SST" ]; then
     VVM_ARGS="--io-tasks $VVM_IO_TASKS"
 fi
 
-# ==============================================================================
-# Inline Wrapper for GPU Masking
-# ==============================================================================
 INLINE_WRAPPER='
-if [ "$OMPI_COMM_WORLD_LOCAL_RANK" -lt "$VVM_COMPUTE_PER_NODE" ]; then
-    export CUDA_VISIBLE_DEVICES=$(( OMPI_COMM_WORLD_LOCAL_RANK % VVM_GPUS ))
-else
-    export CUDA_VISIBLE_DEVICES=""
+if [ -f "$VVM_ENV_SCRIPT" ]; then
+    source "$VVM_ENV_SCRIPT"
 fi
+
+export CUDA_VISIBLE_DEVICES=$(( OMPI_COMM_WORLD_LOCAL_RANK % VVM_GPUS ))
+
 exec ./build/vvm "$@"
 '
 
-# ==============================================================================
-# Run MPI Job
-# ==============================================================================
 mpirun -np $VVM_TOTAL_TASKS \
- $MPI_MAP_ARGS \
+ --oversubscribe --map-by ppr:${TASKS_PER_NODE}:node --rank-by node --bind-to none \
  -x OMP_NUM_THREADS=${PE} \
- $OMP_BIND_ARGS \
+ -x OMP_PROC_BIND=false \
  -x NCCL_DEBUG=INFO \
  -x HDF5_USE_FILE_LOCKING=FALSE \
  -x VVM_GPUS \
  -x VVM_COMPUTE_PER_NODE \
+ -x PATH \
+ -x LD_LIBRARY_PATH \
  bash -c "$INLINE_WRAPPER" -- "$VVM_CONFIG_FILE" $VVM_ARGS
