@@ -949,7 +949,9 @@ static void rrtmgp_lw(
   TIMED_KERNEL(Kokkos::parallel_for(ncol, KOKKOS_LAMBDA(int icol) {
     t_sfc(icol) = t_lev(icol, conv::merge(nlay, 0, top_at_1));
   }));
-  Kokkos::deep_copy(emis_sfc , 0.98);
+  // Kokkos::deep_copy(emis_sfc , 0.98);
+  // Aaron: change it to 0.95 to mimic Fortran VVM
+  Kokkos::deep_copy(emis_sfc , 0.95);
 
   // Get Gaussian quadrature weights
   // TODO: move this crap out of userland!
