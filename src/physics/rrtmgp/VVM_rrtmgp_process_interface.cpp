@@ -503,51 +503,72 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 int ix = col_idx % nx;
                 int iy = col_idx / nx;
 
-                buffer.p_lev_k(i, 0) = 1.01; // TOA pressure (1 Pa)
-                buffer.p_lev_k(i, 1) = pbar_up(h + nz - 1);
-                
-                buffer.p_lay_k(i, 0) = 0.5 * (buffer.p_lev_k(i, 0) + buffer.p_lev_k(i, 1));
-                buffer.p_del_k(i, 0) = buffer.p_lev_k(i, 1) - buffer.p_lev_k(i, 0);
-                buffer.d_dz(i, 0) = 0.0;
-                
-                int top_vvm = h + nz - 1;
-                int subtop_vvm = h + nz - 2;
-                Real t_top = th(top_vvm, iy + h, ix + h) * pibar(top_vvm);
-                Real t_subtop = th(subtop_vvm, iy + h, ix + h) * pibar(subtop_vvm);
-                buffer.t_lay_k(i, 0) = 2.0 * t_top - t_subtop;
-                
-                buffer.qc_k(i, 0) = 0.0;
-                buffer.qi_k(i, 0) = 0.0;
-                buffer.cldfrac_tot_k(i, 0) = 0.0;
-                buffer.eff_radius_qc_k(i, 0) = 10.0;
-                buffer.eff_radius_qi_k(i, 0) = 50.0;
+                int hx = topo(iy + h, ix + h);
+                int num_dummy = hx - 1;
 
-                for (int k = 1; k <= nz; ++k) {
-                    int k_vvm = h + nz - k;
+                Real p_toa_real = pbar_up(h + nz - 1);
+                Real p_top = 1.01;
+                Real dp_dummy = (num_dummy >= 0) ? (p_toa_real - p_top) / (num_dummy + 1.0) : 0.0;
 
-                    buffer.p_lay_k(i, k) = pbar(k_vvm); 
-                    buffer.t_lay_k(i, k) = th(k_vvm, iy + h, ix + h) * pibar(k_vvm);
-                    buffer.qc_k(i, k) = Kokkos::max(qc(k_vvm, iy + h, ix + h), real(1e-7));
-                    buffer.qi_k(i, k) = Kokkos::max(qi(k_vvm, iy + h, ix + h), real(1e-8));
-                    buffer.eff_radius_qc_k(i, k) = diag_eff_radius_qc(k_vvm, iy+h, ix+h);
-                    buffer.eff_radius_qi_k(i, k) = diag_eff_radius_qi(k_vvm, iy+h, ix+h);
-                    buffer.p_del_k(i, k) = dpbar_mid(k_vvm); 
-                    buffer.d_dz(i, k) = dz_mid(k_vvm);
-
-                    if (buffer.qc_k(i, k) + buffer.qi_k(i, k) > 1e-12) {
-                        buffer.cldfrac_tot_k(i, k) = 1.0;
-                    }
-                    else {
-                        buffer.cldfrac_tot_k(i, k) = 0.0;
-                    }
+                for (int k = 0; k <= num_dummy; ++k) {
+                    buffer.p_lev_k(i, k) = p_top + k * dp_dummy;
                 }
-                buffer.t_lev_k(i, nlay) = tg(iy + h, ix + h);
-                
-                for (int k = 1; k <= nz+1; ++k) {
-                    int k_vvm = h + nz - k;
+
+                for (int k = num_dummy + 1; k <= nz + 1; ++k) {
+                    int k_vvm = h + nz - k + num_dummy; 
                     buffer.p_lev_k(i, k) = pbar_up(k_vvm);
                 }
                 
+                for (int k = 0; k <= nz; ++k) {
+                    int k_init_vvm = h+nz-k;
+                    buffer.t_lay_k(i, k) = th(k_init_vvm, iy+h, ix+h) * pibar(k_init_vvm);
+
+                    if (k == 0) {
+                        // original TOA process
+                        buffer.p_lay_k(i, 0) = 0.5 * (buffer.p_lev_k(i, 0) + buffer.p_lev_k(i, 1));
+                        buffer.p_del_k(i, 0) = buffer.p_lev_k(i, 1) - buffer.p_lev_k(i, 0);
+                        buffer.d_dz(i, 0) = 0.0;
+                        int top_vvm = h + nz - 1;
+                        int subtop_vvm = h + nz - 2;
+                        buffer.t_lay_k(i, 0) = 2.0 * th(top_vvm, iy+h, ix+h) * pibar(top_vvm) - th(subtop_vvm, iy+h, ix+h) * pibar(subtop_vvm);
+                        buffer.qc_k(i, 0) = 0.0;
+                        buffer.qi_k(i, 0) = 0.0;
+                        buffer.eff_radius_qc_k(i, 0) = 10.0;
+                        buffer.eff_radius_qi_k(i, 0) = 50.0;
+                        buffer.cldfrac_tot_k(i, 0) = 0.0;
+                    } 
+                    else if (k <= num_dummy) {
+                        // pseudo grid for topo
+                        buffer.p_lay_k(i, k) = 0.5 * (buffer.p_lev_k(i, k) + buffer.p_lev_k(i, k+1));
+                        buffer.p_del_k(i, k) = buffer.p_lev_k(i, k+1) - buffer.p_lev_k(i, k);
+                        buffer.d_dz(i, k) = 0.0;
+                        buffer.qc_k(i, k) = 0.0;
+                        buffer.qi_k(i, k) = 0.0;
+                        buffer.eff_radius_qc_k(i, k) = 10.0;
+                        buffer.eff_radius_qi_k(i, k) = 50.0;
+                        buffer.cldfrac_tot_k(i, k) = 0.0;
+                    } 
+                    else {
+                        // real atmosphere move downward
+                        int k_vvm = h + nz - k + num_dummy;
+                        buffer.p_lay_k(i, k) = pbar(k_vvm); 
+                        buffer.p_del_k(i, k) = buffer.p_lev_k(i, k+1) - buffer.p_lev_k(i, k);
+                        buffer.d_dz(i, k) = dz_mid(k_vvm);
+                        buffer.t_lay_k(i, k) = th(k_vvm, iy + h, ix + h) * pibar(k_vvm);
+                        buffer.qc_k(i, k) = Kokkos::max(qc(k_vvm, iy + h, ix + h), real(1e-7));
+                        buffer.qi_k(i, k) = Kokkos::max(qi(k_vvm, iy + h, ix + h), real(1e-8));
+
+                        // The unit here is mu m
+                        Real re_qc_microns = diag_eff_radius_qc(k_vvm, iy+h, ix+h);
+                        Real re_qi_microns = diag_eff_radius_qi(k_vvm, iy+h, ix+h);
+
+                        buffer.eff_radius_qc_k(i, k) = Kokkos::max(real(2.5), Kokkos::min(real(60.0), re_qc_microns));;
+                        buffer.eff_radius_qi_k(i, k) = Kokkos::max(real(5.0), Kokkos::min(real(140.0), re_qi_microns));
+                        buffer.cldfrac_tot_k(i, k) = (buffer.qc_k(i, k) + buffer.qi_k(i, k) > 1e-12) ? 1.0 : 0.0;
+                    }
+                }
+                buffer.t_lev_k(i, nlay) = tg(iy + h, ix + h);
+
                 // Initialize Broadband Surface Albedo  (TODO: Get from State)
                 // For now, assuming ocean-like albedo
                 buffer.sfc_alb_dir_vis_k(i) = 0.3;
@@ -571,11 +592,18 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
         // Compute T_int Manually
         Kokkos::parallel_for("compute_t_int", Kokkos::RangePolicy<>(0, ncol),
             KOKKOS_LAMBDA(int i) {
+                int col_idx = beg + i;
+                int ix = col_idx % nx;
+                int iy = col_idx / nx;
+
                 for (int k = 1; k < nlay; ++k) {
                     buffer.t_lev_k(i, k) = 0.5 * (buffer.t_lay_k(i, k-1) + buffer.t_lay_k(i, k));
                 }
                 buffer.t_lev_k(i, 0) = 2.0 * buffer.t_lay_k(i, 0) - buffer.t_lev_k(i, 1);
-            });
+                
+                buffer.t_lev_k(i, nlay) = tg(iy + h, ix + h);
+            }
+        );
 
         interface_t::mixing_ratio_to_cloud_mass(buffer.qc_k, buffer.cldfrac_tot_k, buffer.p_del_k, buffer.lwp_k);
         interface_t::mixing_ratio_to_cloud_mass(buffer.qi_k, buffer.cldfrac_tot_k, buffer.p_del_k, buffer.iwp_k);
@@ -615,19 +643,29 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
 
             if (name == "h2o") {
                 Kokkos::parallel_for("set_h2o_vmr", Kokkos::RangePolicy<>(0, ncol),
-                   KOKKOS_LAMBDA(int i) {
-                       int col_idx = beg + i;
-                       int ix = col_idx % nx;
-                       int iy = col_idx / nx;
+                    KOKKOS_LAMBDA(int i) {
+                        int col_idx = beg + i;
+                        int ix = col_idx % nx;
+                        int iy = col_idx / nx;
+                        int hx = topo(iy + h, ix + h);
 
-                       vmr_view(i, 0) = PF::calculate_vmr_from_mmr(gas_mol_weights(igas), 1e-6, 1e-6);
+                        vmr_view(i, 0) = PF::calculate_vmr_from_mmr(gas_mol_weights(igas), 1e-6, 1e-6);
 
-                       for (int k = 1; k < nlay; ++k) {
-                           int k_vvm = h + nz - k; 
-                           Real qv_val = Kokkos::max(qv(k_vvm, iy + h, ix + h), real(1e-6));
-                           vmr_view(i, k) = PF::calculate_vmr_from_mmr(gas_mol_weights(igas), qv_val, qv_val);
-                       }
-                   });
+                        int num_dummy = hx - 1;
+                        for (int k = 1; k < nlay; ++k) {
+                            if (k <= num_dummy) {
+                                int k_vvm_top = h + nz - 1;
+                                Real qv_val = Kokkos::max(qv(k_vvm_top, iy + h, ix + h), real(1e-6));
+                                vmr_view(i, k) = PF::calculate_vmr_from_mmr(gas_mol_weights(igas), qv_val, qv_val);
+                            } 
+                            else {
+                                int k_vvm = h + nz - k + num_dummy;
+                                Real qv_val = Kokkos::max(qv(k_vvm, iy + h, ix + h), real(1e-6));
+                                vmr_view(i, k) = PF::calculate_vmr_from_mmr(gas_mol_weights(igas), qv_val, qv_val);
+                            }
+                        }
+                    }
+                );
             } 
             else {
                 bool is_profile = false;
@@ -644,19 +682,50 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
 
                 if (is_profile) {
                     Kokkos::parallel_for("set_gas_profile", Kokkos::RangePolicy<>(0, ncol),
-                       KOKKOS_LAMBDA(int i) {
-                           for (int k = 0; k < nlay; ++k) {
-                               vmr_view(i, k) = profile(k);
-                           }
-                       });
+                        KOKKOS_LAMBDA(int i) {
+                            int col_idx = beg + i;
+                            int ix = col_idx % nx;
+                            int iy = col_idx / nx;
+                            int hx = topo(iy + h, ix + h);
+                            int num_dummy = hx - 1;
+
+                            for (int k = 0; k < nlay; ++k) {
+                                if (k == 0) {
+                                    vmr_view(i, k) = profile(0);
+                                }
+                                else if (k <= num_dummy) {
+                                    vmr_view(i, k) = profile(1); 
+                                } 
+                                else {
+                                    int k_prof = k - num_dummy; 
+                                    vmr_view(i, k) = profile(k_prof);
+                                }
+                            }
+                        }
+                    );
                 } 
                 else {
                     Kokkos::parallel_for("set_gas_scalar", Kokkos::RangePolicy<>(0, ncol),
-                       KOKKOS_LAMBDA(int i) {
-                           for (int k = 0; k < nlay; ++k) {
-                               vmr_view(i, k) = scalar_val;
-                           }
-                       });
+                        KOKKOS_LAMBDA(int i) {
+                            int col_idx = beg + i;
+                            int ix = col_idx % nx;
+                            int iy = col_idx / nx;
+                            int hx = topo(iy + h, ix + h);
+                            int num_dummy = hx - 1;
+
+                            for (int k = 0; k < nlay; ++k) {
+                                if (k == 0) {
+                                    vmr_view(i, k) = scalar_val;
+                                }
+                                else if (k <= num_dummy) {
+                                    vmr_view(i, k) = scalar_val;
+                                } 
+                                else {
+                                    vmr_view(i, k) = scalar_val;
+                                }
+                            }
+                        }
+                    );
                 }
             }
 
@@ -703,39 +772,53 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 int ix = col_idx % nx;
                 int iy = col_idx / nx;
 
-                swup_toa(iy + h, ix + h) = buffer.sw_flux_up_k(i, 0);
-                swdn_toa(iy + h, ix + h) = buffer.sw_flux_dn_k(i, 0);
-                lwup_toa(iy + h, ix + h) = buffer.lw_flux_up_k(i, 0);
-                lwdn_toa(iy + h, ix + h) = buffer.lw_flux_dn_k(i, 0);
-
-                // This considers topography
                 int hx = topo(iy + h, ix + h); 
-                int k_sfc = h + nz - hx;
-                swdn_sfc(iy + h, ix + h) = buffer.sw_flux_dn_k(i, k_sfc);
-                swup_sfc(iy + h, ix + h) = buffer.sw_flux_up_k(i, k_sfc);
-                lwdn_sfc(iy + h, ix + h) = buffer.lw_flux_dn_k(i, k_sfc);
-                lwup_sfc(iy + h, ix + h) = buffer.lw_flux_up_k(i, k_sfc);
+                int num_dummy = hx - 1;
 
-                for (int k = 1; k <= nz; ++k) {
-                    int k_vvm = h + nz - k;
+                swdn_sfc(iy + h, ix + h) = buffer.sw_flux_dn_k(i, nz + 1);
+                swup_sfc(iy + h, ix + h) = buffer.sw_flux_up_k(i, nz + 1);
+                lwdn_sfc(iy + h, ix + h) = buffer.lw_flux_dn_k(i, nz + 1);
+                lwup_sfc(iy + h, ix + h) = buffer.lw_flux_up_k(i, nz + 1);
 
-                    Real net_heating_val = buffer.sw_heating_k(i, k) + buffer.lw_heating_k(i, k); 
-                    sw_heating(k_vvm, iy + h, ix + h) = buffer.sw_heating_k(i, k);
-                    lw_heating(k_vvm, iy + h, ix + h) = buffer.lw_heating_k(i, k);
-                    net_heating(k_vvm, iy + h, ix + h) = net_heating_val;
+                swup_toa(iy + h, ix + h) = buffer.sw_flux_up_k(i, num_dummy + 1);
+                swdn_toa(iy + h, ix + h) = buffer.sw_flux_dn_k(i, num_dummy + 1);
+                lwup_toa(iy + h, ix + h) = buffer.lw_flux_up_k(i, num_dummy + 1);
+                lwdn_toa(iy + h, ix + h) = buffer.lw_flux_dn_k(i, num_dummy + 1);
+
+                for (int k_vvm = h; k_vvm <= h + nz - 1; ++k_vvm) {
+                    if (k_vvm < h + hx - 1) {
+                        sw_heating(k_vvm, iy + h, ix + h) = 0.0;
+                        lw_heating(k_vvm, iy + h, ix + h) = 0.0;
+                        net_heating(k_vvm, iy + h, ix + h) = 0.0;
+                    } 
+                    else {
+                        int k = h + nz - k_vvm + num_dummy;
+                        Real net_heating_val = buffer.sw_heating_k(i, k) + buffer.lw_heating_k(i, k); 
+                        sw_heating(k_vvm, iy + h, ix + h) = buffer.sw_heating_k(i, k);
+                        lw_heating(k_vvm, iy + h, ix + h) = buffer.lw_heating_k(i, k);
+                        net_heating(k_vvm, iy + h, ix + h) = net_heating_val;
+                    }
                 }
 
-                for (int k = 1; k <= nz + 1; ++k) {
-                    int k_vvm = h + nz - k;
-                    
-                    Real net_sw = buffer.sw_flux_dn_k(i, k) - buffer.sw_flux_up_k(i, k);
-                    Real net_lw = buffer.lw_flux_dn_k(i, k) - buffer.lw_flux_up_k(i, k);
+                for (int k_vvm = h - 1; k_vvm <= h + nz - 1; ++k_vvm) {
+                    if (k_vvm < h + hx - 2) {
+                        net_sw_flux(k_vvm, iy+h, ix+h) = 0.0;
+                        net_lw_flux(k_vvm, iy+h, ix+h) = 0.0;
+                        swdn(k_vvm, iy+h, ix+h) = 0.0;
+                        lwdn(k_vvm, iy+h, ix+h) = 0.0;
+                        lwup(k_vvm, iy+h, ix+h) = 0.0;
+                    } 
+                    else {
+                        int k = h + nz - k_vvm + num_dummy;
+                        Real net_sw = buffer.sw_flux_dn_k(i, k) - buffer.sw_flux_up_k(i, k);
+                        Real net_lw = buffer.lw_flux_dn_k(i, k) - buffer.lw_flux_up_k(i, k);
 
-                    net_sw_flux(k_vvm, iy + h, ix + h) = net_sw;
-                    net_lw_flux(k_vvm, iy + h, ix + h) = net_lw;
-                    swdn(k_vvm, iy + h, ix + h) = buffer.sw_flux_dn_k(i, k);
-                    lwdn(k_vvm, iy + h, ix + h) = buffer.lw_flux_dn_k(i, k);
-                    lwup(k_vvm, iy + h, ix + h) = buffer.lw_flux_up_k(i, k);
+                        net_sw_flux(k_vvm, iy+h, ix+h) = net_sw;
+                        net_lw_flux(k_vvm, iy+h, ix+h) = net_lw;
+                        swdn(k_vvm, iy+h, ix+h) = buffer.sw_flux_dn_k(i, k);
+                        lwdn(k_vvm, iy+h, ix+h) = buffer.lw_flux_dn_k(i, k);
+                        lwup(k_vvm, iy+h, ix+h) = buffer.lw_flux_up_k(i, k);
+                    }
                 }
             }
         );
