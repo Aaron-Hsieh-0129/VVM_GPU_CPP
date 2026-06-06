@@ -216,7 +216,11 @@ void OutputManager::write(int step, VVM::Real time) {
                             size_t nx = adios_var.Count()[1];
                             
                             // 2-Step Copy: Strided Device -> Contiguous Device -> Contiguous Host
-                            Kokkos::View<VVM::Real**, Kokkos::LayoutRight, DevMemSpace> dev_contig("temp_2d", ny, nx);
+                            if (dev_buffers_2d_.find(field_name) == dev_buffers_2d_.end()) {
+                                dev_buffers_2d_[field_name] = Kokkos::View<VVM::Real**, Kokkos::LayoutRight>(field_name + "_dev", ny, nx);
+                            }
+                            auto& dev_contig = dev_buffers_2d_[field_name];
+
                             auto subview = Kokkos::subview(full_data_view, 
                                 std::make_pair(j_start, j_start + ny), 
                                 std::make_pair(i_start, i_start + nx));
@@ -236,7 +240,11 @@ void OutputManager::write(int step, VVM::Real time) {
                             size_t ny = adios_var.Count()[1];
                             size_t nx = adios_var.Count()[2];
 
-                            Kokkos::View<VVM::Real***, Kokkos::LayoutRight, DevMemSpace> dev_contig("temp_3d", nz, ny, nx);
+                            if (dev_buffers_3d_.find(field_name) == dev_buffers_3d_.end()) {
+                                dev_buffers_3d_[field_name] = Kokkos::View<VVM::Real***, Kokkos::LayoutRight>(field_name + "_dev", nz, ny, nx);
+                            }
+                            auto& dev_contig = dev_buffers_3d_[field_name];
+
                             auto subview = Kokkos::subview(full_data_view,
                                 std::make_pair(k_start, k_start + nz),
                                 std::make_pair(j_start, j_start + ny),
@@ -258,7 +266,11 @@ void OutputManager::write(int step, VVM::Real time) {
                             size_t ny = adios_var.Count()[2];
                             size_t nx = adios_var.Count()[3];
 
-                            Kokkos::View<VVM::Real****, Kokkos::LayoutRight, DevMemSpace> dev_contig("temp_4d", d4, nz, ny, nx);
+                            if (dev_buffers_4d_.find(field_name) == dev_buffers_4d_.end()) {
+                                dev_buffers_4d_[field_name] = Kokkos::View<VVM::Real****, Kokkos::LayoutRight>(field_name + "_dev", d4, nz, ny, nx);
+                            }
+                            auto& dev_contig = dev_buffers_4d_[field_name];
+
                             auto subview = Kokkos::subview(full_data_view, Kokkos::ALL(),
                                 std::make_pair(k_start, k_start + nz),
                                 std::make_pair(j_start, j_start + ny),

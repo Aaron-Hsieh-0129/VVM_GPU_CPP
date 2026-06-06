@@ -71,6 +71,10 @@ private:
     std::map<std::string, Kokkos::View<VVM::Real**, Kokkos::LayoutRight, Kokkos::HostSpace>> host_buffers_2d_;
     std::map<std::string, Kokkos::View<VVM::Real***, Kokkos::LayoutRight, Kokkos::HostSpace>> host_buffers_3d_;
     std::map<std::string, Kokkos::View<VVM::Real****, Kokkos::LayoutRight, Kokkos::HostSpace>> host_buffers_4d_;
+
+    std::map<std::string, Kokkos::View<VVM::Real**, Kokkos::LayoutRight>> dev_buffers_2d_;
+    std::map<std::string, Kokkos::View<VVM::Real***, Kokkos::LayoutRight>> dev_buffers_3d_;
+    std::map<std::string, Kokkos::View<VVM::Real****, Kokkos::LayoutRight>> dev_buffers_4d_;
 };
 
 } // namespace IO

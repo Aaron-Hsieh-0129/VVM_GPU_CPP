@@ -61,13 +61,13 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
     adios2::Engine reader = inIO.Open(input_stream_name, adios2::Mode::Read);
     adios2::Engine writer;
 
+    std::map<std::string, std::vector<VVM::Real>> data_buffers;
     while (true) {
         adios2::StepStatus status = reader.BeginStep();
         if (status != adios2::StepStatus::OK) break;
 
         int step = reader.CurrentStep();
         const auto& varTypeMap = inIO.AvailableVariables();
-        std::map<std::string, std::vector<VVM::Real>> data_buffers;
         std::vector<std::string> current_step_vars; 
 
         for (const auto& varPair : varTypeMap) {
