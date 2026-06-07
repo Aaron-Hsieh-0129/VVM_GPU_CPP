@@ -2,7 +2,6 @@
 #include "physics/rrtmgp/rrtmgp_utils.hpp"
 #include "physics/rrtmgp/shr_orb_mod_c2f.hpp"
 #include "share/physics/eamxx_trcmix.hpp"
-#include "share/physics/eamxx_common_physics_functions.hpp"
 #include "share/util/eamxx_column_ops.hpp"
 #include "share/util/eamxx_utils.hpp"
 #include "utils/Timer.hpp"
@@ -16,7 +15,6 @@ namespace RRTMGP {
 
 using Real = scream::Real;
 using Int = scream::Int;
-using PF = scream::PhysicsFunctions<DefaultDevice>;
 using PC = scream::physics::Constants<Real>;
 using CO = scream::ColumnOps<DefaultDevice, Real>;
 
@@ -431,6 +429,12 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
 
     const auto& topo = state.get_field<2>("topo").get_device_data();
 
+    // Fortran VVM RRTMG uses h2ovmr = mwdry/mwh2o*qv, not qv/(1-qv).
+    constexpr Real mwdry = 28.966;
+    constexpr Real mwh2o = 18.016;
+    constexpr Real qcmin_rrtmg = 1e-7;
+    constexpr Real qimin_rrtmg = 1e-8;
+
     // Orbital parameters and Zenith Angle
     double obliqr, lambm0, mvelpp;
     Int orbital_year = m_orbital_year;
@@ -458,7 +462,6 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
         eccf = m_fixed_total_solar_irradiance / 1360.9;
     }
 
-    const auto gas_mol_weights = m_gas_mol_weights;
     auto h_lat = Kokkos::create_mirror_view(m_lat); // Need to sync lat/lon if they change
     Kokkos::deep_copy(h_lat, m_lat);
     auto h_lon = Kokkos::create_mirror_view(m_lon);
@@ -555,16 +558,21 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                         buffer.p_del_k(i, k) = buffer.p_lev_k(i, k+1) - buffer.p_lev_k(i, k);
                         buffer.d_dz(i, k) = dz_mid(k_vvm);
                         buffer.t_lay_k(i, k) = th(k_vvm, iy + h, ix + h) * pibar(k_vvm);
-                        buffer.qc_k(i, k) = Kokkos::max(qc(k_vvm, iy + h, ix + h), real(1e-7));
-                        buffer.qi_k(i, k) = Kokkos::max(qi(k_vvm, iy + h, ix + h), real(1e-8));
+                        Real qc_raw = qc(k_vvm, iy + h, ix + h);
+                        Real qi_raw = qi(k_vvm, iy + h, ix + h);
 
                         // The unit here is mu m
                         Real re_qc_microns = diag_eff_radius_qc(k_vvm, iy+h, ix+h);
                         Real re_qi_microns = diag_eff_radius_qi(k_vvm, iy+h, ix+h);
 
-                        buffer.eff_radius_qc_k(i, k) = Kokkos::max(real(2.5), Kokkos::min(real(60.0), re_qc_microns));;
+                        buffer.eff_radius_qc_k(i, k) = Kokkos::max(real(2.5), Kokkos::min(real(60.0), re_qc_microns));
                         buffer.eff_radius_qi_k(i, k) = Kokkos::max(real(5.0), Kokkos::min(real(140.0), re_qi_microns));
-                        buffer.cldfrac_tot_k(i, k) = (buffer.qc_k(i, k) + buffer.qi_k(i, k) > 1e-12) ? 1.0 : 0.0;
+
+                        // radiation_rrtmg.f90 floors qcl/qci before rad_full.
+                        // rad_driver then sets cloudFrac where the resulting LWP/IWP is positive.
+                        buffer.qc_k(i, k) = Kokkos::max(qc_raw, qcmin_rrtmg);
+                        buffer.qi_k(i, k) = Kokkos::max(qi_raw, qimin_rrtmg);
+                        buffer.cldfrac_tot_k(i, k) = 1.0;
                     }
                 }
                 buffer.t_lev_k(i, nlay) = tg(iy + h, ix + h);
@@ -605,18 +613,17 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
             }
         );
 
-        interface_t::mixing_ratio_to_cloud_mass(buffer.qc_k, buffer.cldfrac_tot_k, buffer.p_del_k, buffer.lwp_k);
-        interface_t::mixing_ratio_to_cloud_mass(buffer.qi_k, buffer.cldfrac_tot_k, buffer.p_del_k, buffer.iwp_k);
-
-        // Convert kg/m2 to g/m2 as required by RRTMGP
-        Kokkos::parallel_for("convert_cld_mass_units", Kokkos::RangePolicy<>(0, ncol),
+        // Fortran VVM computes LWP/IWP directly from qcl/qci:
+        // q * 1e3 * (dp/g). qcl/qci have already followed radiation_rrtmg.f90
+        // qcmin/qimin floors for real atmosphere layers.
+        Kokkos::parallel_for("compute_fortran_like_cloud_paths", Kokkos::RangePolicy<>(0, ncol),
             KOKKOS_LAMBDA(int i) {
                 for(int k=0; k<nlay; ++k) {
-                    buffer.lwp_k(i,k) *= 1e3;
-                    buffer.iwp_k(i,k) *= 1e3;
-                    if (buffer.lwp_k(i,k) < 0) buffer.lwp_k(i,k) = 0.;
-                    if (buffer.iwp_k(i,k) < 0) buffer.iwp_k(i,k) = 0.;
-                       
+                    Real layer_mass = buffer.p_del_k(i,k) / g;
+                    buffer.lwp_k(i,k) = buffer.qc_k(i,k) * real(1e3) * layer_mass;
+                    buffer.iwp_k(i,k) = buffer.qi_k(i,k) * real(1e3) * layer_mass;
+                    if (buffer.lwp_k(i,k) < 0) buffer.lwp_k(i,k) = 0.0;
+                    if (buffer.iwp_k(i,k) < 0) buffer.iwp_k(i,k) = 0.0;
                 }
             }
         );
@@ -649,19 +656,19 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                         int iy = col_idx / nx;
                         int hx = topo(iy + h, ix + h);
 
-                        vmr_view(i, 0) = PF::calculate_vmr_from_mmr(gas_mol_weights(igas), 1e-6, 1e-6);
+                        vmr_view(i, 0) = (mwdry / mwh2o) * 1e-6;
 
                         int num_dummy = hx - 1;
                         for (int k = 1; k < nlay; ++k) {
                             if (k <= num_dummy) {
                                 int k_vvm_top = h + nz - 1;
                                 Real qv_val = Kokkos::max(qv(k_vvm_top, iy + h, ix + h), real(1e-6));
-                                vmr_view(i, k) = PF::calculate_vmr_from_mmr(gas_mol_weights(igas), qv_val, qv_val);
+                                vmr_view(i, k) = (mwdry / mwh2o) * qv_val;
                             } 
                             else {
                                 int k_vvm = h + nz - k + num_dummy;
                                 Real qv_val = Kokkos::max(qv(k_vvm, iy + h, ix + h), real(1e-6));
-                                vmr_view(i, k) = PF::calculate_vmr_from_mmr(gas_mol_weights(igas), qv_val, qv_val);
+                                vmr_view(i, k) = (mwdry / mwh2o) * qv_val;
                             }
                         }
                     }
@@ -761,9 +768,153 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
             m_extra_clnclrsky_diag, m_extra_clnsky_diag
         );
 
-        // Compute Heating Rates (Using RRTMGP helper)
         scream::rrtmgp::compute_heating_rate(buffer.sw_flux_up_k, buffer.sw_flux_dn_k, buffer.p_del_k, buffer.sw_heating_k);
         scream::rrtmgp::compute_heating_rate(buffer.lw_flux_up_k, buffer.lw_flux_dn_k, buffer.p_del_k, buffer.lw_heating_k);
+
+#ifdef VVM_RRTMGP_DEBUG
+        auto h_lw_heating = Kokkos::create_mirror_view(buffer.lw_heating_k);
+        auto h_p_lev      = Kokkos::create_mirror_view(buffer.p_lev_k);
+        auto h_p_del      = Kokkos::create_mirror_view(buffer.p_del_k);
+        auto h_lw_up      = Kokkos::create_mirror_view(buffer.lw_flux_up_k);
+        auto h_lw_dn      = Kokkos::create_mirror_view(buffer.lw_flux_dn_k);
+        auto h_t_lay      = Kokkos::create_mirror_view(buffer.t_lay_k);
+        auto h_t_lev      = Kokkos::create_mirror_view(buffer.t_lev_k);
+        auto h_cldfrac    = Kokkos::create_mirror_view(buffer.cldfrac_tot_k);
+
+        auto h_qc_pack    = Kokkos::create_mirror_view(buffer.qc_k);
+        auto h_qi_pack    = Kokkos::create_mirror_view(buffer.qi_k);
+        auto h_lwp        = Kokkos::create_mirror_view(buffer.lwp_k);
+        auto h_iwp        = Kokkos::create_mirror_view(buffer.iwp_k);
+        auto h_rel        = Kokkos::create_mirror_view(buffer.eff_radius_qc_k);
+        auto h_rei        = Kokkos::create_mirror_view(buffer.eff_radius_qi_k);
+
+        auto h_gas_concs  = Kokkos::create_mirror_view(m_gas_concs_k.concs);
+
+        Kokkos::deep_copy(h_lw_heating, buffer.lw_heating_k);
+        Kokkos::deep_copy(h_p_lev,      buffer.p_lev_k);
+        Kokkos::deep_copy(h_p_del,      buffer.p_del_k);
+        Kokkos::deep_copy(h_lw_up,      buffer.lw_flux_up_k);
+        Kokkos::deep_copy(h_lw_dn,      buffer.lw_flux_dn_k);
+        Kokkos::deep_copy(h_t_lay,      buffer.t_lay_k);
+        Kokkos::deep_copy(h_t_lev,      buffer.t_lev_k);
+        Kokkos::deep_copy(h_cldfrac,    buffer.cldfrac_tot_k);
+
+        Kokkos::deep_copy(h_qc_pack,    buffer.qc_k);
+        Kokkos::deep_copy(h_qi_pack,    buffer.qi_k);
+        Kokkos::deep_copy(h_lwp,        buffer.lwp_k);
+        Kokkos::deep_copy(h_iwp,        buffer.iwp_k);
+        Kokkos::deep_copy(h_rel,        buffer.eff_radius_qc_k);
+        Kokkos::deep_copy(h_rei,        buffer.eff_radius_qi_k);
+
+        Kokkos::deep_copy(h_gas_concs,  m_gas_concs_k.concs);
+
+        auto h_topo = state.get_field<2>("topo").get_host_data();
+        auto h_tg   = state.get_field<2>("Tg").get_host_data();
+        auto h_qc   = state.get_field<3>("qc").get_host_data();
+        auto h_qi   = state.get_field<3>("qi").get_host_data();
+        auto h_qv   = state.get_field<3>("qv").get_host_data();
+
+        const int ih2o = m_gas_concs_k.find_gas("h2o");
+
+        constexpr double grav = 9.80665;
+        constexpr double cp   = 1004.0;
+
+        for (int i = 0; i < ncol; ++i) {
+            int col_idx = beg + i;
+            int ix = col_idx % nx;
+            int iy = col_idx / nx;
+
+            int hx = h_topo(iy + h, ix + h);
+            int num_dummy = hx - 1;
+
+            if (ix == 641 && iy == 63) {
+                std::cout << "\nVVM_RRTMGP_LAND_ANOMALY_DIAG"
+                          << " ix=" << ix
+                          << " iy=" << iy
+                          << " hx=" << hx
+                          << " num_dummy=" << num_dummy
+                          << " Tg=" << h_tg(iy + h, ix + h)
+                          << " ih2o=" << ih2o
+                          << "\n";
+
+                for (int kv = h + hx - 1; kv <= h + hx + 3; ++kv) {
+                    if (kv > h + nz - 1) continue;
+
+                    int kr = h + nz - kv + num_dummy;
+
+                    double plev_top = h_p_lev(i, kr);
+                    double plev_bot = h_p_lev(i, kr + 1);
+                    double pdel     = h_p_del(i, kr);
+
+                    double lwup_top = h_lw_up(i, kr);
+                    double lwdn_top = h_lw_dn(i, kr);
+                    double lwup_bot = h_lw_up(i, kr + 1);
+                    double lwdn_bot = h_lw_dn(i, kr + 1);
+
+                    double net_bot = lwdn_bot - lwup_bot;
+                    double net_top = lwdn_top - lwup_top;
+                    double dnet    = net_bot - net_top;
+
+                    double heating_output = h_lw_heating(i, kr) * 86400.0;
+                    double heating_recomputed_pos =  dnet * grav * 86400.0 / (cp * pdel);
+                    double heating_recomputed_neg = -dnet * grav * 86400.0 / (cp * pdel);
+
+                    double layer_mass = pdel / grav;
+
+                    double raw_qv = h_qv(kv, iy + h, ix + h);
+                    double raw_qc = h_qc(kv, iy + h, ix + h);
+                    double raw_qi = h_qi(kv, iy + h, ix + h);
+
+                    double h2ovmr = (ih2o >= 0) ? h_gas_concs(i, kr, ih2o) : -999.0;
+
+                    std::cout << "  VVM_k=" << (kv - h + 1)
+                              << " RRTM_k=" << kr
+                              << " topo/hx=" << hx
+                              << " num_dummy=" << num_dummy
+
+                              << " Tg=" << h_tg(iy + h, ix + h)
+
+                              << " plev_bot=" << plev_bot
+                              << " plev_top=" << plev_top
+                              << " pdel=" << pdel
+                              << " layer_mass=" << layer_mass
+
+                              << " t_lay=" << h_t_lay(i, kr)
+                              << " t_lev_bot=" << h_t_lev(i, kr + 1)
+                              << " t_lev_top=" << h_t_lev(i, kr)
+
+                              << " lwup_bot=" << lwup_bot
+                              << " lwdn_bot=" << lwdn_bot
+                              << " lwup_top=" << lwup_top
+                              << " lwdn_top=" << lwdn_top
+
+                              << " net_bot=" << net_bot
+                              << " net_top=" << net_top
+                              << " dnet=" << dnet
+
+                              << " heating_output(K/day)=" << heating_output
+                              << " heating_recomputed_pos(K/day)=" << heating_recomputed_pos
+                              << " heating_recomputed_neg(K/day)=" << heating_recomputed_neg
+
+                              << " raw_qv=" << raw_qv
+                              << " raw_qc=" << raw_qc
+                              << " raw_qi=" << raw_qi
+
+                              << " h2ovmr=" << h2ovmr
+
+                              << " qc_pack=" << h_qc_pack(i, kr)
+                              << " qi_pack=" << h_qi_pack(i, kr)
+                              << " cldfrac=" << h_cldfrac(i, kr)
+                              << " lwp=" << h_lwp(i, kr)
+                              << " iwp=" << h_iwp(i, kr)
+                              << " rel=" << h_rel(i, kr)
+                              << " rei=" << h_rei(i, kr)
+
+                              << "\n";
+                }
+            }
+        }
+#endif
 
         // Unpack data and compute heating
         Kokkos::parallel_for("unpack_chunk_data", Kokkos::RangePolicy<>(0, ncol),
@@ -848,4 +999,3 @@ void RRTMGPRadiation::calculate_tendencies(VVM::Core::State& state) {
 } // namespace RRTMGP
 } // namespace Physics
 } // namespace VVM
-

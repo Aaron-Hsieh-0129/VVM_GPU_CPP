@@ -503,7 +503,8 @@ void Initializer::assign_vars() const {
     auto& dpbar_mid = state_.get_field<1>("dpbar_mid").get_mutable_device_data();
     Kokkos::parallel_for("assign_pbar_up", Kokkos::RangePolicy<>(1, nz),
         KOKKOS_LAMBDA(const int k) {
-            pbar_up(k) = real(0.5)*(pbar(k) + pbar(k+1));
+            if (k == 1) pbar_up(k) = pbar(k);
+            else pbar_up(k) = real(0.5)*(pbar(k) + pbar(k+1));
         }
     );
     Kokkos::parallel_for("assign_pbar_up", Kokkos::RangePolicy<>(2, nz),
@@ -511,6 +512,7 @@ void Initializer::assign_vars() const {
             dpbar_mid(k) = -(pbar_up(k) - pbar_up(k-1)); // make it positive
         }
     );
+    if (rank == 0) state_.get_field<1>("pbar_up").print_profile(grid_, 0, 0, 0);
 
     // Assign qv
     const auto& qvbar = state_.get_field<1>("qvbar").get_device_data();
