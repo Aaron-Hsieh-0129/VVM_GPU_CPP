@@ -305,6 +305,10 @@ void OutputManager::write_static_data() {
     const size_t gnz = grid_.get_global_points_z();
     const size_t h = grid_.get_halo_cells();
 
+    if (rank_ != 0) {
+        return;
+    }
+
     auto var_x = io_.InquireVariable<VVM::Real>("coordinates/x");
     std::vector<VVM::Real> x_coords;
     if (rank_ == 0) {

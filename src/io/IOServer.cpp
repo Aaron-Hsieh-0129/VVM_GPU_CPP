@@ -49,20 +49,21 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
     outIO.SetEngine("HDF5"); 
     outIO.SetParameter("IdleH5Writer", "true"); 
     
-    if (size > 1) {
-        outIO.SetParameter("H5CollectiveMPIO", "true"); 
-        if (rank == 0) std::cout << "  [IO-Server] HDF5 Collective Mode: ENABLED (Ranks: " << size << ")" << std::endl;
-    } 
-    else {
-        outIO.SetParameter("H5CollectiveMPIO", "false");
-        if (rank == 0) std::cout << "  [IO-Server] HDF5 Collective Mode: DISABLED (Single Rank)" << std::endl;
-    }
+    // if (size > 1) {
+    //     outIO.SetParameter("H5CollectiveMPIO", "true"); 
+    //     if (rank == 0) std::cout << "  [IO-Server] HDF5 Collective Mode: ENABLED (Ranks: " << size << ")" << std::endl;
+    // } 
+    // else {
+    //     outIO.SetParameter("H5CollectiveMPIO", "false");
+    //     if (rank == 0) std::cout << "  [IO-Server] HDF5 Collective Mode: DISABLED (Single Rank)" << std::endl;
+    // }
+    outIO.SetParameter("H5CollectiveMPIO", "false");
 
     adios2::Engine reader = inIO.Open(input_stream_name, adios2::Mode::Read);
     adios2::Engine writer;
 
-    std::map<std::string, std::vector<VVM::Real>> data_buffers;
     while (true) {
+        std::map<std::string, std::vector<VVM::Real>> data_buffers;
         adios2::StepStatus status = reader.BeginStep();
         if (status != adios2::StepStatus::OK) break;
 
