@@ -1,42 +1,43 @@
 {
     "grid": {
-        "nx": 128,
-        "ny": 128,
-        "nz": 69,
+        "nx": 1024,
+        "ny": 64,
+        "nz": 99,
         "n_halo_cells": 2,
-        "dx": 500.0,
-        "dy": 500.0,
-        "dz": 250.0,
-        "dz1": 100.0,
+        "dx": 250.0,
+        "dy": 250.0,
+        "dz": 50.0,
+        "dz1": 50.0,
         "boundary_condition": {
             "x": "periodic",
             "y": "periodic",
-            "__bc_option": "periodic, zero_gradient"
+            "__bc_option": "periodic"
         },
         "fix_lonlat": true,
-        "vertical_coordinate_type": "taiwanvvm",
-        "__vertical_coordinate_type_options": "default, taiwanvvm"
+        "vertical_coordinate_type": "default",
+        "__vertical_coordinate_type_options": "default, taiwanvvm, rcemip",
+        "rcemip_grid_data_path": "./rundata/initial_conditions/profiles/snd_rcemip_anal300_v3.txt"
     },
     "simulation": {
-        "total_time_s": 1800.0,
+        "total_time_s": 86400.0,
         "dt_s": 1.0,
-        "output_interval_s": 1.0,
+        "output_interval_s": 600.0,
         "idealized_test": "none",
         "__idealized_test": "none, advection_u, advection_v, advection_w, stretching, twisting, 2dbubble"
     },
     "initial_conditions": {
         "format": "txt",
-        "source_file": "../rundata/initial_conditions/profiles/amazon.txt",
+        "source_file": "./rundata/initial_conditions/profiles/TNNUA.txt",
         "constant_upper_wind": {
-            "enable": true,
+            "enable": false,
             "pressure_threshold_Pa": 25000.0
         },
-        "perturbation": "3dbubble",
+        "perturbation": "none",
         "__perturbation": "none, 2dbubble, 3dbubble"
     },
     "netcdf_reader": {
-        "source_file": "../rundata/initial_conditions/spatial/bubble_amazon.nc",
-        "Tg_source": "netcdf",
+        "source_file": "./rundata/initial_conditions/spatial/sea_grass_mountain.nc",
+        "Tg_source": "atmosphere",
         "__Tg_source_options": "atmosphere, netcdf",
         "variables_to_read": {
             "2d": [
@@ -47,8 +48,13 @@
             ]
         }
     },
+    "restart": {
+        "enable": false,
+        "source_file": "./output/sea_grass_mountain_moreoutput_gfx_modrad/vvm_output_000144.h5",
+        "file_interval_s": 600.0
+    },
     "output": {
-        "output_dir": "/work/aaron900129/VVM_GPU_CPP/output/amazon",
+        "output_dir": "./output/sea_grass_mountain_test",
         "engine": "HDF5",
         "queue_limit": 20,
         "data_transport": "",
@@ -59,9 +65,12 @@
             "thbar", "pibar", "rhobar", "rhobar_up",
             "u", "v", "w", "th", "xi", "eta", "zeta",
             "qv", "qc", "qr", "qi",
-            "sw_heating", "lw_heating", "swdn", "lwdn", "lwup", 
+            "sw_heating", "lw_heating", "swdn", "lwdn", "lwup",
+            "swup_toa", "swdn_toa", "lwup_toa", "lwdn_toa",
+            "swup_sfc", "swdn_sfc", "lwup_sfc", "lwdn_sfc",            
             "precip_liq_surf_mass", "precip_ice_surf_mass",
-            "Tg", "sfc_flux_th", "sfc_flux_qv", "le", "hfx"
+            "Tg", "sfc_flux_th", "sfc_flux_qv", "sfc_flux_u", "sfc_flux_v", "le", "hfx",
+            "st1", "st2", "st3", "st4", "gfx", "topo"
         ],
         "output_grid": {
             "x_start": 0,
@@ -76,28 +85,30 @@
         "solver": {
             "w_solver_method": "tridiagonal",
             "_w_solver_method_options": "Choose 'tridiagonal' (original) or 'jacobi' (3D parallel)",
-            "iteration": 50,
-            "WRXMU": 2.5e-7
+            "iteration": 100,
+            "WRXMU": 4.0e-6
         },
         "forcings": {
             "sponge_layer": {
                 "enable": true,
-                "sponge_layer_base": 17000.0,
+                "damp_thermo": true,
+                "damp_vort": true,
+                "sponge_layer_base": 4800.0,
                 "inv_CRAD": 3600.0
             },
             "random_perturbation": {
-                "enable": false,
-                "time_s": 200,
-                "amplitude": 0.5,
-                "z_start_m": 0,
-                "z_end_m": 2000,
+                "enable": true,
+                "time_s": 10,
+                "amplitude": 0.00167,
+                "z_start_m": 100,
+                "z_end_m": 200,
                 "random_seed": 1129
             },
             "lateral_boundary_nudging": {
                 "enable": false,
                 "boundaries": {
-                    "west": true,
-                    "east": true,
+                    "west": false,
+                    "east": false,
                     "south": false,
                     "north": false
                 },
@@ -115,7 +126,7 @@
                 }
             },
             "areamn": {
-                "enable": true,
+                "enable": false,
                 "uvtau": 7200,
                 "nudge_start_m": 0
 
@@ -305,14 +316,14 @@
             "max_total_ni": 2000.0e3
         },
         "rrtmgp": {
-            "enable_rrtmgp": false,
-            "column_chunk_size": 12288,
+            "enable_rrtmgp": true,
+            "column_chunk_size": 8192,
             "__column_chunk_size": "This should be modified according to domain and rank and the larger the faster (costs more memory).",
-            "rad_frequency_s": 24,
+            "rad_frequency_s": 120,
             "active_gases": ["h2o", "co2", "o3", "n2o", "co", "ch4", "o2", "n2"],
-            "fixed_total_solar_irradiance": 551.58,
-            "fixed_solar_zenith_angle": 0.74256,
-            "pool_size_multiplier": 1.933,
+            "fixed_total_solar_irradiance": -1,
+            "fixed_solar_zenith_angle": -1,
+            "pool_size_multiplier": 1.0,
             "time": {
                 "year": 2021,
                 "month": 3,
@@ -326,13 +337,13 @@
             "enable_turbulence": true
         },
         "surface_process": {
-            "enable": false,
-            "frequency_s": 12,
+            "enable": true,
+            "frequency_s": 120,
             
             "land_scheme": "noahlsm",
             "__land_scheme_options": "none, noahlsm",
             
-            "ocean_scheme": "sflux_tc_2d",
+            "ocean_scheme": "sflux_2d",
             "__ocean_scheme_options": "none, sflux_2d, sflux_tc_2d, tco_ocean",
 
             "__mode_explaination1": "If noahlsm is turned on, it will call Fortran land model (src/physics/land) with ocean/land/ice model inside.", 
@@ -340,6 +351,7 @@
         }
     },
     "optimization": {
+        "cuda_graph_solver": true,
         "cuda_graph_halo_exchange": ["u", "w", "xi", "eta", "zeta", "th", "qv", "qc", "qi", "qr", "qm", "nc", "ni", "nr", "bm"]
     },
     "constants": {
@@ -358,3 +370,4 @@
         ]
     }
 }
+
