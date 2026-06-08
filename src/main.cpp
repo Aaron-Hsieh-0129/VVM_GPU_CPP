@@ -194,9 +194,9 @@ int main(int argc, char *argv[]) {
         );
 
         const bool restart_enabled = config.get_value<bool>("restart.enable", false);
-        // if (!restart_enabled) {
-        output_manager->write(0, 0.0);
-        // }
+        if (!restart_enabled) {
+            output_manager->write(0, 0.0);
+        }
         // output_manager->write_static_topo_file();
 
         // Simulation loop parameters

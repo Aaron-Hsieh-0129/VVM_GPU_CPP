@@ -357,7 +357,18 @@ void PnetcdfReader::read_and_initialize(VVM::Core::State& state) {
     if (rank_ == 0) {
         std::cout << "Finished loading from NetCDF file." << std::endl;
     }
-    halo_exchanger_.exchange_halos(state);
+    // Use per-field template overload to avoid triggering CUDA graph capture.
+    // The State& overload calls exchange_halos_impl inside cudaStreamBeginCapture,
+    // which bakes stale NCCL buffer addresses into graphs for all graph-enabled fields.
+    for (const auto& var_name : vars_1d) {
+        if (state.has_field(var_name)) halo_exchanger_.exchange_halos(state.get_field<1>(var_name));
+    }
+    for (const auto& var_name : vars_2d) {
+        if (state.has_field(var_name)) halo_exchanger_.exchange_halos(state.get_field<2>(var_name));
+    }
+    for (const auto& var_name : vars_3d) {
+        if (state.has_field(var_name)) halo_exchanger_.exchange_halos(state.get_field<3>(var_name));
+    }
 }
 
 } // namespace IO
