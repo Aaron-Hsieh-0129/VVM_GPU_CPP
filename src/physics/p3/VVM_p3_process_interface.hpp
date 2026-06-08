@@ -356,7 +356,8 @@ public:
     VVM_P3_Interface(const VVM::Utils::ConfigurationManager& config, 
                      const VVM::Core::Grid& grid, 
                      const VVM::Core::Parameters& params, 
-                     Core::HaloExchanger& halo_exchanger);
+                     Core::HaloExchanger& halo_exchanger,
+                     Core::State& state);
 
     void preprocessing_and_packing(VVM::Core::State& state);
     void postprocessing_and_unpacking(VVM::Core::State& state);

@@ -13,7 +13,7 @@ using Constants = scream::physics::Constants<Real>;
 namespace VVM {
 namespace Physics {
 
-VVM_P3_Interface::VVM_P3_Interface(const VVM::Utils::ConfigurationManager &config, const VVM::Core::Grid &grid, const VVM::Core::Parameters &params, Core::HaloExchanger& halo_exchanger)
+VVM_P3_Interface::VVM_P3_Interface(const VVM::Utils::ConfigurationManager &config, const VVM::Core::Grid &grid, const VVM::Core::Parameters &params, Core::HaloExchanger& halo_exchanger, Core::State& state)
     : config_(config), grid_(grid), params_(params), halo_exchanger_(halo_exchanger), 
     m_num_cols(grid_.get_local_physical_points_x() * grid_.get_local_physical_points_y()),
     m_num_levs(grid_.get_local_physical_points_z()),
@@ -65,6 +65,19 @@ VVM_P3_Interface::VVM_P3_Interface(const VVM::Utils::ConfigurationManager &confi
         std::cout << "p3 Spack n = " << Spack::n << std::endl;
     }
     allocate_p3_buffers();
+
+    int nx_total = grid.get_local_total_points_x();
+    int ny_total = grid.get_local_total_points_y();
+    int nz_total = grid.get_local_total_points_z();
+
+    if (!state.has_field("qc")) state.add_field<3>("qc", {nz_total, ny_total, nx_total});
+    if (!state.has_field("qr")) state.add_field<3>("qr", {nz_total, ny_total, nx_total});
+    if (!state.has_field("qi")) state.add_field<3>("qi", {nz_total, ny_total, nx_total});
+    if (!state.has_field("qm")) state.add_field<3>("qm", {nz_total, ny_total, nx_total});
+    if (!state.has_field("nc")) state.add_field<3>("nc", {nz_total, ny_total, nx_total});
+    if (!state.has_field("nr")) state.add_field<3>("nr", {nz_total, ny_total, nx_total});
+    if (!state.has_field("ni")) state.add_field<3>("ni", {nz_total, ny_total, nx_total});
+    if (!state.has_field("bm")) state.add_field<3>("bm", {nz_total, ny_total, nx_total});
 }
 
 void VVM_P3_Interface::allocate_p3_buffers() {
@@ -219,15 +232,7 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
     int nx_total = grid_.get_local_total_points_x();
     int ny_total = grid_.get_local_total_points_y();
     int nz_total = grid_.get_local_total_points_z();
-    
-    if (!state.has_field("qc")) state.add_field<3>("qc", {nz_total, ny_total, nx_total});
-    if (!state.has_field("qr")) state.add_field<3>("qr", {nz_total, ny_total, nx_total});
-    if (!state.has_field("qi")) state.add_field<3>("qi", {nz_total, ny_total, nx_total});
-    if (!state.has_field("qm")) state.add_field<3>("qm", {nz_total, ny_total, nx_total});
-    if (!state.has_field("nc")) state.add_field<3>("nc", {nz_total, ny_total, nx_total});
-    if (!state.has_field("nr")) state.add_field<3>("nr", {nz_total, ny_total, nx_total});
-    if (!state.has_field("ni")) state.add_field<3>("ni", {nz_total, ny_total, nx_total});
-    if (!state.has_field("bm")) state.add_field<3>("bm", {nz_total, ny_total, nx_total});
+
     if (!state.has_field("precip_liq_surf_mass")) state.add_field<2>("precip_liq_surf_mass", {ny_total, nx_total});
     if (!state.has_field("precip_ice_surf_mass")) state.add_field<2>("precip_ice_surf_mass", {ny_total, nx_total});
     if (!state.has_field("precip_liq_surf_flux")) state.add_field<2>("precip_liq_surf_flux", {ny_total, nx_total});

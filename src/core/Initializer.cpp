@@ -1,6 +1,7 @@
 #include "Initializer.hpp"
 #include "io/TxtReader.hpp"
 #include "io/PnetcdfReader.hpp"
+#include "io/Hdf5RestartReader.hpp"
 #include "vvm_types.hpp"
 #include <Kokkos_Core.hpp>
 #include <algorithm>
@@ -9,9 +10,18 @@
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <cmath>
+#include <cctype>
 
 namespace VVM {
 namespace Core {
+
+namespace {
+bool ends_with(const std::string& value, const std::string& suffix) {
+    return value.size() >= suffix.size() &&
+           value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+} // namespace
 
 Initializer::Initializer(const Utils::ConfigurationManager& config, const Grid& grid, Parameters& parameters, State &state, HaloExchanger& halo_exchanger) 
     : config_(config), grid_(grid), parameters_(parameters), state_(state), halo_exchanger_(halo_exchanger) {
@@ -29,6 +39,18 @@ Initializer::Initializer(const Utils::ConfigurationManager& config, const Grid& 
         reader_ = std::make_unique<VVM::IO::TxtReader>(source_file, grid, parameters_, config_);
     } 
     pnetcdf_reader_ = std::make_unique<VVM::IO::PnetcdfReader>(pnetcdf_source_file, grid, parameters_, config_, halo_exchanger_);
+    if (config.get_value<bool>("restart.enable", false)) {
+        std::string restart_source_file = config.get_value<std::string>("restart.source_file");
+        if (ends_with(restart_source_file, ".h5")) {
+            restart_reader_ = std::make_unique<VVM::IO::Hdf5RestartReader>(
+                restart_source_file, grid, parameters_, config_, halo_exchanger_);
+        } else if (ends_with(restart_source_file, ".nc")) {
+            restart_reader_ = std::make_unique<VVM::IO::PnetcdfReader>(
+                restart_source_file, grid, parameters_, config_, halo_exchanger_, "restart");
+        } else {
+            throw std::runtime_error("[Initializer] Unsupported restart file extension: " + restart_source_file);
+        }
+    }
     // else if (format == "netcdf") {
     //     // TODO: Netcdf input
     //     // reader_ = std::make_unique<Initializers::NetCDFReader>(source_file, grid);
@@ -51,11 +73,61 @@ void Initializer::initialize_state() const {
     }
     initialize_topo();
     assign_vars();
-    initialize_perturbation();
+    if (restart_reader_) {
+        load_restart();
+    } else {
+        initialize_perturbation();
+    }
     // init poisson should be placed after assign variables 
     // because the density would affect height factors.
     initialize_poisson();
     initialize_zeta_factor_for_twisting();
+}
+
+void Initializer::load_restart() const {
+    int rank = grid_.get_mpi_rank();
+    const std::string restart_source_file = config_.get_value<std::string>("restart.source_file");
+    if (rank == 0) {
+        std::cout << "  [Initializer] Restart enabled. Loading restart variables from: "
+                  << restart_source_file << std::endl;
+    }
+
+    restart_reader_->read_and_initialize(state_);
+
+    const VVM::Real restart_time = get_restart_time_from_filename(restart_source_file);
+    const VVM::Real dt = config_.get_value<VVM::Real>("simulation.dt_s");
+    const size_t restart_step = static_cast<size_t>(std::llround(restart_time / dt));
+
+    state_.set_time(restart_time);
+    state_.set_step(restart_step);
+
+    if (rank == 0) {
+        std::cout << "  [Initializer] Restart time set to " << state_.get_time()
+                  << " s, step " << state_.get_step() << std::endl;
+    }
+}
+
+VVM::Real Initializer::get_restart_time_from_filename(const std::string& source_file) const {
+    const size_t dot_pos = source_file.find_last_of('.');
+    const size_t search_end = (dot_pos == std::string::npos) ? source_file.size() : dot_pos;
+    size_t digit_end = search_end;
+
+    while (digit_end > 0 && !std::isdigit(static_cast<unsigned char>(source_file[digit_end - 1]))) {
+        --digit_end;
+    }
+
+    size_t digit_start = digit_end;
+    while (digit_start > 0 && std::isdigit(static_cast<unsigned char>(source_file[digit_start - 1]))) {
+        --digit_start;
+    }
+
+    if (digit_start == digit_end) {
+        throw std::runtime_error("[Initializer] Cannot derive restart time from source file name: " + source_file);
+    }
+
+    const int restart_file_index = std::stoi(source_file.substr(digit_start, digit_end - digit_start));
+    const VVM::Real restart_file_interval_s = config_.get_value<VVM::Real>("restart.file_interval_s", real(3600.0));
+    return static_cast<VVM::Real>(restart_file_index) * restart_file_interval_s;
 }
 
 void Initializer::initialize_grid() const {

@@ -29,7 +29,7 @@ Model::Model(const Utils::ConfigurationManager& config,
 
     dycore_ = std::make_unique<Dynamics::DynamicalCore>(config_, grid_, params_, state_, halo_exchanger_, bc_manager_);
     if (config_.get_value<bool>("physics.p3.enable_p3", false)) {
-        microphysics_ = std::make_unique<Physics::VVM_P3_Interface>(config_, grid_, params_, halo_exchanger_);
+        microphysics_ = std::make_unique<Physics::VVM_P3_Interface>(config_, grid_, params_, halo_exchanger_, state_);
     }
 
     if (config_.get_value<bool>("physics.turbulence.enable_turbulence", false)) {
@@ -125,7 +125,13 @@ void Model::init() {
         predict_uvtopmn_ = false;
     }
 
-    dycore_->compute_diagnostic_fields();
+    // if (config_.get_value<bool>("restart.enable", false)) {
+    //     dycore_->compute_wind_fields();
+    // }
+    // dycore_->compute_diagnostic_fields();
+    if (config_.get_value<bool>("restart.enable", false)) {
+        dycore_->initialize_restart_history();
+    }
 }
 
 void Model::run_step(VVM::Real dt) {

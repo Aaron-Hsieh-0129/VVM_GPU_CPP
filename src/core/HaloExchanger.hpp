@@ -143,7 +143,10 @@ inline HaloExchanger::HaloExchanger(const Utils::ConfigurationManager& config, c
         const int nx = grid.get_local_total_points_x();
         const int ny = grid.get_local_total_points_y();
         const int nz = grid.get_local_total_points_z();
-        const int nw_dummy = 4;
+        // Pre-size to max batch used by exchange_multiple_halos (thermo: 10 fields).
+        // Prevents Kokkos::resize from freeing buffer pointers that may be baked
+        // into CUDA graphs captured via cudaStreamCaptureModeGlobal.
+        const int nw_dummy = 16;
 
         buffer_size_x_2d_ = static_cast<size_t>(h) * ny;
         buffer_size_y_2d_ = static_cast<size_t>(h) * nx;
@@ -825,7 +828,7 @@ inline HaloExchanger::HaloExchanger(const Grid& grid)
         const int nx_total = grid.get_local_total_points_x();
         const int ny_total = grid.get_local_total_points_y();
         const int nz_total = grid.get_local_total_points_z();
-        const int nw_dummy = 4; // Maximum for the 4th dimension is set to 4
+        const int nw_dummy = 16; // Pre-sized to avoid resize after CUDA graph capture
 
         buffer_size_x_2d_ = static_cast<size_t>(h) * ny_total;
         buffer_size_y_2d_ = static_cast<size_t>(h) * nx_total;

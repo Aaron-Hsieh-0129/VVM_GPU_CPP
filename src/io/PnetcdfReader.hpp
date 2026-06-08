@@ -25,7 +25,8 @@ public:
                   const VVM::Core::Grid& grid, 
                   const VVM::Core::Parameters& params, 
                   const VVM::Utils::ConfigurationManager& config, 
-                  VVM::Core::HaloExchanger& halo_exchanger);
+                  VVM::Core::HaloExchanger& halo_exchanger,
+                  const std::string& config_prefix = "netcdf_reader");
     
     ~PnetcdfReader() override;
 
@@ -50,6 +51,8 @@ private:
     const VVM::Core::Grid& grid_;
     const VVM::Core::Parameters& params_;
     const VVM::Utils::ConfigurationManager& config_;
+    std::string config_prefix_;
+    bool strict_missing_variables_ = false;
     
     MPI_Comm comm_;
     int rank_;

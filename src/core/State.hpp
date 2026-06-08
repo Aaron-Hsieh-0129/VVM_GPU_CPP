@@ -250,8 +250,10 @@ public:
     auto end() const { return fields_.cend(); } // Last key
 
     size_t get_step() const { return step_; }
+    void set_step(size_t step) { step_ = step; }
     void increment_step() { step_++; }
     VVM::Real get_time() const { return time_; }
+    void set_time(VVM::Real time) { time_ = time; }
     void advance_time(VVM::Real dt) { time_ += dt; }
 
     bool has_field(const std::string& name) const {

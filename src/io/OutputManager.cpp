@@ -55,17 +55,8 @@ OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VV
     io_.SetEngine(engine_type_);
 
     if (engine_type_ == "HDF5") {
-        // Multi-node Collective Detection
-        MPI_Comm nodeComm;
-        MPI_Comm_split_type(comm_, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &nodeComm);
-        int node_rank;
-        MPI_Comm_rank(nodeComm, &node_rank);
-        int is_node_head = (node_rank == 0) ? 1 : 0;
-        int total_nodes = 0;
-        MPI_Allreduce(&is_node_head, &total_nodes, 1, MPI_INT, MPI_SUM, comm_);
-        MPI_Comm_free(&nodeComm);
-
-        std::string use_collective = (mpi_size_ > 1) ? "true" : "false";
+        const bool use_collective_mpio = config.get_value<bool>("output.hdf5_collective_mpio", false);
+        const std::string use_collective = use_collective_mpio ? "true" : "false";
         if (rank_ == 0) std::cout << "  [OutputManager] Engine: HDF5. Collective: " << use_collective << std::endl;
         
         io_.SetParameter("IdleH5Writer", "true");
@@ -158,6 +149,7 @@ void OutputManager::write(int step, VVM::Real time) {
         std::string filename = output_dir_ + "/" + filename_prefix_ + "_" + format_to_six_digits((int) (time/output_interval_s_)) + ".h5";
         if (rank_ == 0) std::cout << "  [OutputManager] HDF5 Writing: " << filename << std::endl;
         writer_ = io_.Open(filename, adios2::Mode::Write, comm_);
+        if (rank_ == 0) std::cout << "  [OutputManager] HDF5 Open complete." << std::endl;
     } 
     else if (engine_type_ == "SST") {
         if (!writer_) {
@@ -168,10 +160,12 @@ void OutputManager::write(int step, VVM::Real time) {
     }
 
     writer_.BeginStep();
+    if (engine_type_ == "HDF5" && rank_ == 0) std::cout << "  [OutputManager] HDF5 BeginStep complete." << std::endl;
 
     auto var_time = io_.InquireVariable<VVM::Real>("time");
     writer_.Put<VVM::Real>(var_time, &time, adios2::Mode::Sync);
     write_static_data();
+    if (engine_type_ == "HDF5" && rank_ == 0) std::cout << "  [OutputManager] HDF5 static fields complete." << std::endl;
 
     const size_t h = grid_.get_halo_cells();
     const size_t rank_off_x = grid_.get_local_physical_start_x();
@@ -184,6 +178,9 @@ void OutputManager::write(int step, VVM::Real time) {
 
     for (const auto& field_name : fields_to_output_) {
         if (field_variables_.count(field_name)) {
+            if (engine_type_ == "HDF5" && rank_ == 0) {
+                std::cout << "  [OutputManager] HDF5 field begin: " << field_name << std::endl;
+            }
             auto& adios_var = field_variables_.at(field_name);
             auto it = state_.begin();
             while (it != state_.end() && it->first != field_name) ++it;
@@ -288,14 +285,19 @@ void OutputManager::write(int step, VVM::Real time) {
                         }
                     }
                 }, it->second);
-             }
+	             }
+            if (engine_type_ == "HDF5" && rank_ == 0) {
+                std::cout << "  [OutputManager] HDF5 field complete: " << field_name << std::endl;
+            }
         }
     }
 
     writer_.EndStep();
+    if (engine_type_ == "HDF5" && rank_ == 0) std::cout << "  [OutputManager] HDF5 EndStep complete." << std::endl;
     
     if (engine_type_ == "HDF5") {
         writer_.Close();
+        if (rank_ == 0) std::cout << "  [OutputManager] HDF5 Close complete." << std::endl;
     }
 }
 
@@ -304,10 +306,6 @@ void OutputManager::write_static_data() {
     const size_t gny = grid_.get_global_points_y();
     const size_t gnz = grid_.get_global_points_z();
     const size_t h = grid_.get_halo_cells();
-
-    if (rank_ != 0) {
-        return;
-    }
 
     auto var_x = io_.InquireVariable<VVM::Real>("coordinates/x");
     std::vector<VVM::Real> x_coords;

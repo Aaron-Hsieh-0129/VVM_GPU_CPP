@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <map>
 #include <algorithm>
+#include <cmath>
 #include <adios2.h>
 #include <sys/stat.h>
 
@@ -34,6 +35,7 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
     adios2::ADIOS adios(io_comm);
     std::string output_dir = config.get_value<std::string>("output.output_dir");
     std::string filename_prefix = config.get_value<std::string>("output.output_filename_prefix");
+    VVM::Real output_interval_s = config.get_value<VVM::Real>("simulation.output_interval_s");
     
     std::string input_stream_name = output_dir + "/" + filename_prefix;
 
@@ -44,6 +46,11 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
 
     adios2::IO inIO = adios.DeclareIO("InputSST");
     inIO.SetEngine("SST");
+    // Restart runs load large HDF5 files before opening the SST writer, which
+    // can take several minutes.  The default SST OpenTimeoutSecs (~60s) is too
+    // short; 600s covers even slow restarts without hanging forever if the
+    // writer truly never appears.
+    inIO.SetParameter("OpenTimeoutSecs", "600");
 
     adios2::IO outIO = adios.DeclareIO("OutputHDF5");
     outIO.SetEngine("HDF5"); 
@@ -68,6 +75,7 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
         if (status != adios2::StepStatus::OK) break;
 
         int step = reader.CurrentStep();
+        VVM::Real step_time = static_cast<VVM::Real>(step) * output_interval_s;
         const auto& varTypeMap = inIO.AvailableVariables();
         std::vector<std::string> current_step_vars; 
 
@@ -81,16 +89,19 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
             current_step_vars.push_back(name);
 
             if (!outIO.InquireVariable<VVM::Real>(name)) {
-                outIO.DefineVariable<VVM::Real>(name, shape);
+                if (shape.empty()) outIO.DefineVariable<VVM::Real>(name);
+                else outIO.DefineVariable<VVM::Real>(name, shape);
+            }
+
+            if (shape.empty()) {
+                data_buffers[name].resize(1);
+                reader.Get(varIn, data_buffers[name].data());
+                if (name == "time") step_time = data_buffers[name][0];
+                continue;
             }
 
             size_t my_start, my_count;
-            if (shape.size() > 0) {
-                get_local_range(shape[0], rank, size, my_start, my_count);
-            } 
-            else {
-                my_start = 0; my_count = 0;
-            }
+            get_local_range(shape[0], rank, size, my_start, my_count);
 
             if (my_count > 0) {
                 adios2::Dims start = varIn.Start();
@@ -105,10 +116,24 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
                 reader.Get(varIn, data_buffers[name].data());
             }
         }
-        reader.EndStep();
+        bool step_complete = true;
+        try {
+            reader.EndStep();
+        } catch (const std::exception& e) {
+            // Writer closed or failed while we were consuming this step.
+            // The data already received may be partial; skip the HDF5 write
+            // and exit the loop cleanly so the io server doesn't abort().
+            if (rank == 0) {
+                std::cerr << "[IO-Server] SST stream closed during EndStep (writer finished normally or failed): "
+                          << e.what() << std::endl;
+            }
+            step_complete = false;
+        }
+        if (!step_complete) break;
 
-        if (rank == 0) std::cout << "  [IO-Server] Writing Step " << step << "..." << std::endl;
-        std::string h5_name = output_dir + "/" + filename_prefix + "_" + format_six_digits(step) + ".h5";
+        const int output_index = static_cast<int>(std::llround(step_time / output_interval_s));
+        if (rank == 0) std::cout << "  [IO-Server] Writing Step " << output_index << "..." << std::endl;
+        std::string h5_name = output_dir + "/" + filename_prefix + "_" + format_six_digits(output_index) + ".h5";
         writer = outIO.Open(h5_name, adios2::Mode::Write, io_comm);
         writer.BeginStep();
 
@@ -119,6 +144,11 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
             if (!varOut) continue;
 
             if (data_buffers.count(name)) {
+                if (varOut.Shape().empty()) {
+                    writer.Put(varOut, data_buffers[name].data());
+                    continue;
+                }
+
                 size_t my_count = data_buffers[name].size();
                 size_t dim0 = varOut.Shape()[0];
                 size_t s_start, s_count;

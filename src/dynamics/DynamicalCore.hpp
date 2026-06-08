@@ -47,6 +47,7 @@ public:
     void calculate_vorticity_tendencies();
     void update_vorticity(VVM::Real dt);
     void diagnose_wind_fields(Core::State& state);
+    void initialize_restart_history();
 
 
 private:

@@ -50,3 +50,6 @@ log
 compile_commands.json
 .clangd
 tags
+
+.agents
+.codex

@@ -26,10 +26,13 @@ public:
     void assign_vars() const;
     void initialize_perturbation() const;
     void initialize_zeta_factor_for_twisting() const;
+    void load_restart() const;
+    VVM::Real get_restart_time_from_filename(const std::string& source_file) const;
 
 private:
     std::unique_ptr<VVM::IO::Reader> reader_;
     std::unique_ptr<VVM::IO::Reader> pnetcdf_reader_;
+    std::unique_ptr<VVM::IO::Reader> restart_reader_;
 
     const Utils::ConfigurationManager& config_;
     const Grid& grid_;

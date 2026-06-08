@@ -89,6 +89,10 @@ DynamicalCore::DynamicalCore(const Utils::ConfigurationManager& config,
         if (is_thermo) thermo_vars_.push_back(var_name);
         else vorticity_vars_.push_back(var_name);
 
+        if (!state_.has_field(var_name)) {
+            state_.add_field<3>(var_name, dims);
+        }
+
         std::vector<std::unique_ptr<TendencyTerm>> ab2_terms;
         std::vector<std::unique_ptr<TendencyTerm>> fe_terms;
 
@@ -173,6 +177,45 @@ void DynamicalCore::compute_diagnostic_fields() const {
     diagnostic_scheme_->calculate_R_xi(state_, grid_, params_, R_xi_field);
     diagnostic_scheme_->calculate_R_eta(state_, grid_, params_, R_eta_field);
     diagnostic_scheme_->calculate_R_zeta(state_, grid_, params_, R_zeta_field);
+}
+
+void DynamicalCore::initialize_restart_history() {
+    int rank = grid_.get_mpi_rank();
+    if (rank == 0) {
+        std::cout << "  [DynamicalCore] Seeding two-step history from restart state." << std::endl;
+    }
+
+    for (const auto& item : tendency_calculators_) {
+        const std::string& var_name = item.first;
+
+        if (state_.has_field(var_name + "_m")) {
+            Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(),
+                              state_.get_field<3>(var_name + "_m").get_mutable_device_data(),
+                              state_.get_field<3>(var_name).get_device_data());
+        }
+
+        item.second->calculate_tendencies(state_, grid_, params_);
+
+        if (state_.has_field("d_" + var_name)) {
+            auto history = state_.get_field<4>("d_" + var_name).get_mutable_device_data();
+            const size_t now_idx = state_.get_step() % 2;
+            const size_t prev_idx = (state_.get_step() + 1) % 2;
+            auto now = Kokkos::subview(history, now_idx, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+            auto prev = Kokkos::subview(history, prev_idx, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+            Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(), prev, now);
+        }
+    }
+
+    if (state_.has_field("utopmn_m")) {
+        Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(),
+                          state_.get_field<0>("utopmn_m").get_mutable_device_data(),
+                          state_.get_field<0>("utopmn").get_device_data());
+    }
+    if (state_.has_field("vtopmn_m")) {
+        Kokkos::deep_copy(Kokkos::DefaultExecutionSpace(),
+                          state_.get_field<0>("vtopmn_m").get_mutable_device_data(),
+                          state_.get_field<0>("vtopmn").get_device_data());
+    }
 }
 
 void DynamicalCore::compute_zeta_vertical_structure(Core::State& state) const {
@@ -651,4 +694,3 @@ void DynamicalCore::diagnose_wind_fields(Core::State& state) {
 
 } // namespace Dynamics
 } // namespace VVM
-

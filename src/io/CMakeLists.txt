@@ -2,6 +2,7 @@ set(VVM_IO_SOURCES
     TxtReader.cpp
     OutputManager.cpp
     PnetcdfReader.cpp
+    Hdf5RestartReader.cpp
     IOServer.cpp
 )
 
@@ -10,6 +11,7 @@ set(VVM_IO_HEADERS
     TxtReader.hpp
     OutputManager.hpp
     PnetcdfReader.hpp
+    Hdf5RestartReader.hpp
     IOServer.hpp
 )
 

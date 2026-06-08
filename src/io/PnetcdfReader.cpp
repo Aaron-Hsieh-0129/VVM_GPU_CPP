@@ -1,10 +1,24 @@
 #include "PnetcdfReader.hpp"
 #include "core/Field.hpp"
 #include <iostream>
+#include <sstream>
 #include <vector>
 
 namespace VVM {
 namespace IO {
+
+namespace {
+std::string join_variable_names(const std::vector<std::string>& names) {
+    if (names.empty()) return "(none)";
+
+    std::ostringstream oss;
+    for (size_t i = 0; i < names.size(); ++i) {
+        if (i > 0) oss << ", ";
+        oss << names[i];
+    }
+    return oss.str();
+}
+} // namespace
 
 void PnetcdfReader::check_ncmpi_error(int status, const std::string& msg) const {
     if (status != NC_NOERR) {
@@ -21,11 +35,14 @@ PnetcdfReader::PnetcdfReader(const std::string& filepath,
                              const VVM::Core::Grid& grid, 
                              const VVM::Core::Parameters& params, 
                              const VVM::Utils::ConfigurationManager& config, 
-                             Core::HaloExchanger& halo_exchanger) 
+                             Core::HaloExchanger& halo_exchanger,
+                             const std::string& config_prefix) 
     : source_file_(filepath), 
       grid_(grid), 
       params_(params), 
       config_(config),
+      config_prefix_(config_prefix),
+      strict_missing_variables_(config_prefix == "restart"),
       comm_(grid.get_cart_comm()),
       ncid_(-1), 
       halo_exchanger_(halo_exchanger) {
@@ -88,7 +105,9 @@ void PnetcdfReader::read_variable_1d(int ncid, const std::string& var_name, VVM:
     int varid;
     int status = ncmpi_inq_varid(ncid, var_name.c_str(), &varid);
     if (status != NC_NOERR) {
-        if (rank_ == 0) std::cerr << "Warning: Cannot find 1D variable '" << var_name << "' in NetCDF file. Skipping." << std::endl;
+        std::string msg = "Cannot find 1D variable '" + var_name + "' in NetCDF file.";
+        if (strict_missing_variables_) throw std::runtime_error(msg);
+        if (rank_ == 0) std::cerr << "Warning: " << msg << " Skipping." << std::endl;
         return;
     }
 
@@ -124,7 +143,9 @@ void PnetcdfReader::read_variable_2d(int ncid, const std::string& var_name, VVM:
     int varid;
     int status = ncmpi_inq_varid(ncid, var_name.c_str(), &varid);
     if (status != NC_NOERR) {
-        if (rank_ == 0) std::cerr << "Warning: Cannot find 2D variable '" << var_name << "' in NetCDF file. Skipping." << std::endl;
+        std::string msg = "Cannot find 2D variable '" + var_name + "' in NetCDF file.";
+        if (strict_missing_variables_) throw std::runtime_error(msg);
+        if (rank_ == 0) std::cerr << "Warning: " << msg << " Skipping." << std::endl;
         return;
     }
 
@@ -174,7 +195,9 @@ void PnetcdfReader::read_variable_3d(int ncid, const std::string& var_name, VVM:
     int varid;
     int status = ncmpi_inq_varid(ncid, var_name.c_str(), &varid);
     if (status != NC_NOERR) {
-        if (rank_ == 0) std::cerr << "Warning: Cannot find 3D variable '" << var_name << "' in NetCDF file. Skipping." << std::endl;
+        std::string msg = "Cannot find 3D variable '" + var_name + "' in NetCDF file.";
+        if (strict_missing_variables_) throw std::runtime_error(msg);
+        if (rank_ == 0) std::cerr << "Warning: " << msg << " Skipping." << std::endl;
         return;
     }
 
@@ -243,64 +266,88 @@ void PnetcdfReader::read_and_initialize(VVM::Core::State& state) {
     }
 
     std::vector<std::string> vars_1d;
-    std::string key_1d = "netcdf_reader.variables_to_read.1d";
+    std::string key_1d = config_prefix_ + ".variables_to_read.1d";
     if (config_.has_key(key_1d)) {
         vars_1d = config_.get_value<std::vector<std::string>>(key_1d);
-        
-        if (rank_ == 0) std::cout << "  - Attempting to load 1D variables from config key '" << key_1d << "'..." << std::endl;
+    }
+
+    std::vector<std::string> vars_2d;
+    std::string key_2d = config_prefix_ + ".variables_to_read.2d";
+    if (config_.has_key(key_2d)) {
+        vars_2d = config_.get_value<std::vector<std::string>>(key_2d);
+    }
+
+    std::vector<std::string> vars_3d;
+    std::string key_3d = config_prefix_ + ".variables_to_read.3d";
+    if (config_.has_key(key_3d)) {
+        vars_3d = config_.get_value<std::vector<std::string>>(key_3d);
+    } else if (strict_missing_variables_) {
+        auto prognostic_config = config_.get_value<nlohmann::json>("dynamics.prognostic_variables");
+        for (const auto& item : prognostic_config.items()) {
+            const std::string& var_name = item.key();
+            if (state.has_field(var_name)) vars_3d.push_back(var_name);
+        }
+    }
+
+    if (strict_missing_variables_ && rank_ == 0) {
+        std::cout << "  [PnetcdfReader] Restart variables to read from " << source_file_ << ":" << std::endl;
+        std::cout << "    1D: " << join_variable_names(vars_1d) << std::endl;
+        std::cout << "    2D: " << join_variable_names(vars_2d) << std::endl;
+        std::cout << "    3D: " << join_variable_names(vars_3d) << std::endl;
+    }
+
+    if (!vars_1d.empty()) {
+        if (rank_ == 0 && !strict_missing_variables_) std::cout << "  - Attempting to load 1D variables from config key '" << key_1d << "'..." << std::endl;
         for (const auto& var_name : vars_1d) {
             try {
                 read_variable_1d(ncid_, var_name, state.get_field<1>(var_name));
                 if (rank_ == 0) std::cout << "    - Loaded 1D variable: " << var_name << std::endl;
             } 
             catch (const std::runtime_error& e) {
+                if (strict_missing_variables_) throw;
                 if (rank_ == 0) std::cerr << "    - Warning for 1D var '" << var_name << "': " << e.what() << std::endl;
             }
         }
     } 
-    else {
+    else if (!strict_missing_variables_) {
         if (rank_ == 0) std::cerr << "Warning: Config key '" << key_1d << "' not found. No 1D variables will be read by PnetcdfReader." << std::endl;
     }
 
-    std::vector<std::string> vars_2d;
-    std::string key_2d = "netcdf_reader.variables_to_read.2d";
-    if (config_.has_key(key_2d)) {
-        vars_2d = config_.get_value<std::vector<std::string>>(key_2d);
-        
-        if (rank_ == 0) std::cout << "  - Attempting to load 2D variables from config key '" << key_2d << "'..." << std::endl;
+    if (!vars_2d.empty()) {
+        if (rank_ == 0 && !strict_missing_variables_) std::cout << "  - Attempting to load 2D variables from config key '" << key_2d << "'..." << std::endl;
         for (const auto& var_name : vars_2d) {
             try {
                 read_variable_2d(ncid_, var_name, state.get_field<2>(var_name));
                 if (rank_ == 0) std::cout << "    - Loaded 2D variable: " << var_name << std::endl;
             } 
             catch (const std::runtime_error& e) {
+                if (strict_missing_variables_) throw;
                 if (rank_ == 0) std::cerr << "    - Warning for 2D var '" << var_name << "': " << e.what() << std::endl;
             }
         }
     } 
-    else {
+    else if (!strict_missing_variables_) {
         if (rank_ == 0) std::cerr << "Warning: Config key '" << key_2d << "' not found. No 2D variables will be read by PnetcdfReader." << std::endl;
     }
 
-
-    std::vector<std::string> vars_3d;
-    std::string key_3d = "netcdf_reader.variables_to_read.3d";
-    if (config_.has_key(key_3d)) {
-        vars_3d = config_.get_value<std::vector<std::string>>(key_3d);
-
-        if (rank_ == 0) std::cout << "  - Attempting to load 3D variables from config key '" << key_3d << "'..." << std::endl;
+    if (!vars_3d.empty()) {
+        if (rank_ == 0 && !strict_missing_variables_) std::cout << "  - Attempting to load 3D variables from config key '" << key_3d << "'..." << std::endl;
         for (const auto& var_name : vars_3d) {
             try {
                 read_variable_3d(ncid_, var_name, state.get_field<3>(var_name));
                 if (rank_ == 0) std::cout << "    - Loaded 3D variable: " << var_name << std::endl;
             } 
             catch (const std::runtime_error& e) {
+                if (strict_missing_variables_) throw;
                 if (rank_ == 0) std::cerr << "    - Warning for 3D var '" << var_name << "': " << e.what() << std::endl;
             }
         }
     } 
-    else {
+    else if (!strict_missing_variables_) {
          if (rank_ == 0) std::cerr << "Warning: Config key '" << key_3d << "' not found. No 3D variables will be read by PnetcdfReader." << std::endl;
+    }
+    else {
+        throw std::runtime_error("Restart mode did not find any 3D prognostic variables to read.");
     }
 
     

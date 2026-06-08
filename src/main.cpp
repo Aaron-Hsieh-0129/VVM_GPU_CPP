@@ -76,6 +76,25 @@ int main(int argc, char *argv[]) {
 
     // Split Compute and IO jobs
     int num_io_tasks = get_io_tasks(argc, argv);
+
+    // IO server is only meaningful for SST engine. Abort early if the job was
+    // submitted with --io-tasks N for a non-SST engine, because those IO server
+    // ranks would either hang waiting for an SST stream that never opens, or
+    // compete for CUDA devices with compute ranks in CUDA exclusive mode.
+    {
+        std::string engine = config.get_value<std::string>("output.engine", "HDF5");
+        if (engine != "SST" && num_io_tasks > 0) {
+            if (world_rank == 0) {
+                std::cerr << "[Main] ERROR: output.engine=\"" << engine
+                          << "\" but job was submitted with --io-tasks " << num_io_tasks << ".\n"
+                          << "  IO server ranks are only used with SST engine.\n"
+                          << "  Re-submit without --io-tasks (or with --io-tasks 0)." << std::endl;
+            }
+            MPI_Barrier(MPI_COMM_WORLD);
+            MPI_Abort(MPI_COMM_WORLD, 1);
+        }
+    }
+
     int num_sim_tasks = world_size - num_io_tasks;
     if (num_sim_tasks <= 0) {
         if (world_rank == 0) std::cerr << "Error: Not enough ranks for simulation!" << std::endl;
@@ -89,44 +108,53 @@ int main(int argc, char *argv[]) {
     MPI_Comm_rank(split_comm, &split_rank);
     MPI_Comm_size(split_comm, &split_size);
 
+    // Phase 1: Compute ranks claim their GPU devices BEFORE IO server starts.
+    // IO server ranks co-located on the same node would otherwise race with
+    // compute ranks for GPU contexts via ADIOS2's internal KokkosInit.
+    // The barrier below ensures compute ranks have established CUDA contexts
+    // before IO server creates adios2::ADIOS, which triggers KokkosInit.
+    if (color == 0) {
+        int threads_per_rank = 1;
+        if (const char* env_p = std::getenv("OMP_NUM_THREADS")) {
+            threads_per_rank = std::stoi(env_p);
+        }
+        omp_set_num_threads(threads_per_rank);
+        if (split_rank == 0) {
+            std::cout << "[System] CPU Threads per Rank set to: " << threads_per_rank << std::endl;
+        }
+
+        MPI_Comm compute_node_comm;
+        MPI_Comm_split_type(split_comm, MPI_COMM_TYPE_SHARED, split_rank, MPI_INFO_NULL, &compute_node_comm);
+        int compute_node_rank, compute_node_size;
+        MPI_Comm_rank(compute_node_comm, &compute_node_rank);
+        MPI_Comm_size(compute_node_comm, &compute_node_size);
+        MPI_Comm_free(&compute_node_comm);
+
+        if (split_rank == 0) {
+            std::cout << "[System] Compute Ranks per Node: " << compute_node_size << std::endl;
+        }
+
+        int num_gpus = 0;
+        cudaError_t cuda_err = cudaGetDeviceCount(&num_gpus);
+        if (cuda_err != cudaSuccess || num_gpus == 0) num_gpus = 1;
+
+        int gpu_id = compute_node_rank % num_gpus;
+        Kokkos::InitializationSettings args;
+        args.set_device_id(gpu_id);
+        Kokkos::initialize(args);
+    }
+
+    // All compute ranks have now initialized Kokkos/CUDA.
+    // IO server ranks wait here, then proceed to run_io_server below.
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // Phase 2: IO server branch.
     if (color == 1) {
         VVM::IO::run_io_server(split_comm, config);
         MPI_Comm_free(&split_comm);
         MPI_Finalize();
         return 0;
     }
-
-    int threads_per_rank = 1;
-    if (const char* env_p = std::getenv("OMP_NUM_THREADS")) {
-        threads_per_rank = std::stoi(env_p);
-    }
-    omp_set_num_threads(threads_per_rank);
-
-    if (split_rank == 0) {
-        std::cout << "[System] CPU Threads per Rank set to: " << threads_per_rank << std::endl;
-    }
-
-    // compute rank
-    MPI_Comm compute_node_comm;
-    MPI_Comm_split_type(split_comm, MPI_COMM_TYPE_SHARED, split_rank, MPI_INFO_NULL, &compute_node_comm);
-    int compute_node_rank, compute_node_size;
-    MPI_Comm_rank(compute_node_comm, &compute_node_rank);
-    MPI_Comm_size(compute_node_comm, &compute_node_size);
-    MPI_Comm_free(&compute_node_comm);
-
-    int num_gpus = 0;
-    cudaError_t err = cudaGetDeviceCount(&num_gpus);
-    if (err != cudaSuccess || num_gpus == 0) num_gpus = 1;
-
-    int gpu_id = compute_node_rank % num_gpus;
-    Kokkos::InitializationSettings args;
-    args.set_device_id(gpu_id);
-    Kokkos::initialize(args);
-
-    if (split_rank == 0) {
-        std::cout << "[System] Compute Ranks per Node: " << compute_node_size << std::endl;
-    }
-
 
 #if defined(ENABLE_NCCL)
     ncclComm_t nccl_comm;
@@ -165,7 +193,8 @@ int main(int argc, char *argv[]) {
             config, grid, parameters, state, split_comm
         );
 
-        output_manager->write(0, 0.0);
+        const bool restart_enabled = config.get_value<bool>("restart.enable", false);
+        output_manager->write(static_cast<int>(state.get_step()), state.get_time());
         // output_manager->write_static_topo_file();
 
         // Simulation loop parameters
@@ -173,6 +202,9 @@ int main(int argc, char *argv[]) {
         double dt = parameters.get_value_host(parameters.dt);
         double output_interval = config.get_value<double>("simulation.output_interval_s");
         double next_output_time = output_interval;
+        if (restart_enabled) {
+            next_output_time = (std::floor(state.get_time() / output_interval) + 1.0) * output_interval;
+        }
 
         // Simulation loop
         while (state.get_time() < total_time) {
