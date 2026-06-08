@@ -149,7 +149,6 @@ void OutputManager::write(int step, VVM::Real time) {
         std::string filename = output_dir_ + "/" + filename_prefix_ + "_" + format_to_six_digits((int) (time/output_interval_s_)) + ".h5";
         if (rank_ == 0) std::cout << "  [OutputManager] HDF5 Writing: " << filename << std::endl;
         writer_ = io_.Open(filename, adios2::Mode::Write, comm_);
-        if (rank_ == 0) std::cout << "  [OutputManager] HDF5 Open complete." << std::endl;
     } 
     else if (engine_type_ == "SST") {
         if (!writer_) {
@@ -160,12 +159,10 @@ void OutputManager::write(int step, VVM::Real time) {
     }
 
     writer_.BeginStep();
-    if (engine_type_ == "HDF5" && rank_ == 0) std::cout << "  [OutputManager] HDF5 BeginStep complete." << std::endl;
 
     auto var_time = io_.InquireVariable<VVM::Real>("time");
     writer_.Put<VVM::Real>(var_time, &time, adios2::Mode::Sync);
     write_static_data();
-    if (engine_type_ == "HDF5" && rank_ == 0) std::cout << "  [OutputManager] HDF5 static fields complete." << std::endl;
 
     const size_t h = grid_.get_halo_cells();
     const size_t rank_off_x = grid_.get_local_physical_start_x();
@@ -178,9 +175,6 @@ void OutputManager::write(int step, VVM::Real time) {
 
     for (const auto& field_name : fields_to_output_) {
         if (field_variables_.count(field_name)) {
-            if (engine_type_ == "HDF5" && rank_ == 0) {
-                std::cout << "  [OutputManager] HDF5 field begin: " << field_name << std::endl;
-            }
             auto& adios_var = field_variables_.at(field_name);
             auto it = state_.begin();
             while (it != state_.end() && it->first != field_name) ++it;
@@ -285,19 +279,14 @@ void OutputManager::write(int step, VVM::Real time) {
                         }
                     }
                 }, it->second);
-	             }
-            if (engine_type_ == "HDF5" && rank_ == 0) {
-                std::cout << "  [OutputManager] HDF5 field complete: " << field_name << std::endl;
-            }
+             }
         }
     }
 
     writer_.EndStep();
-    if (engine_type_ == "HDF5" && rank_ == 0) std::cout << "  [OutputManager] HDF5 EndStep complete." << std::endl;
     
     if (engine_type_ == "HDF5") {
         writer_.Close();
-        if (rank_ == 0) std::cout << "  [OutputManager] HDF5 Close complete." << std::endl;
     }
 }
 
