@@ -931,10 +931,10 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 lwdn_sfc(iy + h, ix + h) = buffer.lw_flux_dn_k(i, nz + 1);
                 lwup_sfc(iy + h, ix + h) = buffer.lw_flux_up_k(i, nz + 1);
 
-                swup_toa(iy + h, ix + h) = buffer.sw_flux_up_k(i, num_dummy + 1);
-                swdn_toa(iy + h, ix + h) = buffer.sw_flux_dn_k(i, num_dummy + 1);
-                lwup_toa(iy + h, ix + h) = buffer.lw_flux_up_k(i, num_dummy + 1);
-                lwdn_toa(iy + h, ix + h) = buffer.lw_flux_dn_k(i, num_dummy + 1);
+                swup_toa(iy + h, ix + h) = buffer.sw_flux_up_k(i, 0);
+                swdn_toa(iy + h, ix + h) = buffer.sw_flux_dn_k(i, 0);
+                lwup_toa(iy + h, ix + h) = buffer.lw_flux_up_k(i, 0);
+                lwdn_toa(iy + h, ix + h) = buffer.lw_flux_dn_k(i, 0);
 
                 for (int k_vvm = h; k_vvm <= h + nz - 1; ++k_vvm) {
                     if (k_vvm < h + hx - 1) {

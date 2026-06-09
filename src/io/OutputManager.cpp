@@ -2,10 +2,36 @@
 #include <sys/stat.h>
 #include <cerrno>
 #include <algorithm>
+#include <array>
+#include <cmath>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
 #include <unordered_set>
 
 namespace VVM {
 namespace IO {
+
+namespace {
+constexpr VVM::Real earth_radius_m = VVM::real(6.37e6);
+constexpr VVM::Real pi = VVM::real(3.141592653589793238462643383279502884);
+
+std::string format_grads_number(VVM::Real value) {
+    std::ostringstream ss;
+    ss << std::setprecision(12) << value;
+    return ss.str();
+}
+
+std::string format_grads_axis_number(VVM::Real value) {
+    std::ostringstream ss;
+    ss << std::fixed << std::setprecision(7) << value;
+    std::string formatted = ss.str();
+    if (value > VVM::real(0.0) && value < VVM::real(1.0) && formatted.rfind("0.", 0) == 0) {
+        formatted.erase(0, 1);
+    }
+    return formatted;
+}
+} // namespace
 
 std::string OutputManager::format_to_six_digits(int number) {
     std::stringstream ss;
@@ -24,6 +50,9 @@ OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VV
     fields_to_output_ = config.get_value<std::vector<std::string>>("output.fields_to_output");
     output_interval_s_ = config.get_value<VVM::Real>("simulation.output_interval_s");
     total_time_ = config.get_value<VVM::Real>("simulation.total_time_s");
+    use_taiwanvvm_coordinates_ = (config.get_value<std::string>("grid.vertical_coordinate_type", "default") == "taiwanvvm");
+    const int config_start_hour = config.get_value<int>("physics.rrtmgp.time.hour", 16);
+    grads_start_hour_ = (config_start_hour + 8) % 24;
 
     // Default to HDF5 if not specified
     if (config.has_key("output.engine")) {
@@ -49,7 +78,7 @@ OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VV
     }
 
     MPI_Barrier(comm_);
-    if (rank_ == 0) grads_ctl_file();
+    grads_ctl_file();
 
     io_ = adios_.DeclareIO("VVM_IO");
     io_.SetEngine(engine_type_);
@@ -322,7 +351,106 @@ void OutputManager::write_static_data() {
     writer_.Put<VVM::Real>(var_z_mid, z_mid_physical.data(), adios2::Mode::Sync);
 }
 
+OutputManager::LinearAxis OutputManager::centered_lonlat_axis(int points, VVM::Real spacing) const {
+    LinearAxis axis;
+    axis.increment = spacing / earth_radius_m / (real(2.0) * pi) * real(360.0);
+    axis.start = (real(0.5) - real(0.5) * static_cast<VVM::Real>(points)) * axis.increment;
+    return axis;
+}
+
+std::pair<OutputManager::LinearAxis, OutputManager::LinearAxis> OutputManager::grads_horizontal_axes() const {
+    LinearAxis x_axis = centered_lonlat_axis(grid_.get_global_points_x(), grid_.get_dx());
+    LinearAxis y_axis = centered_lonlat_axis(grid_.get_global_points_y(), grid_.get_dy());
+
+    if (!use_taiwanvvm_coordinates_) {
+        return {x_axis, y_axis};
+    }
+
+    const int h = grid_.get_halo_cells();
+    const int local_start_x = grid_.get_local_physical_start_x();
+    const int local_end_x = grid_.get_local_physical_end_x();
+    const int local_start_y = grid_.get_local_physical_start_y();
+    const int local_end_y = grid_.get_local_physical_end_y();
+
+    std::array<VVM::Real, 4> local_values = {
+        real(0.0), real(0.0), real(0.0), real(0.0)
+    };
+    std::array<int, 4> local_flags = {0, 0, 0, 0};
+
+    auto owns_point = [&](int global_y, int global_x) {
+        return local_start_y <= global_y && global_y <= local_end_y &&
+               local_start_x <= global_x && global_x <= local_end_x;
+    };
+
+    if (owns_point(0, 0)) {
+        const auto lon_host = state_.get_field<2>("lon").get_host_data();
+        const auto lat_host = state_.get_field<2>("lat").get_host_data();
+        const int j = h - local_start_y;
+        const int i = h - local_start_x;
+        local_values[0] = lon_host(j, i);
+        local_values[2] = lat_host(j, i);
+        local_flags[0] = 1;
+        local_flags[2] = 1;
+    }
+
+    if (grid_.get_global_points_x() > 1 && owns_point(0, 1)) {
+        const auto lon_host = state_.get_field<2>("lon").get_host_data();
+        const int j = h - local_start_y;
+        const int i = h + 1 - local_start_x;
+        local_values[1] = lon_host(j, i);
+        local_flags[1] = 1;
+    }
+
+    if (grid_.get_global_points_y() > 1 && owns_point(1, 0)) {
+        const auto lat_host = state_.get_field<2>("lat").get_host_data();
+        const int j = h + 1 - local_start_y;
+        const int i = h - local_start_x;
+        local_values[3] = lat_host(j, i);
+        local_flags[3] = 1;
+    }
+
+    std::array<VVM::Real, 4> global_values;
+    std::array<int, 4> global_flags;
+    MPI_Allreduce(local_values.data(), global_values.data(), 4, VVM_MPI_REAL, MPI_SUM, comm_);
+    MPI_Allreduce(local_flags.data(), global_flags.data(), 4, MPI_INT, MPI_SUM, comm_);
+
+    if (global_flags[0] > 0) x_axis.start = global_values[0] / static_cast<VVM::Real>(global_flags[0]);
+    if (global_flags[2] > 0) y_axis.start = global_values[2] / static_cast<VVM::Real>(global_flags[2]);
+    if (global_flags[1] > 0) {
+        x_axis.increment = global_values[1] / static_cast<VVM::Real>(global_flags[1]) - x_axis.start;
+    }
+    if (global_flags[3] > 0) {
+        y_axis.increment = global_values[3] / static_cast<VVM::Real>(global_flags[3]) - y_axis.start;
+    }
+
+    return {x_axis, y_axis};
+}
+
+std::string OutputManager::grads_start_time() const {
+    std::ostringstream ss;
+    ss << std::setfill('0') << std::setw(2) << grads_start_hour_ << "z01JAN1998";
+    return ss.str();
+}
+
+std::string OutputManager::grads_time_increment() const {
+    const VVM::Real rounded = std::round(output_interval_s_);
+    const bool is_whole_second = std::abs(output_interval_s_ - rounded) < real(1.0e-6);
+
+    if (is_whole_second) {
+        const auto seconds = static_cast<long long>(rounded);
+        if (seconds > 0 && seconds % 86400 == 0) return std::to_string(seconds / 86400) + "dy";
+        if (seconds > 0 && seconds % 3600 == 0) return std::to_string(seconds / 3600) + "hr";
+        if (seconds > 0 && seconds % 60 == 0) return std::to_string(seconds / 60) + "mn";
+    }
+
+    return format_grads_number(output_interval_s_ / real(60.0)) + "mn";
+}
+
 void OutputManager::grads_ctl_file() {
+    const auto axes = grads_horizontal_axes();
+
+    if (rank_ != 0) return;
+
     std::ofstream outFile(output_dir_ + "/vvm.ctl");
     if (!outFile.is_open()) return;
 
@@ -335,15 +463,21 @@ void OutputManager::grads_ctl_file() {
     outFile << "OPTIONS template\n";
     outFile << "TITLE VVM_GPU_CPP\n";
     outFile << "UNDEF -9999.0\n";
-    outFile << "XDEF " << grid_.get_global_points_x() << " LINEAR 0 1\n";
-    outFile << "YDEF " << grid_.get_global_points_y() << " LINEAR 0 1\n";
+    outFile << "XDEF " << grid_.get_global_points_x() << " LINEAR "
+            << format_grads_axis_number(axes.first.start) << " "
+            << format_grads_axis_number(axes.first.increment) << "\n";
+    outFile << "YDEF " << grid_.get_global_points_y() << " LINEAR "
+            << format_grads_axis_number(axes.second.start) << " "
+            << format_grads_axis_number(axes.second.increment) << "\n";
     outFile << "ZDEF " << grid_.get_global_points_z() << " LEVELS ";
     for (int k = h; k < h+nz_phy; k++) {
         outFile << static_cast<int> (z_mid_host(k));
-        if (k < nz_phy+h-1) outFile << ", ";
+        if (k < nz_phy+h-1) outFile << " ";
+        if (k % 15 == 0) outFile << "\n";
     }
     outFile << "\n";
-    outFile << "TDEF " << (int) (total_time_ / (output_interval_s_)+1) << " LINEAR 00:00Z01JAN2000 " << "1hr\n";
+    outFile << "TDEF " << (int) (total_time_ / (output_interval_s_)+1) << " LINEAR " << grads_start_time() << " "
+            << grads_time_increment() << "\n";
     outFile << "\n";
 
     int valid_vars_count = 0;

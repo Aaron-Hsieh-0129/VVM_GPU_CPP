@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <utility>
 #include <adios2.h>
 #include <Kokkos_Core.hpp>
 #include <adios2/cxx/KokkosView.h>
@@ -41,6 +42,8 @@ private:
     std::string output_dir_;
     std::string filename_prefix_;
     std::vector<std::string> fields_to_output_;
+    bool use_taiwanvvm_coordinates_ = false;
+    int grads_start_hour_ = 0;
 
     VVM::Real output_interval_s_;
     VVM::Real total_time_;
@@ -61,8 +64,17 @@ private:
     bool variables_defined_ = false;
     adios2::Variable<VVM::Real> var_time_;
 
+    struct LinearAxis {
+        VVM::Real start = real(0.0);
+        VVM::Real increment = real(1.0);
+    };
+
     void define_variables();
     void grads_ctl_file();
+    LinearAxis centered_lonlat_axis(int points, VVM::Real spacing) const;
+    std::pair<LinearAxis, LinearAxis> grads_horizontal_axes() const;
+    std::string grads_start_time() const;
+    std::string grads_time_increment() const;
 
     std::string format_to_six_digits(int number);
 
