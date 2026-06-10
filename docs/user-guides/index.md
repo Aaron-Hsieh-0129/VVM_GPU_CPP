@@ -4,6 +4,7 @@ These guides describe how to configure and run **GPUVVM** (GPU-accelerated Vecto
 
 | Guide | Contents |
 | ------ | -------- |
+| [Job submission](job-submission.md) | Recommended `submit.py` workflow, local runs, SLURM runs, CPU/GPU allocation |
 | [Model configuration](configuration.md) | JSON configuration: grid, simulation, physics, dynamics, output |
 | [I/O management](io-management.md) | ADIOS2 engines, fields, asynchronous I/O with dedicated ranks |
 

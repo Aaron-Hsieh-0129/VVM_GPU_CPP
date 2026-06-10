@@ -14,7 +14,7 @@ High-resolution simulations over **Taiwan** use **realistic topography** and **l
 
 ## Generating spatial NetCDF
 
-The script `scripts/generate_init_nc.py` reads **`rundata/input_configs/default_config.json`** (same path as the main config used in the script) and writes:
+The tool `tools/generate_init_nc.py` reads **`rundata/input_configs/default_config.json`** (same path as the main config used in the tool) and writes:
 
 - `netcdf_reader.source_file` from the config (directories are created if missing).
 
@@ -23,16 +23,16 @@ It supports:
 - **`USE_TAIWAN_TOPO = True`** — Reads high-resolution Taiwan data from `SOURCE_TW_DATA` (default `../rundata/land/topolsm_TW.nc`) and coarsens to the configured grid.
 - **`USE_TAIWAN_TOPO = False`** — Idealized ridge and land-type patterns for synthetic experiments.
 
-Edit the constants at the top of the script and run it from the `scripts/` directory with Python dependencies (`netCDF4`, `numpy`, `scipy`) installed. Align paths with your machine.
+Edit the constants at the top of the tool and run it from the `tools/` directory with Python dependencies (`netCDF4`, `numpy`, `scipy`) installed. Align paths with your machine.
 
 ## Large-scale forcing (optional)
 
-For lateral boundary forcing, `scripts/generate_ls_forcing.py` can prepare forcing files; `dynamics.forcings.lateral_boundary_nudging` in JSON points to directories and file naming under `rundata/LS_forcings/` when enabled.
+For lateral boundary forcing, `tools/generate_ls_forcing.py` can prepare forcing files; `dynamics.forcings.lateral_boundary_nudging` in JSON points to directories and file naming under `rundata/LS_forcings/` when enabled.
 
 ## Operational notes
 
 - Ensure **NetCDF** and **PnetCDF** libraries used at build time match the files you read and write.
-- Taiwan runs are often **large**; adjust MPI ranks, `physics.rrtmgp.column_chunk_size`, and I/O strategy (`output.engine`, `--io-tasks`) for your cluster.
+- Taiwan runs are often **large**; submit them through `submit.py` so MPI ranks, GPUs, CPUs, and optional `--io` tasks are allocated together.
 - The repository README credits **Noah** land GPU work to the Central Weather Administration (CWA) of Taiwan.
 
 For a minimal first run, start from `rundata/input_configs/default_config.json`, replace `output.output_dir` and `initial_conditions.source_file` with local paths, and verify `netcdf_reader.source_file` exists after preprocessing.

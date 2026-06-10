@@ -6,6 +6,8 @@
 
 A GPU-accelerated (Kokkos-based) C++ implementation of the **Vector Vorticity equation cloud-resolving Model (VVM)**.
 
+Full documentation is available through the MkDocs site: <https://aaron-hsieh-0129.github.io/VVM_GPU_CPP/>.
+
 
 ## Table of Contents
 
@@ -61,18 +63,20 @@ git clone https://github.com/Aaron-Hsieh-0129/VVM_GPU_CPP.git
 cd VVM_GPU_CPP
 ```
 
-### Step 2: Environment Setup (Required)
-You must define the project root directory using the `VVM_ROOT` environment variable before compiling or running the model. Add this to your session or `~/.bashrc`:
+### Step 2: Environment Setup
 
 ```bash
 export VVM_ROOT=/absolute/path/to/your/VVM_GPU_CPP
+cd $VVM_ROOT
 ```
+
+`submit.py` can detect the project root when it is launched from the repository, but `VVM_ROOT` keeps build and run examples copy-paste friendly.
 
 ### Step 3: Configure CMake Presets
 
 Open `CMakePresets.json` and configure or add a preset matching your machine cluster. Update the environment paths (`NVHPC_DIR`, `CMAKE_CXX_COMPILER`, `HDF5_DIR`, etc.) to match your build prefix.
 
-At runtime, the submission wrapper (`submit.py`) will automatically scan this file, extract the parameters, and set up your execution environment (including `LD_LIBRARY_PATH` and `hpcx-init.sh`) dynamically. No separate environment script or manual variable export is required.
+At runtime, the submission wrapper (`submit.py`) reads this file, extracts the selected preset, and prepares the execution environment, including MPI and library paths.
 
 
 ### Step 4: Build the Project
@@ -80,7 +84,6 @@ At runtime, the submission wrapper (`submit.py`) will automatically scan this fi
 Compile the project from the root directory. Replace `<your_preset_name>` with your configured preset and `<core_number>` with the number of CPU cores for parallel building:
 
 ```bash
-cd $VVM_ROOT
 cmake --preset <your_preset_name> -DBUILD_TESTS=ON
 cmake --build build -j<core_number>
 ```
@@ -91,51 +94,52 @@ cmake --build build -j<core_number>
     
 - **Initial Conditions**:
     
-    - Generate initial input files using the Python scripts located under `tools/`.
+    - Generate initial input files using the Python tools located under `tools/`.
         
     - Specify your generated spatial file path (typically placed in `rundata/initial_conditions/spatial/`) within `default_config.json`.
         
     - Initial profiles should be placed under `rundata/initial_conditions/profiles/`.
 
-### Step 6: Execute
+### Step 6: Submit and Execute
 
-We provide a user-friendly wrapper script (submit.py) located in the root directory to handle both local execution and SLURM job submission. It automatically manages MPI tasks, GPU allocations, and directory creation.
+Use the root-level `submit.py` wrapper for normal runs. It handles local execution and SLURM submission, sets the runtime environment from `CMakePresets.json`, manages MPI task counts, creates output directories, and helps keep CPU/GPU allocation consistent.
 
-#### Option A: Using the Submission Wrapper (Recommended)
+> **Important:** Direct `mpirun` commands are advanced/debugging commands. For production runs, use `submit.py`; incorrect CPU/GPU assignment and I/O-rank allocation can substantially slow the model.
 
-**Interactive Mode:**
+#### Interactive Mode
 
 Simply run the script without any arguments and follow the guided prompts:
 
 ```bash
-$VVM_ROOT/submit.py
+./submit.py
 ```
 
-**Command-Line Mode (Quick Start)**
+The interactive phase shows which fields you need to fill in, explains the run options, and prints an equivalent command-line invocation at the end so you can reuse it for future runs.
+
+#### Command-Line Mode
 
 For automated workflows or quick executions, you can pass arguments directly.
 
 - Local Execution (HDF5 Engine):
 
 ```bash
-cd $VVM_ROOT
-./submit.py -c ./rundata/input_configs/default_config.json --compute 4 --local
+./submit.py --local --preset <your_preset_name> -c ./rundata/input_configs/default_config.json --compute 4
 ```
 
 - SLURM Submission (SST Engine with Asynchronous I/O):
 
 ```bash
-cd $VVM_ROOT
-./submit.py -c ./rundata/input_configs/default_config.json --compute 16 --io 4 --nodes 4 --gpus 5 -t 24:00:00
+./submit.py --preset <your_preset_name> -c ./rundata/input_configs/default_config.json --compute 16 --io 4 --nodes 4 --gpus 5 -t 24:00:00
 ```
 
+For more options and resource-layout guidance, see the [Job Submission guide](https://aaron-hsieh-0129.github.io/VVM_GPU_CPP/user-guides/job-submission/).
 
-#### Option B: Manual Execution (Advanced)
-Run the model from the `build` directory:
+#### Manual MPI Execution (Advanced)
+
+Manual MPI is useful for small debug runs after your environment is already loaded. It bypasses the wrapper's resource checks, so verify CPU binding, rank placement, GPU visibility, and I/O ranks yourself.
 
 ```bash
-cd $VVM_ROOT
-mpirun -np 1 ./build/vvm
+mpirun -np 1 ./build/vvm ./rundata/input_configs/default_config.json
 ```
 
 ##### Asynchronous I/O (Optional)
@@ -145,15 +149,13 @@ To use asynchronous output, specify the SST engine in `default_config.json`. You
 For example, to use **1 GPU/CPU for the model** and **1 CPU for I/O**:
 
 ```bash
-cd $VVM_ROOT
-mpirun -np 2 ./build/vvm --io-tasks 1
+mpirun -np 2 ./build/vvm ./rundata/input_configs/default_config.json --io-tasks 1
 ```
 
 To use **2 GPUs/CPUs for the model** and **2 CPUs for I/O**:
 
 ```bash
-cd $VVM_ROOT
-mpirun -np 4 ./build/vvm --io-tasks 2
+mpirun -np 4 ./build/vvm ./rundata/input_configs/default_config.json --io-tasks 2
 ```
 
 
