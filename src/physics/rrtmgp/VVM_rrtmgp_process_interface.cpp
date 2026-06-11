@@ -404,6 +404,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
     const auto& thbar = state.get_field<1>("thbar").get_device_data();
     const auto& diag_eff_radius_qc = state.get_field<3>("diag_eff_radius_qc").get_device_data();
     const auto& diag_eff_radius_qi = state.get_field<3>("diag_eff_radius_qi").get_device_data();
+    const auto& albedo = state.get_field<2>("albedo").get_device_data();
 
     VVM::Real Rd = m_config.get_value<VVM::Real>("constants.Rd");
     VVM::Real g = m_config.get_value<VVM::Real>("constants.gravity");
@@ -577,12 +578,10 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 }
                 buffer.t_lev_k(i, nlay) = tg(iy + h, ix + h);
 
-                // Initialize Broadband Surface Albedo  (TODO: Get from State)
-                // For now, assuming ocean-like albedo
-                buffer.sfc_alb_dir_vis_k(i) = 0.3;
-                buffer.sfc_alb_dir_nir_k(i) = 0.3;
-                buffer.sfc_alb_dif_vis_k(i) = 0.3;
-                buffer.sfc_alb_dif_nir_k(i) = 0.3;
+                buffer.sfc_alb_dir_vis_k(i) = albedo(iy+h, ix+h)/100.;
+                buffer.sfc_alb_dir_nir_k(i) = albedo(iy+h, ix+h)/100.;
+                buffer.sfc_alb_dif_vis_k(i) = albedo(iy+h, ix+h)/100.;
+                buffer.sfc_alb_dif_nir_k(i) = albedo(iy+h, ix+h)/100.;
 
                 for(int k=0; k < nlay; ++k) {
                     for(int b=0; b<nswbands; ++b) {
