@@ -194,9 +194,7 @@ int main(int argc, char *argv[]) {
         );
 
         const bool restart_enabled = config.get_value<bool>("restart.enable", false);
-        if (!restart_enabled) {
-            output_manager->write(0, 0.0);
-        }
+        output_manager->write(0, 0.0); // Do this even at restart mode because the SST enigine might lost control if not called at first
         // output_manager->write_static_topo_file();
 
         // Simulation loop parameters

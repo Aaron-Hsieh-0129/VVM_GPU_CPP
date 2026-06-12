@@ -16,12 +16,6 @@ namespace {
 constexpr VVM::Real earth_radius_m = VVM::real(6.37e6);
 constexpr VVM::Real pi = VVM::real(3.141592653589793238462643383279502884);
 
-std::string format_grads_number(VVM::Real value) {
-    std::ostringstream ss;
-    ss << std::setprecision(12) << value;
-    return ss.str();
-}
-
 std::string format_grads_axis_number(VVM::Real value) {
     std::ostringstream ss;
     ss << std::fixed << std::setprecision(7) << value;
@@ -92,12 +86,38 @@ OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VV
         io_.SetParameter("H5CollectiveMPIO", use_collective);
     } 
     else if (engine_type_ == "SST") {
-        int queue_limit = config.get_value<int>("output.queue_limit", 20);
-        std::string data_transport = config.get_value<std::string>("output.data_transport", "");
-        if (rank_ == 0) std::cout << "  [OutputManager] Engine: SST (BP5)." << std::endl;
-        io_.SetParameter("MarshalMethod", "BP5"); 
-        if (data_transport != "") io_.SetParameter("DataTransport", data_transport);
-        io_.SetParameter("QueueLimit", std::to_string(queue_limit)); 
+        const int queue_limit = config.get_value<int>("output.queue_limit", 1);
+
+        if (rank_ == 0) {
+            std::cout << "  [OutputManager] Engine: SST (WAN sockets safe mode)." << std::endl;
+            std::cout << "  [OutputManager] SST DataTransport: WAN" << std::endl;
+            std::cout << "  [OutputManager] SST WANDataTransport: sockets" << std::endl;
+            std::cout << "  [OutputManager] SST ControlTransport: sockets" << std::endl;
+            std::cout << "  [OutputManager] SST QueueLimit: " << queue_limit << std::endl;
+        }
+
+        io_.SetParameter("MarshalMethod", "BP5");
+
+        // Safe fallback path: EVPath/WAN over sockets.
+        io_.SetParameter("DataTransport", "WAN");
+        io_.SetParameter("WANDataTransport", "sockets");
+        io_.SetParameter("ControlTransport", "sockets");
+
+        io_.SetParameter("RendezvousReaderCount", "1");
+        io_.SetParameter("QueueLimit", std::to_string(queue_limit));
+        io_.SetParameter("QueueFullPolicy", "Block");
+        io_.SetParameter("ReserveQueueLimit", "0");
+
+        define_variables();
+        variables_defined_ = true;
+
+        const std::string stream_name = output_dir_ + "/" + filename_prefix_;
+        if (rank_ == 0) {
+            std::cout << "  [OutputManager] SST Streaming: "
+                    << stream_name << std::endl;
+        }
+
+        writer_ = io_.Open(stream_name, adios2::Mode::Write, comm_);
     }
 }
 
@@ -229,7 +249,7 @@ void OutputManager::write(int step, VVM::Real time) {
                             auto& host_view = host_buffers_1d_[field_name];
                             
                             Kokkos::deep_copy(host_view, subview);
-                            writer_.Put(adios_var, host_view.data());
+                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Sync);
                         }
                         else if constexpr (T::DimValue == 2) {
                             size_t ny = adios_var.Count()[0];
@@ -253,7 +273,7 @@ void OutputManager::write(int step, VVM::Real time) {
                             Kokkos::deep_copy(host_view, dev_contig);
                             
                             // UNCONDITIONAL PUT: Even if ny*nx is 0, we pass the pointer (which is valid/empty)
-                            writer_.Put(adios_var, host_view.data());
+                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Sync);
                         }
                         else if constexpr (T::DimValue == 3) {
                             size_t nz = adios_var.Count()[0];
@@ -278,7 +298,7 @@ void OutputManager::write(int step, VVM::Real time) {
                             auto& host_view = host_buffers_3d_[field_name];
                             Kokkos::deep_copy(host_view, dev_contig);
                             
-                            writer_.Put(adios_var, host_view.data());
+                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Sync);
                         }
                         else if constexpr (T::DimValue == 4) {
                             size_t d4 = adios_var.Count()[0];
@@ -304,7 +324,7 @@ void OutputManager::write(int step, VVM::Real time) {
                             auto& host_view = host_buffers_4d_[field_name];
                             Kokkos::deep_copy(host_view, dev_contig);
                             
-                            writer_.Put(adios_var, host_view.data());
+                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Sync);
                         }
                     }
                 }, it->second);
@@ -312,6 +332,7 @@ void OutputManager::write(int step, VVM::Real time) {
         }
     }
 
+    writer_.PerformPuts();
     writer_.EndStep();
     
     if (engine_type_ == "HDF5") {
@@ -433,17 +454,13 @@ std::string OutputManager::grads_start_time() const {
 }
 
 std::string OutputManager::grads_time_increment() const {
-    const VVM::Real rounded = std::round(output_interval_s_);
-    const bool is_whole_second = std::abs(output_interval_s_ - rounded) < real(1.0e-6);
+    const auto minutes = std::max<long long>(
+        1,
+        static_cast<long long>(std::llround(output_interval_s_ / real(60.0)))
+    );
 
-    if (is_whole_second) {
-        const auto seconds = static_cast<long long>(rounded);
-        if (seconds > 0 && seconds % 86400 == 0) return std::to_string(seconds / 86400) + "dy";
-        if (seconds > 0 && seconds % 3600 == 0) return std::to_string(seconds / 3600) + "hr";
-        if (seconds > 0 && seconds % 60 == 0) return std::to_string(seconds / 60) + "mn";
-    }
-
-    return format_grads_number(output_interval_s_ / real(60.0)) + "mn";
+    if (minutes % 60 == 0) return std::to_string(minutes / 60) + "hr";
+    return std::to_string(minutes) + "mn";
 }
 
 void OutputManager::grads_ctl_file() {

@@ -33,144 +33,239 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
     MPI_Comm_size(io_comm, &size);
 
     adios2::ADIOS adios(io_comm);
-    std::string output_dir = config.get_value<std::string>("output.output_dir");
-    std::string filename_prefix = config.get_value<std::string>("output.output_filename_prefix");
-    VVM::Real output_interval_s = config.get_value<VVM::Real>("simulation.output_interval_s");
-    
-    std::string input_stream_name = output_dir + "/" + filename_prefix;
+
+    const std::string output_dir =
+        config.get_value<std::string>("output.output_dir");
+    const std::string filename_prefix =
+        config.get_value<std::string>("output.output_filename_prefix");
+    const VVM::Real output_interval_s =
+        config.get_value<VVM::Real>("simulation.output_interval_s");
+
+    const std::string input_stream_name = output_dir + "/" + filename_prefix;
 
     if (rank == 0) {
-        std::cout << "  [IO-Server] Listening on stream: " << input_stream_name << std::endl;
+        std::cout << "  [IO-Server] Listening on stream: "
+                  << input_stream_name << std::endl;
         mkdir(output_dir.c_str(), 0777);
     }
 
+    MPI_Barrier(io_comm);
+
+    // -------------------------
+    // SST reader: safe settings
+    // -------------------------
     adios2::IO inIO = adios.DeclareIO("InputSST");
     inIO.SetEngine("SST");
-    // Restart runs load large HDF5 files before opening the SST writer, which
-    // can take several minutes.  The default SST OpenTimeoutSecs (~60s) is too
-    // short; 600s covers even slow restarts without hanging forever if the
-    // writer truly never appears.
-    inIO.SetParameter("OpenTimeoutSecs", "600");
 
-    adios2::IO outIO = adios.DeclareIO("OutputHDF5");
-    outIO.SetEngine("HDF5"); 
-    outIO.SetParameter("IdleH5Writer", "true"); 
+    // Force the same SST path every time. Do not let ADIOS2 auto-select RDMA.
+    inIO.SetParameter("DataTransport", "WAN");
+    inIO.SetParameter("WANDataTransport", "sockets");
+    inIO.SetParameter("ControlTransport", "sockets");
+
+    // Restart startup can be long before the writer opens.
+    inIO.SetParameter("OpenTimeoutSecs", "14400");
+    inIO.SetParameter("SpeculativePreloadMode", "OFF");
+    inIO.SetParameter("AlwaysProvideLatestTimestep", "false");
     
-    // if (size > 1) {
-    //     outIO.SetParameter("H5CollectiveMPIO", "true"); 
-    //     if (rank == 0) std::cout << "  [IO-Server] HDF5 Collective Mode: ENABLED (Ranks: " << size << ")" << std::endl;
-    // } 
-    // else {
-    //     outIO.SetParameter("H5CollectiveMPIO", "false");
-    //     if (rank == 0) std::cout << "  [IO-Server] HDF5 Collective Mode: DISABLED (Single Rank)" << std::endl;
-    // }
+    // -------------------------
+    // HDF5 writer: safe settings
+    // -------------------------
+    adios2::IO outIO = adios.DeclareIO("OutputHDF5");
+    outIO.SetEngine("HDF5");
+    outIO.SetParameter("IdleH5Writer", "true");
+
+    // For the safe SST run, use 1 IO rank first.
+    // Serial HDF5 is safer than collective HDF5 while debugging SST stability.
     outIO.SetParameter("H5CollectiveMPIO", "false");
 
-    adios2::Engine reader = inIO.Open(input_stream_name, adios2::Mode::Read);
-    adios2::Engine writer;
+    adios2::Engine reader;
+    try {
+        reader = inIO.Open(input_stream_name, adios2::Mode::Read);
+    } catch (const std::exception& e) {
+        if (rank == 0) {
+            std::cerr << "[IO-Server] FATAL: failed to open SST stream: "
+                      << e.what() << std::endl;
+        }
+        MPI_Abort(MPI_COMM_WORLD, 10);
+    }
 
     while (true) {
         std::map<std::string, std::vector<VVM::Real>> data_buffers;
-        adios2::StepStatus status = reader.BeginStep();
-        if (status != adios2::StepStatus::OK) break;
+        std::vector<std::string> current_step_vars;
 
-        int step = reader.CurrentStep();
-        VVM::Real step_time = static_cast<VVM::Real>(step) * output_interval_s;
-        const auto& varTypeMap = inIO.AvailableVariables();
-        std::vector<std::string> current_step_vars; 
-
-        for (const auto& varPair : varTypeMap) {
-            std::string name = varPair.first;
-            std::string type = varPair.second.at("Type");
-            if (type != "double" && type != "float") continue;
-
-            auto varIn = inIO.InquireVariable<VVM::Real>(name);
-            auto shape = varIn.Shape();
-            current_step_vars.push_back(name);
-
-            if (!outIO.InquireVariable<VVM::Real>(name)) {
-                if (shape.empty()) outIO.DefineVariable<VVM::Real>(name);
-                else outIO.DefineVariable<VVM::Real>(name, shape);
-            }
-
-            if (shape.empty()) {
-                data_buffers[name].resize(1);
-                reader.Get(varIn, data_buffers[name].data());
-                if (name == "time") step_time = data_buffers[name][0];
-                continue;
-            }
-
-            size_t my_start, my_count;
-            get_local_range(shape[0], rank, size, my_start, my_count);
-
-            if (my_count > 0) {
-                adios2::Dims start = varIn.Start();
-                adios2::Dims count = varIn.Shape();
-                start[0] = my_start;
-                count[0] = my_count;
-                varIn.SetSelection({start, count});
-
-                size_t elements = 1;
-                for(auto c : count) elements *= c;
-                data_buffers[name].resize(elements);
-                reader.Get(varIn, data_buffers[name].data());
-            }
-        }
-        bool step_complete = true;
+        adios2::StepStatus status;
         try {
-            reader.EndStep();
+            status = reader.BeginStep();
         } catch (const std::exception& e) {
-            // Writer closed or failed while we were consuming this step.
-            // The data already received may be partial; skip the HDF5 write
-            // and exit the loop cleanly so the io server doesn't abort().
             if (rank == 0) {
-                std::cerr << "[IO-Server] SST stream closed during EndStep (writer finished normally or failed): "
+                std::cerr << "[IO-Server] FATAL: BeginStep failed: "
                           << e.what() << std::endl;
             }
-            step_complete = false;
+            MPI_Abort(MPI_COMM_WORLD, 11);
         }
-        if (!step_complete) break;
 
-        const int output_index = static_cast<int>(std::llround(step_time / output_interval_s));
-        if (rank == 0) std::cout << "  [IO-Server] Writing Step " << output_index << "..." << std::endl;
-        std::string h5_name = output_dir + "/" + filename_prefix + "_" + format_six_digits(output_index) + ".h5";
-        writer = outIO.Open(h5_name, adios2::Mode::Write, io_comm);
-        writer.BeginStep();
+        if (status != adios2::StepStatus::OK) {
+            if (rank == 0) {
+                std::cout << "[IO-Server] SST stream ended." << std::endl;
+            }
+            break;
+        }
 
-        std::sort(current_step_vars.begin(), current_step_vars.end());
+        const int step = reader.CurrentStep();
+        VVM::Real step_time = static_cast<VVM::Real>(step) * output_interval_s;
 
-        for (const auto& name : current_step_vars) {
-            auto varOut = outIO.InquireVariable<VVM::Real>(name);
-            if (!varOut) continue;
+        const auto& varTypeMap = inIO.AvailableVariables();
 
-            if (data_buffers.count(name)) {
-                if (varOut.Shape().empty()) {
-                    writer.Put(varOut, data_buffers[name].data());
+        try {
+            for (const auto& varPair : varTypeMap) {
+                const std::string& name = varPair.first;
+
+                auto typeIt = varPair.second.find("Type");
+                if (typeIt == varPair.second.end()) continue;
+
+                const std::string& type = typeIt->second;
+                if (type != "double" && type != "float") continue;
+
+                auto varIn = inIO.InquireVariable<VVM::Real>(name);
+                if (!varIn) continue;
+
+                const adios2::Dims shape = varIn.Shape();
+                current_step_vars.push_back(name);
+
+                if (!outIO.InquireVariable<VVM::Real>(name)) {
+                    if (shape.empty()) {
+                        outIO.DefineVariable<VVM::Real>(name);
+                    } else {
+                        adios2::Dims start(shape.size(), 0);
+                        adios2::Dims count = shape;
+                        outIO.DefineVariable<VVM::Real>(name, shape, start, count);
+                    }
+                }
+
+                // Scalar
+                if (shape.empty()) {
+                    data_buffers[name].resize(1);
+
+                    // Safe mode: synchronous get. Avoid large deferred PerformGets bursts.
+                    reader.Get(varIn, data_buffers[name].data(), adios2::Mode::Sync);
+
+                    if (name == "time") {
+                        step_time = data_buffers[name][0];
+                    }
                     continue;
                 }
 
-                size_t my_count = data_buffers[name].size();
-                size_t dim0 = varOut.Shape()[0];
-                size_t s_start, s_count;
-                get_local_range(dim0, rank, size, s_start, s_count);
-                
-                if (s_count > 0) {
-                     adios2::Dims start = {s_start};
-                     adios2::Dims count = {s_count};
-                     // Fill rest of dims
-                     for(size_t i=1; i<varOut.Shape().size(); ++i) {
-                         start.push_back(0);
-                         count.push_back(varOut.Shape()[i]);
-                     }
-                     varOut.SetSelection({start, count});
-                     writer.Put(varOut, data_buffers[name].data());
+                // Array: split first dimension across IO ranks.
+                size_t my_start = 0;
+                size_t my_count = 0;
+                get_local_range(shape[0], rank, size, my_start, my_count);
+
+                if (my_count == 0) {
+                    continue;
                 }
+
+                adios2::Dims start(shape.size(), 0);
+                adios2::Dims count = shape;
+                start[0] = my_start;
+                count[0] = my_count;
+
+                varIn.SetSelection({start, count});
+
+                size_t elements = 1;
+                for (const auto c : count) {
+                    elements *= c;
+                }
+
+                data_buffers[name].resize(elements);
+
+                // Safe mode: synchronous get.
+                reader.Get(varIn, data_buffers[name].data(), adios2::Mode::Sync);
             }
+
+            reader.EndStep();
+
+        } catch (const std::exception& e) {
+            if (rank == 0) {
+                std::cerr << "[IO-Server] FATAL: SST read/Get/EndStep failed: "
+                          << e.what() << std::endl;
+            }
+            MPI_Abort(MPI_COMM_WORLD, 12);
         }
-        writer.EndStep();
-        writer.Close();
+
+        const int output_index =
+            static_cast<int>(std::llround(step_time / output_interval_s));
+
+        if (rank == 0) {
+            std::cout << "  [IO-Server] Writing Step "
+                      << output_index << "..." << std::endl;
+        }
+
+        const std::string h5_name =
+            output_dir + "/" + filename_prefix + "_" +
+            format_six_digits(output_index) + ".h5";
+
+        std::sort(current_step_vars.begin(), current_step_vars.end());
+
+        try {
+            adios2::Engine writer = outIO.Open(h5_name, adios2::Mode::Write, io_comm);
+            writer.BeginStep();
+
+            for (const auto& name : current_step_vars) {
+                auto varOut = outIO.InquireVariable<VVM::Real>(name);
+                if (!varOut) continue;
+
+                auto bufIt = data_buffers.find(name);
+                if (bufIt == data_buffers.end()) continue;
+
+                auto& buffer = bufIt->second;
+
+                // Scalar
+                if (varOut.Shape().empty()) {
+                    writer.Put(varOut, buffer.data(), adios2::Mode::Sync);
+                    continue;
+                }
+
+                const adios2::Dims shape = varOut.Shape();
+                if (shape.empty()) continue;
+
+                size_t s_start = 0;
+                size_t s_count = 0;
+                get_local_range(shape[0], rank, size, s_start, s_count);
+
+                if (s_count == 0) {
+                    continue;
+                }
+
+                adios2::Dims start(shape.size(), 0);
+                adios2::Dims count = shape;
+                start[0] = s_start;
+                count[0] = s_count;
+
+                varOut.SetSelection({start, count});
+
+                writer.Put(varOut, buffer.data(), adios2::Mode::Sync);
+            }
+
+            writer.EndStep();
+            writer.Close();
+
+        } catch (const std::exception& e) {
+            if (rank == 0) {
+                std::cerr << "[IO-Server] FATAL: HDF5 write failed for "
+                          << h5_name << ": " << e.what() << std::endl;
+            }
+            MPI_Abort(MPI_COMM_WORLD, 13);
+        }
     }
-    reader.Close();
+
+    try {
+        reader.Close();
+    } catch (const std::exception& e) {
+        if (rank == 0) {
+            std::cerr << "[IO-Server] Warning: reader.Close() failed: "
+                      << e.what() << std::endl;
+        }
+    }
 }
 
 } // namespace IO
