@@ -352,7 +352,6 @@
         }
     },
     "optimization": {
-        "cuda_graph_solver": true,
         "cuda_graph_halo_exchange": ["u", "w", "xi", "eta", "zeta", "th", "qv", "qc", "qi", "qr", "qm", "nc", "ni", "nr", "bm"]
     },
     "constants": {
@@ -364,11 +363,6 @@
         "Lv": 2.5e6,
         "OMEGA": 7.292e-5,
         "PI": 3.14159265
-    },
-    "add_model_fields": {
-        "3d": [
-            "tracer1"
-        ]
     }
 }
 
