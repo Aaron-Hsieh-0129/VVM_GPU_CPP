@@ -45,7 +45,7 @@ double calculate_calday(int year, int month, int day, int hour, int minute, doub
 }
 
 
-RRTMGPRadiation::RRTMGPRadiation(const VVM::Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params)
+RRTMGPRadiation::RRTMGPRadiation(const VVM::Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params, VVM::Core::State& state)
     : m_grid(grid), m_config(config), m_params(params)
 {
     // Initialize dimensions
@@ -80,6 +80,10 @@ RRTMGPRadiation::RRTMGPRadiation(const VVM::Utils::ConfigurationManager& config,
         }
     }
     m_ngas = m_gas_names.size();
+
+    int nx = m_grid.get_local_total_points_x();
+    int ny = m_grid.get_local_total_points_y();
+    if (!state.has_field("albedo")) state.add_field<2>("albedo", {ny, nx});
 }
 
 RRTMGPRadiation::~RRTMGPRadiation() {}

@@ -61,7 +61,7 @@ public:
     using interface_t = scream::rrtmgp::rrtmgp_interface<Real, layout_t, DefaultDevice>;
 
     // Constructors
-    RRTMGPRadiation(const VVM::Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params);
+    RRTMGPRadiation(const VVM::Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params, VVM::Core::State& state);
     ~RRTMGPRadiation();
 
     std::string name() const { return "rrtmgp"; }

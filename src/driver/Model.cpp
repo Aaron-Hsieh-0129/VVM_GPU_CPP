@@ -37,7 +37,7 @@ Model::Model(const Utils::ConfigurationManager& config,
     }
 
     if (config_.get_value<bool>("physics.rrtmgp.enable_rrtmgp", false)) {
-        radiation_ = std::make_unique<Physics::RRTMGP::RRTMGPRadiation>(config_, grid_, params_);
+        radiation_ = std::make_unique<Physics::RRTMGP::RRTMGPRadiation>(config_, grid_, params_, state_);
 
         VVM::Real rad_freq_s = config_.get_value<VVM::Real>("physics.rrtmgp.rad_frequency_s", 1.0);
         VVM::Real remainder = std::fmod(rad_freq_s, dt_s);
