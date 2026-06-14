@@ -540,25 +540,6 @@ end subroutine check_boundary
 ! roughness lengthe is defined in sfcsub                                                  !%f
 !     z0(i, jj)  = z0_data(vegtyp(i, jj))                                                 !%f
 
-            ! Aaron - turn this on to use input data or do interpolation
-            if (shdmax(i, jj) > shdmin(i, jj)) then
-                interp_fraction = (shdfac(i, jj) - shdmin(i, jj)) / (shdmax(i, jj) - shdmin(i, jj))
-                interp_fraction = max(0.0_kind_phys, min(interp_fraction, 1.0_kind_phys))
-                
-                z0(i, jj)   = (1.0_kind_phys - interp_fraction) * z0min_data(vegtyp(i, jj)) + &
-                              interp_fraction * z0max_data(vegtyp(i, jj))
-                
-                if (.not. rdlai2d) then
-                    xlai(i, jj) = (1.0_kind_phys - interp_fraction) * laimin_data(vegtyp(i, jj)) + &
-                                  interp_fraction * laimax_data(vegtyp(i, jj))
-                end if
-            else
-                z0(i, jj)   = 0.5_kind_phys * z0min_data(vegtyp(i, jj)) + 0.5_kind_phys * z0max_data(vegtyp(i, jj))
-                
-                if (.not. rdlai2d) then
-                    xlai(i, jj) = 0.5_kind_phys * laimin_data(vegtyp(i, jj)) + 0.5_kind_phys * laimax_data(vegtyp(i, jj))
-                end if
-            end if
 
 
 !     sfcems(i, jj)= ems1_data(vegtyp(i, jj))      !for summer season                     !%f
@@ -1192,7 +1173,9 @@ end subroutine check_boundary
 !  --- ...  prepare partial quantities for penman equation.                               !%e
          delta = elcp*dqsdt2(i, jj)                                                       !%e
          t24 = sfctmp(i, jj)*sfctmp(i, jj)*sfctmp(i, jj)*sfctmp(i, jj)                    !%e
-         rr = t24*6.48e-8/(sfcprs(i, jj)*ch(i, jj)) + 1.0                                 !%e
+         ! Aaron - consider emissivity
+         ! rr = t24*6.48e-8/(sfcprs(i, jj)*ch(i, jj)) + 1.0                                 !%e
+         rr = sfcems(i,jj) * t24*6.48e-8/(sfcprs(i, jj)*ch(i, jj)) + 1.0                                 !%e
          rho = sfcprs(i, jj)/(rd1*t2v)                                                    !%e
          rch = rho*cp*ch(i, jj)                                                           !%e
                                                                                           !%e

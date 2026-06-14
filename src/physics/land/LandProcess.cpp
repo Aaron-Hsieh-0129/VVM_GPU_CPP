@@ -279,8 +279,8 @@ void LandProcess::postprocessing_and_unpacking() {
             // canopy_v(vj, vi) = m_canopy(i, j);
             // snwdph_v(vj, vi) = m_snwdph(i, j);
             // sneqv_v(vj, vi) = m_sneqv(i, j);
-            // zorl(vj, vi) = m_zorl(i, j);
-            // sfemis(vj, vi) = m_sfemis(i, j);
+            zorl(vj, vi) = m_zorl(i, j);
+            sfemis(vj, vi) = m_sfemis(i, j);
             for(int k=0; k<m_nsoil; ++k) {
                 stc_v(k, vj, vi) = m_stc(i, k, j);
             //     smc_v(k, vj, vi) = m_smc(i, k, j);

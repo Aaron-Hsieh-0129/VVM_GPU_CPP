@@ -130,7 +130,7 @@ contains
                 tgclim(i,j) = 285.0_c_vvm_real 
                 snoalb(i,j) = 0.60_c_vvm_real
                 albedo2(i,j) = 0.0_c_vvm_real
-                z0rl(i,j) = zorl(i,j) * 100.0_c_vvm_real  ! NCEP zorl to cm
+                z0rl(i,j) = z0_data(vegtype(i,j)) * 100.0_c_vvm_real  ! NCEP zorl to cm
                 
                 tprcp(i,j) = prcp(i,j) * dt / 1000.0_c_vvm_real  !  mm/s times dt to m
                 

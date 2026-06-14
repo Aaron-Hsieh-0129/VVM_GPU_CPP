@@ -19,6 +19,7 @@
          use const, only: RTYPE
          use param, only: my, my_max
          use index
+         use namelist_soilveg, only: Z0MAX_DATA, DEFINED_VEG
 
          implicit none
 !
@@ -195,7 +196,7 @@
                      ! Aaron: modify the lower bound to be 1e-2
                      windr = max(sqrt(u1r*u1r &
                                    + v1r*v1r) &
-                                   + max(0.0, min(ddvelr, 30.0)), 0.01)
+                                   + max(0.0, min(ddvelr, 30.0)), 1.0)
 #endif
                      tem1 = 1.0 + rvrdm1*max(q1r, 1.e-8)
                      thv1 = t1r*prslkir*tem1
@@ -238,23 +239,26 @@
 
                         if (ivegsrc .ge. 1) then
 
-                           if (vegtyper == 10) then
-                              z0max = exp(tem2*log01 + tem1*log07)
-                           elseif (vegtyper == 6) then
-                              z0max = exp(tem2*log01 + tem1*log05)
-                           elseif (vegtyper == 7) then
-         !           z0max = exp( tem2*log01 + tem1*log01 )
-                              z0max = 0.01
-                           elseif (vegtyper == 16) then
-         !           z0max = exp( tem2*log01 + tem1*log01 )
-                              z0max = 0.01
-                           else
-                              if (islimskr == 2) then
-                                 z0max = exp(tem2*log(0.0002) + tem1*log(z0max))
-                              else
-                                 z0max = exp(tem2*log01 + tem1*log(z0max))
-                              end if
-                           end if
+         !                   if (vegtyper == 10) then
+         !                      z0max = exp(tem2*log01 + tem1*log07)
+         !                   elseif (vegtyper == 6) then
+         !                      z0max = exp(tem2*log01 + tem1*log05)
+         !                   elseif (vegtyper == 7) then
+         ! !           z0max = exp( tem2*log01 + tem1*log01 )
+         !                      z0max = 0.01
+         !                   elseif (vegtyper == 16) then
+         ! !           z0max = exp( tem2*log01 + tem1*log01 )
+         !                      z0max = 0.01
+         !                   else
+         !                      if (islimskr == 2) then
+         !                         z0max = exp(tem2*log(0.0002) + tem1*log(z0max))
+         !                      else
+         !                         z0max = exp(tem2*log01 + tem1*log(z0max))
+         !                      end if
+         !                   end if
+
+                            ! Aaron: Use table
+                            z0max = z0max_data(vegtyper)
 
                         elseif (ivegsrc == 0) then
 
@@ -474,6 +478,21 @@
                   ustress(i, jj) = ustressr
                   vstress(i, jj) = vstressr
 #endif 
+
+                      ! if (i == 1 .and. jj == 1) then
+                      !      print *, 'GPU_SFCDIF_CHECK ', &
+                      !            ' veg=', vegtyper, &
+                      !            ' islimsk=', islimskr, &
+                      !            ' ivegsrc=', ivegsrc, &
+                      !            ' z0max=', z0max, &
+                      !            ' ztmax=', ztmax, &
+                      !            ' wind=', windr, &
+                      !            ' cm=', cmr, &
+                      !            ' cmx_equiv=', cmr*windr, &
+                      !            ' rb=', rbr, &
+                      !            ' fmr=', fmr, &
+                      !            ' pm=', pm
+                      ! end if
                   end if
                end if
             end do
