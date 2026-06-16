@@ -249,7 +249,7 @@ end subroutine check_boundary
          real(kind=kind_phys), parameter :: rfc = 0.191
          real(kind=kind_phys), parameter :: rfac = ric/(fhneu*rfc*rfc)
 !  ---  shflx_gpu
-         real(kind=kind_phys), parameter :: ctfil1 = 0.5
+         real(kind=kind_phys), parameter :: ctfil1 = 1.0 ! Aaron - remove smoothing for t1. It was 0.5 before.
          real(kind=kind_phys), parameter :: ctfil2 = 1.0 - ctfil1
 !  ---  snopac_gpu
          real, parameter :: esdmin = 1.e-6
@@ -412,6 +412,43 @@ end subroutine check_boundary
                if (i .le. myim(jj)) then
                   if (flag(i, jj) .and. flag_iter(i, jj)) then
 
+
+                    ! Aaron - debug print
+                    ! if (i == 1 .and. jj == 1) then
+                    !     print *, 'GPU_URBAN_BEFORE_SFLX', i, jj, &
+                    !          'flag=', flag(i,jj), &
+                    !          'flag_iter=', flag_iter(i,jj), &
+                    !          'couple=', couple(i,jj), &
+                    !          'icein=', icein(i,jj), &
+                    !          'vegtyp=', vegtyp(i,jj), &
+                    !          'soiltyp=', soiltyp(i,jj), &
+                    !          'slopetyp=', slopetyp(i,jj), &
+                    !          'zlvl=', zlvl(i,jj), &
+                    !          'z0=', z0(i,jj), &
+                    !          'sfcprs=', sfcprs(i,jj), &
+                    !          'sfctmp=', sfctmp(i,jj), &
+                    !          't1=', t1(i,jj), &
+                    !          'tbot=', tbot(i,jj), &
+                    !          'q2=', q2(i,jj), &
+                    !          'q2sat=', q2sat(i,jj), &
+                    !          'dqsdt2=', dqsdt2(i,jj), &
+                    !          'th2=', th2(i,jj), &
+                    !          'sfcspd=', sfcspd(i,jj), &
+                    !          'swdn=', swdn(i,jj), &
+                    !          'swnet=', swnet(i,jj), &
+                    !          'lwdn=', lwdn(i,jj), &
+                    !          'sfcems=', sfcems(i,jj), &
+                    !          'prcp=', prcp(i,jj), &
+                    !          'ffrozp=', ffrozp(i,jj), &
+                    !          'alb=', alb(i,jj), &
+                    !          'snoalb=', snoalb(i,jj), &
+                    !          'shdmin=', shdmin(i,jj), &
+                    !          'shdfac=', shdfac(i,jj), &
+                    !          'snowh=', snowh(i,jj), &
+                    !          'sneqv=', sneqv(i,jj), &
+                    !          'cm=', cm(i,jj), &
+                    !          'ch=', ch(i,jj)
+                    ! endif
 
 !  --- ...  initialization
          runoff1(i, jj) = 0.0
@@ -5700,6 +5737,15 @@ end subroutine check_boundary
 !           differently in routine snopac)                                                !%dn
             t1(i, jj) = (yy + (zz1 - 1.0)*stc(i, 1, jj))/zz1                              !%dn
             t1(i, jj) = ctfil1*t1(i, jj) + ctfil2*oldt1                                   !%dn
+
+            ! Aaron - debug print
+            ! if (i == 1 .and. jj == 1) then
+            !     print *, 't1 component: ', i, jj, &
+            !          'yy=', yy, &
+            !          'zz1=', zz1, &
+            !          'stc1=', stc(i,1,jj)
+            ! endif
+
             !$acc loop seq                                                                !%dn
             do i1 = 1, nsoil                                                              !%dn
                stc(i, i1, jj) = ctfil1*stc(i, i1, jj) + ctfil2*stsoil(i1)                 !%dn
@@ -9196,6 +9242,56 @@ end subroutine check_boundary
          end do
 
          soilw(i, jj) = soilww/soilwm
+
+         ! Aaron - debug print
+         ! if (i == 1 .and. jj == 1) then
+         !    print *, 'GPU_URBAN_AFTER_SFLX', i, jj, &
+         !         'flag=', flag(i,jj), &
+         !         'flag_iter=', flag_iter(i,jj), &
+         !         'couple=', couple(i,jj), &
+         !         'ice=', ice, &
+         !         'vegtyp=', vegtyp(i,jj), &
+         !         'soiltyp=', soiltyp(i,jj), &
+         !         'slopetyp=', slopetyp(i,jj), &
+         !         'zlvl=', zlvl(i,jj), &
+         !         'z0=', z0(i,jj), &
+         !         'sfcprs=', sfcprs(i,jj), &
+         !         'sfctmp=', sfctmp(i,jj), &
+         !         't1=', t1(i,jj), &
+         !         'tbot=', tbot(i,jj), &
+         !         'q2=', q2(i,jj), &
+         !         'q2sat=', q2sat(i,jj), &
+         !         'dqsdt2=', dqsdt2(i,jj), &
+         !         'th2=', th2(i,jj), &
+         !         't2v=', t2v, &
+         !         'sfcspd=', sfcspd(i,jj), &
+         !         'swdn=', swdn(i,jj), &
+         !         'swnet=', swnet(i,jj), &
+         !         'lwdn=', lwdn(i,jj), &
+         !         'fdown=', fdown, &
+         !         'sfcems=', sfcems(i,jj), &
+         !         'prcp=', prcp(i,jj), &
+         !         'ffrozp=', ffrozp(i,jj), &
+         !         'alb=', alb(i,jj), &
+         !         'albedo=', albedo(i,jj), &
+         !         'snoalb=', snoalb(i,jj), &
+         !         'shdfac=', shdfac(i,jj), &
+         !         'snowh=', snowh(i,jj), &
+         !         'sneqv=', sneqv(i,jj), &
+         !         'sncovr=', sncovr(i,jj), &
+         !         'cm=', cm(i,jj), &
+         !         'ch=', ch(i,jj), &
+         !         'rch=', rch, &
+         !         'rr=', rr, &
+         !         'epsca=', epsca, &
+         !         'etp=', etp(i,jj), &
+         !         'eta=', eta(i,jj), &
+         !         'sheat=', sheat(i,jj), &
+         !         'ssoil=', ssoil(i,jj), &
+         !         'beta=', beta(i,jj), &
+         !         'pc=', pc(i,jj), &
+         !         'rc=', rc(i,jj)
+         !  endif
                   end if
                end if
             end do

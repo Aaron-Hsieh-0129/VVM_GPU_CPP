@@ -34,7 +34,8 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
     m_q1 = view_2d_ll("lsm_q1", m_nx, m_ny);
     m_u1 = view_2d_ll("lsm_u1", m_nx, m_ny);
     m_v1 = view_2d_ll("lsm_v1", m_nx, m_ny);
-    m_ps = view_2d_ll("lsm_ps", m_nx, m_ny);
+    m_ps = view_2d_ll("lsm_ps", m_nx, m_ny); // Surface pressure
+    m_prsl1 = view_2d_ll("lsm_prsl1", m_nx, m_ny); // Pressure at first layer of atmosphere
     m_prcp = view_2d_ll("lsm_prcp", m_nx, m_ny);
     m_swdn = view_2d_ll("lsm_swdn", m_nx, m_ny);
     m_swnet = view_2d_ll("lsm_swnet", m_nx, m_ny);
@@ -52,6 +53,7 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
     m_sneqv = view_2d_ll("lsm_sneqv", m_nx, m_ny);
     m_zorl = view_2d_ll("lsm_zorl", m_nx, m_ny);
     m_cmx = view_2d_ll("lsm_cmx", m_nx, m_ny);
+    m_chx = view_2d_ll("lsm_chx", m_nx, m_ny);
 
     m_sigmaf = view_2d_ll("lsm_sigmaf", m_nx, m_ny); // Green Vegetation Fraction
     m_lai = view_2d_ll("lsm_lai", m_nx, m_ny); // leaf area index (m^2/m^2)
@@ -77,6 +79,7 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
     if (!state.has_field("sneqv")) state.add_field<2>("sneqv", {ny, nx});
     if (!state.has_field("zorl")) state.add_field<2>("zorl", {ny, nx});
     if (!state.has_field("cmx")) state.add_field<2>("cmx", {ny, nx});
+    if (!state.has_field("chx")) state.add_field<2>("chx", {ny, nx});
     if (!state.has_field("vegtype")) state.add_field<2>("vegtype", {ny, nx});
     if (!state.has_field("soiltype")) state.add_field<2>("soiltype", {ny, nx});
     if (!state.has_field("slopetype")) state.add_field<2>("slopetype", {ny, nx});
@@ -93,6 +96,11 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
     if (!state.has_field("smc")) state.add_field<3>("smc", {m_nsoil, ny, nx});
     if (!state.has_field("slc")) state.add_field<3>("slc", {m_nsoil, ny, nx});
     if (!state.has_field("sfemis")) state.add_field<2>("sfemis", {ny, nx});
+
+
+    if (!state.has_field("swdn_sfc")) state.add_field<2>("swdn_sfc", {ny, nx});
+    if (!state.has_field("swup_sfc")) state.add_field<2>("swup_sfc", {ny, nx});
+    if (!state.has_field("lwdn_sfc")) state.add_field<2>("lwdn_sfc", {ny, nx});
 
     m_use_tco_ocean = (ocean_scheme == "tco_ocean") ? 1 : 0; // false/true: 0/1 
 }
@@ -123,6 +131,7 @@ void LandProcess::init() {
             m_prcp(i,j) = 0.0;
             m_zorl(i, j) = 0.1;
             m_cmx(i, j) = 0.;
+            m_chx(i, j) = 0.;
             m_canopy(i, j) = 0.0;
             m_snwdph(i, j) = 0.0;
             m_sneqv(i, j) = 0.0;
@@ -144,6 +153,8 @@ void LandProcess::init() {
     );
     prepare_static_data();
     register_openacc();
+
+    init_vvm_land_sfcdif_wrf();
 }
 
 void LandProcess::prepare_static_data() {
@@ -178,7 +189,8 @@ void LandProcess::prepare_static_data() {
             VVM::Real dz = z_mid_v(hxp) - z_up_v(hx);
             m_hgt(i, j) = (dz < real(2.0)) ? real(2.0) : dz;
 
-            m_ps(i, j) = pbar_up_v(hx); 
+            m_ps(i, j) = pbar_v(hxp); 
+            m_prsl1(i, j) = pbar_v(hxp);
             m_prslki(i, j) = pibar_up_v(hx) / pibar_v(hxp);
 
             m_sigmaf(i, j) = gvf(vj, vi) / real(100.);  // Green Vegetation Fraction
@@ -195,6 +207,7 @@ void LandProcess::prepare_static_data() {
             m_slopetype(i, j) = slopetype(vj, vi); // slope 9 types
             m_zorl(i, j) = real(0.1); // surface roughness (m)
             m_cmx(i, j) = real(0.); // Exchange coefficient for momentum (m s-1)
+            m_chx(i, j) = real(0.); // Exchange coefficient for thermal (m s-1)
         }
     );
 }
@@ -225,7 +238,6 @@ void LandProcess::preprocessing_and_packing() {
             int hx = topo_v(vj, vi);
             int hxp = topo_v(vj, vi) + 1;
             
-
             m_t1(i, j) = th_v(hxp, vj, vi) * pibar_v(hxp);
             m_u1(i, j) = real(0.5) * (u_v(hxp, vj, vi) + u_v(hxp, vj, vi-1));
             m_v1(i, j) = real(0.5) * (v_v(hxp, vj, vi) + v_v(hxp, vj-1, vi));
@@ -237,6 +249,20 @@ void LandProcess::preprocessing_and_packing() {
             m_swnet(i,j) = swdn_sfc_v(vj, vi) - swup_sfc_v(vj, vi);
             m_lwdn(i,j) = lwdn_sfc_v(vj, vi);
             m_prcp(i,j) = precip_liq_surf_2d(vj, vi) + precip_ice_surf_2d(vj, vi);
+
+            /*
+            m_t1(i, j) = 299.644;
+            m_u1(i, j) = 3.;
+            m_v1(i, j) = 0.;
+            // m_u1(i, j) = u_v(hxp, vj, vi);
+            // m_v1(i, j) = v_v(hxp, vj, vi);
+            m_q1(i, j) = 0.0161989;
+
+            m_swdn(i,j) = 936.75;
+            m_swnet(i,j) = 0.;
+            m_lwdn(i,j) = 410.554;
+            m_prcp(i,j) = 0.;
+            */
         }
     );
 }
@@ -259,6 +285,7 @@ void LandProcess::postprocessing_and_unpacking() {
     auto& Tg = state_.get_field<2>("Tg").get_mutable_device_data(); 
     auto& zorl = state_.get_field<2>("zorl").get_mutable_device_data(); 
     auto& cmx = state_.get_field<2>("cmx").get_mutable_device_data(); 
+    auto& chx = state_.get_field<2>("chx").get_mutable_device_data(); 
     auto& sfemis = state_.get_field<2>("sfemis").get_mutable_device_data(); 
 
 
@@ -275,6 +302,7 @@ void LandProcess::postprocessing_and_unpacking() {
 
             Tg(vj, vi) = m_tskin(i, j);
             cmx(vj, vi) = m_cmx(i, j);
+            chx(vj, vi) = m_chx(i, j);
             // NOTE: The following varaibles don't need to be unpacked unless they need to be output
             // canopy_v(vj, vi) = m_canopy(i, j);
             // snwdph_v(vj, vi) = m_snwdph(i, j);
@@ -307,14 +335,17 @@ void LandProcess::run(VVM::Real dt) {
 //     hipStream_t stream = Kokkos::DefaultExecutionSpace().hip_stream();
 // #endif
 
+
+
+
     run_vvm_land_wrapper(m_use_tco_ocean, m_nx, m_ny, m_nsoil, dt,
         m_islimsk.data(), m_vegtype.data(), m_soiltype.data(), m_slopetype.data(),
         m_sigmaf.data(), m_sfemis.data(), m_alb.data(), m_shdmin.data(), m_shdmax.data(),
-        m_t1.data(), m_q1.data(), m_u1.data(), m_v1.data(), m_ps.data(), 
+        m_t1.data(), m_q1.data(), m_u1.data(), m_v1.data(), m_ps.data(), m_prsl1.data(), 
         m_prcp.data(), m_swdn.data(), m_lwdn.data(), m_swnet.data(), m_hgt.data(), m_prslki.data(),
         m_stc.data(), m_smc.data(), m_slc.data(), m_tskin.data(), 
         m_canopy.data(), m_snwdph.data(), m_sneqv.data(),
-        m_hflux.data(), m_qflux.data(), m_evap.data(), m_gfx.data(), m_zorl.data(), m_cmx.data(), 
+        m_hflux.data(), m_qflux.data(), m_evap.data(), m_gfx.data(), m_zorl.data(), m_cmx.data(), m_chx.data(),
         m_lai.data(), true);
 
     postprocessing_and_unpacking();
@@ -323,8 +354,8 @@ void LandProcess::run(VVM::Real dt) {
 void LandProcess::finalize() {
     unregister_openacc();
     m_islimsk = {}; m_vegtype = {}; m_soiltype = {}; m_slopetype = {};
-    m_zorl = {}; m_cmx = {}; m_t1 = {}; m_q1 = {}; m_u1 = {}; m_v1 = {};
-    m_ps = {}; m_prcp = {}; m_swdn = {}; m_lwdn = {}; m_swnet = {};
+    m_zorl = {}; m_cmx = {}; m_chx = {}; m_t1 = {}; m_q1 = {}; m_u1 = {}; m_v1 = {};
+    m_ps = {}; m_prsl1 = {}; m_prcp = {}; m_swdn = {}; m_lwdn = {}; m_swnet = {};
     m_stc = {}; m_smc = {}; m_slc = {};
     m_tskin = {}; m_canopy = {}; m_snwdph = {}; m_sneqv = {};
     m_hflux = {}; m_qflux = {}; m_evap = {}; m_gfx = {}; m_lai = {};
@@ -332,10 +363,10 @@ void LandProcess::finalize() {
 
 void LandProcess::register_openacc() {
     MAP_KOKKOS_DEVICE(m_islimsk); MAP_KOKKOS_DEVICE(m_vegtype); 
-    MAP_KOKKOS_DEVICE(m_soiltype); MAP_KOKKOS_DEVICE(m_slopetype); MAP_KOKKOS_DEVICE(m_zorl); MAP_KOKKOS_DEVICE(m_cmx);
+    MAP_KOKKOS_DEVICE(m_soiltype); MAP_KOKKOS_DEVICE(m_slopetype); MAP_KOKKOS_DEVICE(m_zorl); MAP_KOKKOS_DEVICE(m_cmx); MAP_KOKKOS_DEVICE(m_chx);
     MAP_KOKKOS_DEVICE(m_t1); MAP_KOKKOS_DEVICE(m_q1); 
     MAP_KOKKOS_DEVICE(m_u1); MAP_KOKKOS_DEVICE(m_v1);
-    MAP_KOKKOS_DEVICE(m_ps); MAP_KOKKOS_DEVICE(m_prcp); 
+    MAP_KOKKOS_DEVICE(m_ps); MAP_KOKKOS_DEVICE(m_prsl1); MAP_KOKKOS_DEVICE(m_prcp); 
     MAP_KOKKOS_DEVICE(m_swdn); MAP_KOKKOS_DEVICE(m_lwdn); MAP_KOKKOS_DEVICE(m_swnet); MAP_KOKKOS_DEVICE(m_hgt); MAP_KOKKOS_DEVICE(m_prslki);
     MAP_KOKKOS_DEVICE(m_sigmaf); MAP_KOKKOS_DEVICE(m_sfemis); MAP_KOKKOS_DEVICE(m_alb); MAP_KOKKOS_DEVICE(m_shdmin); MAP_KOKKOS_DEVICE(m_shdmax); MAP_KOKKOS_DEVICE(m_lai);
     MAP_KOKKOS_DEVICE(m_stc); MAP_KOKKOS_DEVICE(m_smc); MAP_KOKKOS_DEVICE(m_slc);
@@ -345,10 +376,10 @@ void LandProcess::register_openacc() {
 
 void LandProcess::unregister_openacc() {
     UNMAP_KOKKOS_DEVICE(m_islimsk); UNMAP_KOKKOS_DEVICE(m_vegtype); 
-    UNMAP_KOKKOS_DEVICE(m_soiltype); UNMAP_KOKKOS_DEVICE(m_slopetype); UNMAP_KOKKOS_DEVICE(m_zorl); UNMAP_KOKKOS_DEVICE(m_cmx);
+    UNMAP_KOKKOS_DEVICE(m_soiltype); UNMAP_KOKKOS_DEVICE(m_slopetype); UNMAP_KOKKOS_DEVICE(m_zorl); UNMAP_KOKKOS_DEVICE(m_cmx); UNMAP_KOKKOS_DEVICE(m_chx);
     UNMAP_KOKKOS_DEVICE(m_t1); UNMAP_KOKKOS_DEVICE(m_q1); 
     UNMAP_KOKKOS_DEVICE(m_u1); UNMAP_KOKKOS_DEVICE(m_v1);
-    UNMAP_KOKKOS_DEVICE(m_ps); UNMAP_KOKKOS_DEVICE(m_prcp); 
+    UNMAP_KOKKOS_DEVICE(m_ps); UNMAP_KOKKOS_DEVICE(m_prsl1); UNMAP_KOKKOS_DEVICE(m_prcp); 
     UNMAP_KOKKOS_DEVICE(m_swdn); UNMAP_KOKKOS_DEVICE(m_lwdn); UNMAP_KOKKOS_DEVICE(m_swnet); UNMAP_KOKKOS_DEVICE(m_hgt); UNMAP_KOKKOS_DEVICE(m_prslki);
     UNMAP_KOKKOS_DEVICE(m_sigmaf); UNMAP_KOKKOS_DEVICE(m_sfemis); UNMAP_KOKKOS_DEVICE(m_alb); UNMAP_KOKKOS_DEVICE(m_shdmin); UNMAP_KOKKOS_DEVICE(m_shdmax); UNMAP_KOKKOS_DEVICE(m_lai);
     UNMAP_KOKKOS_DEVICE(m_stc); UNMAP_KOKKOS_DEVICE(m_smc); UNMAP_KOKKOS_DEVICE(m_slc);

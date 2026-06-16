@@ -289,8 +289,9 @@
                   snohf(i, jj)  = 0.0
    !  --- ...  initialize variables
                   ! Aaron: modify the lower bound to be 1e-2
-                  wind(i, jj) = max(sqrt( u1(i, lev, jj)*u1(i, lev, jj) + v1(i, lev, jj)*v1(i, lev, jj) )               & 
-                              + max(0.0, min(ddvel(i, jj), 30.0)), 1)
+                  ! wind(i, jj) = max(sqrt( u1(i, lev, jj)*u1(i, lev, jj) + v1(i, lev, jj)*v1(i, lev, jj) )               & 
+                  !             + max(0.0, min(ddvel(i, jj), 30.0)), 1)
+                  wind(i, jj) = sqrt(u1(i,lev,jj)*u1(i,lev,jj) + v1(i,lev,jj)*v1(i,lev,jj) )
 
                   q0r   = max(q1(i, lev, jj), 1.e-8)   !* q1=specific humidity at level 1 (kg/kg)
                   theta1(i, jj) = t1(i, lev, jj) * prslki(i, jj) !* adiabatic temp at level 1 (k)
@@ -382,12 +383,14 @@
                snowhr = 10.0 * weasdr
                endif
 
-               chx(i, jj)    = ch(i, jj)  * wind(i, jj)              ! compute conductance
-               cmx(i, jj)    = cm(i, jj)  * wind(i, jj)
+               ! chx(i, jj)    = ch(i, jj)  * wind(i, jj)              ! compute conductance
+               ! cmx(i, jj)    = cm(i, jj)  * wind(i, jj)
+               chx(i, jj)    = ch(i, jj)
+               cmx(i, jj)    = cm(i, jj)
                chh(i, jj) = chx(i, jj) * rho(i, jj)
 
                !  ---- ... outside sflx, roughness uses cm as unit
-               zorl(i, jj) = zorl(i, jj)/100.
+               zorl(i, jj) = zorl(i, jj)
                   
                q0(i, jj) = q0r
                qs1(i, jj) = qs1r
@@ -514,7 +517,7 @@
                 weasd(i, jj)   = weasd(i, jj) * 1000.0
       !  ---- ... outside sflx, roughness uses cm as unit (update after snow's
       !  effect)
-                zorl(i, jj) = zorl(i, jj)*100.
+                zorl(i, jj) = zorl(i, jj)
 
       !  --- ...  do not return the following output fields to parent model
       !    ec      - canopy water evaporation (m s-1)

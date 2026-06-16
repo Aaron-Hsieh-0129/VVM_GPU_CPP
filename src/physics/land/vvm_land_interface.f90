@@ -16,13 +16,21 @@ module vvm_land_interface
     common/fpvscom/ c1xpvs, c2xpvs, tbpvs
 
 contains
+    subroutine init_vvm_land_sfcdif_wrf() bind(c)
+      use sfc_diff_wrf_exact_mod, only: myjsfcinit
+      implicit none
+
+      call set_soilveg(1, 1) ! isot = 1, ivegsrc = 1
+
+      call myjsfcinit()
+    end subroutine init_vvm_land_sfcdif_wrf
 
     subroutine run_vvm_land_wrapper(use_tco_ocean, nx, ny, nsoil, dt, &
         islimsk, vegtype, soiltyp, slopetyp, &
         sigmaf, sfemis, alb, shdmin, shdmax, &
-        t1, q1, u1, v1, ps, prcp, swdn, lwdn, swnet, hgt, prslki_in, &
+        t1, q1, u1, v1, ps, prsl1, prcp, swdn, lwdn, swnet, hgt, prslki_in, &
         stc, smc, slc, tskin, canopy, snwdph, sneqv, &
-        hflux, qflux, evap, gfx, zorl, cmx, & 
+        hflux, qflux, evap, gfx, zorl, cmx, chx, & 
         lai, rdlai2d) bind(c, name="run_vvm_land_wrapper")
         
         integer(c_int), value :: use_tco_ocean
@@ -31,7 +39,7 @@ contains
         
         integer(c_int), intent(in)    :: islimsk(nx,ny), vegtype(nx,ny), soiltyp(nx,ny), slopetyp(nx,ny)
         real(c_vvm_real), intent(in)    :: t1(nx,ny), q1(nx,ny), u1(nx,ny), v1(nx,ny)
-        real(c_vvm_real), intent(in)    :: ps(nx,ny), prcp(nx,ny), swdn(nx,ny), lwdn(nx,ny), swnet(nx,ny)
+        real(c_vvm_real), intent(in)    :: ps(nx,ny), prsl1(nx,ny), prcp(nx,ny), swdn(nx,ny), lwdn(nx,ny), swnet(nx,ny)
         real(c_vvm_real), intent(in)    :: hgt(nx,ny) ! VVM height (m)
         real(c_vvm_real), intent(in)    :: prslki_in(nx,ny) ! VVM portion (pi(sfc)/pi(air)) 
 
@@ -41,10 +49,14 @@ contains
         real(c_vvm_real), intent(inout) :: alb(nx,ny), sfemis(nx,ny)
         real(c_vvm_real), intent(inout) :: stc(nx,nsoil,ny), smc(nx,nsoil,ny), slc(nx,nsoil,ny)
         real(c_vvm_real), intent(inout) :: tskin(nx,ny), canopy(nx,ny), snwdph(nx,ny), sneqv(nx,ny), zorl(nx,ny), cmx(nx, ny)
+        real(c_vvm_real), intent(inout) :: chx(nx, ny)
         real(c_vvm_real), intent(inout) :: hflux(nx,ny), qflux(nx,ny), evap(nx,ny), gfx(nx,ny)
 
         real(c_vvm_real), intent(inout) :: lai(nx, ny)
         logical(c_bool), value          :: rdlai2d
+
+        real(c_vvm_real) :: czil(nx,ny)
+        integer(c_int) :: isurban, iz0tlnd
 
         real(8), parameter :: g = 9.806_c_vvm_real
         real(8), parameter :: r = 287.04_c_vvm_real
@@ -56,8 +68,8 @@ contains
         real(8)        :: xmin, xmax, xinc, x_val, t_val
         logical        :: redrag, mom4ice
         
-        real(c_vvm_real) :: psi(nx,ny), prsl1(nx,ny), prslki(nx,ny)
-        real(c_vvm_real) :: tg(nx,ny), z0rl(nx,ny), cd(nx,ny), cdq(nx,ny), rb(nx,ny)
+        real(c_vvm_real) :: psi(nx,ny), prslki(nx,ny)
+        real(c_vvm_real) :: tg(nx,ny), z0rl(nx,ny), z0base(nx,ny), cd(nx,ny), cdq(nx,ny), rb(nx,ny)
         real(c_vvm_real) :: stress(nx,ny), fm(nx,ny), fh(nx,ny), ustar(nx,ny), sfcw(nx,ny)
         real(c_vvm_real) :: ddvel(nx,ny), fm10(nx,ny), fh2(nx,ny), fh10(nx,ny)
         real(c_vvm_real) :: tsurf(nx,ny)
@@ -79,7 +91,8 @@ contains
         my_max = ny
         isot = 1
         ivegsrc = 1
-        call set_soilveg(isot, ivegsrc)
+        isurban = 13
+        iz0tlnd = 0
         
         xmin = 180.0_c_vvm_real
         xmax = 330.0_c_vvm_real
@@ -99,18 +112,18 @@ contains
 
         !$acc data present(islimsk, vegtype, soiltyp, slopetyp, &
         !$acc              sigmaf, sfemis, alb, shdmin, shdmax, &
-        !$acc              t1, q1, u1, v1, ps, prcp, swdn, lwdn, swnet, hgt, &
-        !$acc              stc, smc, slc, tskin, canopy, snwdph, sneqv, hflux, qflux, evap, gfx, zorl, cmx) &
-        !$acc      create(psi, prsl1, prslki, tg, z0rl, cd, cdq, rb, stress, &
+        !$acc              t1, q1, u1, v1, ps, prsl1, prcp, swdn, lwdn, swnet, hgt, &
+        !$acc              stc, smc, slc, tskin, canopy, snwdph, sneqv, hflux, qflux, evap, gfx, zorl, cmx, chx) &
+        !$acc      create(psi, prslki, tg, z0rl, z0base, cd, cdq, rb, stress, &
         !$acc             fm, fh, ustar, sfcw, ddvel, fm10, fh2, fh10, &
         !$acc             tsurf, flag_iter, flag_guess, qsurf, &
         !$acc             lwdn_eff, swnet_eff, &
         !$acc             ep1d, tgclim, snoalb, albedo2, &
         !$acc             tprcp, srflag, sncover, drain, runof, zice, cice, xtice, snomt, &
-        !$acc             u10, v10, t2, q2, rh2, rh10, ro2)
+        !$acc             u10, v10, t2, q2, rh2, rh10, ro2, czil)
 
         ncld = 1
-        isot = 1; ivegsrc = 1; async_id = 1
+        async_id = 1
         lsm = 1
         redrag = .false.
         mom4ice = .false.
@@ -119,7 +132,6 @@ contains
         do j = 1, ny
             do i = 1, nx
                 psi(i,j) = ps(i,j)
-                prsl1(i,j) = ps(i,j)
                 prslki(i,j) = prslki_in(i,j)
 
                 ro2(i,j) = ps(i,j) / (r * t1(i,j) * (1.0_c_vvm_real + 0.608_c_vvm_real * q1(i,j)))
@@ -130,7 +142,29 @@ contains
                 tgclim(i,j) = 285.0_c_vvm_real 
                 snoalb(i,j) = 0.60_c_vvm_real
                 albedo2(i,j) = 0.0_c_vvm_real
-                z0rl(i,j) = z0_data(vegtype(i,j)) * 100.0_c_vvm_real  ! NCEP zorl to cm
+
+                if (islimsk(i,j) == 1) then
+                    ! Land:
+                    ! Initialize persistent zorl only once.
+                    ! After the first call, keep using the saved model value.
+                    if (zorl(i,j) <= 0.0_c_vvm_real) then
+                        zorl(i,j) = z0_data(vegtype(i,j))
+                    end if
+
+                    z0base(i,j) = z0_data(vegtype(i,j))
+                    z0rl(i,j) = z0base(i,j) ! they are the same if there is no snow and z0 is set to be z0max
+
+                else
+                    ! Ocean or non-land:
+                    ! For WRF land-comparison tests this may not matter.
+                    ! Use existing zorl if valid; otherwise initialize to smooth-ocean floor.
+                    if (zorl(i,j) <= 0.0_c_vvm_real) then
+                        zorl(i,j) = 1.5e-5_c_vvm_real
+                    end if
+
+                    z0rl(i,j)   = zorl(i,j)
+                    z0base(i,j) = zorl(i,j)
+                end if
                 
                 tprcp(i,j) = prcp(i,j) * dt / 1000.0_c_vvm_real  !  mm/s times dt to m
                 
@@ -166,60 +200,41 @@ contains
 
                 lwdn_eff(i,j) = lwdn(i,j) * sfemis(i,j)
                 swnet_eff(i,j) = swdn(i,j) * (1.0_c_vvm_real - alb(i,j))
+
+                sfcw(i,j) = sqrt(u1(i,j)*u1(i,j) + v1(i,j)*v1(i,j))
+
+                czil(i,j) = 0.1_c_vvm_real ! Aaron - this is given in VVM but might need to store previous value in the future. 
+                cd(i,j)  = cmx(i,j)
+                cdq(i,j) = chx(i,j)
             end do
         end do
         
-        ! =================================================================
-        ! 2-step iteration (sfcw < 2m/s unstable)
-        ! =================================================================
-        do iter = 1, 2
-            call sfc_diff_gpu(myim, nx, 1, ncld, psi, u1, v1, t1, q1, &
-                 hgt, snwdph, tg, z0rl, cd, cdq, rb, prsl1, prslki, islimsk, &
-                 stress, fm, fh, ustar, sfcw, ddvel, fm10, fh2, fh10, sigmaf, &
-                 vegtype, shdmax, ivegsrc, tsurf, flag_iter, redrag, async_id)
-                 
-            !$acc parallel loop collapse(2) async(async_id)
-            do j = 1, ny
-                do i = 1, nx
-                    if ((iter == 1) .and. (sfcw(i,j) < 2.0_c_vvm_real)) then
-                        flag_guess(i,j) = .true.
-                    end if
-                end do
-            end do
-            
-            if (use_tco_ocean == 1) then
-                call sfc_ocean_gpu(myim, nx, 1, ncld, psi, u1, v1, t1, q1, &
-                     tg, cd, cdq, prsl1, prslki, islimsk, ddvel, flag_iter, &
-                     qsurf, gfx, qflux, hflux, ep1d, async_id)
-            end if
-                 
-            call sfc_drv_gpu(myim, nx, nsoil, 1, ncld, psi, u1, v1, t1, q1, soiltyp, &
-                 vegtype, sigmaf, sfemis, lwdn_eff, swdn, swnet_eff, dt, &
-                 tgclim, cd, cdq, prsl1, prslki, hgt, islimsk, ddvel, slopetyp, &
-                 shdmin, shdmax, snoalb, alb, flag_iter, flag_guess, isot, ivegsrc, sneqv, &
-                 snwdph, tg, tprcp, srflag, smc, stc, slc, &
-                 canopy, tsurf, z0rl, sncover, qsurf, gfx, drain, qflux, &
-                 hflux, ep1d, runof, albedo2, 1, 1, 1, lai, rdlai2d, async_id)
-                 
-            call sfc_sice_gpu(myim, nx, nsoil, 1, ncld, psi, u1, v1, t1, q1, dt, sfemis, lwdn_eff, &
-                 swdn, swnet_eff, srflag, cd, cdq, prsl1, prslki, islimsk, ddvel, &
-                 flag_iter, mom4ice, lsm, zice, cice, xtice, sneqv, &
-                 tg, tprcp, stc, ep1d, snwdph, qsurf, snomt, gfx, &
-                 qflux, hflux, async_id)
-                 
-            if (iter == 1) then
-                !$acc parallel loop collapse(2) async(async_id)
-                do j = 1, ny
-                    do i = 1, nx
-                        flag_iter(i,j) = .false.
-                        flag_guess(i,j) = .false.
-                        if ((islimsk(i,j) == 1) .and. (sfcw(i,j) < 2.0_c_vvm_real)) then
-                            flag_iter(i,j) = .true.
-                        end if
-                    end do
-                end do
-            end if
-        end do
+        call sfc_diff_gpu(myim, nx, 1, ncld, &
+             hgt, hgt, z0rl, z0base, psi, tsurf, t1, q1, q1, sfcw, &
+             czil, vegtype, isurban, iz0tlnd, flag_iter, &
+             cd, cdq, rb, stress, ustar, async_id)
+
+        if (use_tco_ocean == 1) then
+            call sfc_ocean_gpu(myim, nx, 1, ncld, psi, u1, v1, t1, q1, &
+                 tg, cd, cdq, prsl1, prslki, islimsk, ddvel, flag_iter, &
+                 qsurf, gfx, qflux, hflux, ep1d, async_id)
+        end if
+
+
+        call sfc_drv_gpu(myim, nx, nsoil, 1, ncld, psi, u1, v1, t1, q1, soiltyp, &
+             vegtype, sigmaf, sfemis, lwdn_eff, swdn, swnet_eff, dt, &
+             tgclim, cd, cdq, prsl1, prslki, hgt, islimsk, ddvel, slopetyp, &
+             shdmin, shdmax, snoalb, alb, flag_iter, flag_guess, isot, ivegsrc, sneqv, &
+             snwdph, tg, tprcp, srflag, smc, stc, slc, &
+             canopy, tsurf, z0rl, sncover, qsurf, gfx, drain, qflux, &
+             hflux, ep1d, runof, albedo2, 1, 1, 1, lai, rdlai2d, async_id)
+
+        call sfc_sice_gpu(myim, nx, nsoil, 1, ncld, psi, u1, v1, t1, q1, dt, sfemis, lwdn_eff, &
+             swdn, swnet_eff, srflag, cd, cdq, prsl1, prslki, islimsk, ddvel, &
+             flag_iter, mom4ice, lsm, zice, cice, xtice, sneqv, &
+             tg, tprcp, stc, ep1d, snwdph, qsurf, snomt, gfx, &
+             qflux, hflux, async_id)
+
         
         call sfc_diag_gpu(myim, nx, 1, ncld, psi, u1, v1, t1, q1, tg, &
                           qsurf, u10, v10, t2, q2, prslki, qflux, fm, fh, fm10, fh2, fh10, &
@@ -243,10 +258,11 @@ contains
                     zorl(i,j) = max(ustar(i,j) * ustar(i,j) * 0.014_c_vvm_real / g, 1.5D-5)
                 else
                     ! land 
-                    zorl(i,j) = z0rl(i,j) / 100.0_c_vvm_real ! cm -> m
+                    zorl(i,j) = z0rl(i,j)
                 end if
 
-                cmx(i,j) = cd(i,j) * sfcw(i,j)
+                cmx(i,j) = cd(i,j)
+                chx(i,j) = cdq(i,j)
 
                 alb(i,j) = albedo2(i,j)
             end do
