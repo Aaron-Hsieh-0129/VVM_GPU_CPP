@@ -28,9 +28,9 @@ print(f"[Info] Change to VVM_ROOT: {VVM_ROOT}")
 # ==============================================================================
 # Set to True : Read high-resolution Taiwan topography and perform coarsening
 # Set to False: Enter "Idealized Simulation" mode for user-defined ridge & land types
-USE_TAIWAN_TOPO = True
+USE_TAIWAN_TOPO = False
 
-CONFIG_PATH = './rundata/input_configs/taiwanvvm.json'
+CONFIG_PATH = './rundata/input_configs/grass.json'
 SOURCE_TW_DATA = './rundata/land/topolsm_TW.nc'
 
 # ==============================================================================
@@ -118,27 +118,27 @@ else:
 def get_ideal_topo_data(ny, nx):
     topo_idx = np.zeros((ny, nx), dtype='i4')
     
-    MI_GLOB = nx
-    I = np.arange(1, MI_GLOB + 1)
-
-    profile_h = np.zeros(MI_GLOB, dtype='f8')
-    cond = I < (MI_GLOB * 7 / 8)
-
-    profile_h[cond] = (I[cond] - MI_GLOB * 3 / 4) * 1000.0 / (MI_GLOB / 8.0)
-    profile_h[~cond] = 1000.0 + (MI_GLOB * 7 / 8 - I[~cond]) * 1000.0 / (MI_GLOB / 8.0)
-
-    profile_h = np.maximum(profile_h, 0.0)
-    profile_idx = np.argmin(np.abs(profile_h[:, None] - z_up[None, :]), axis=1)
-    topo_idx[:] = profile_idx
+    # MI_GLOB = nx
+    # I = np.arange(1, MI_GLOB + 1)
+    #
+    # profile_h = np.zeros(MI_GLOB, dtype='f8')
+    # cond = I < (MI_GLOB * 7 / 8)
+    #
+    # profile_h[cond] = (I[cond] - MI_GLOB * 3 / 4) * 1000.0 / (MI_GLOB / 8.0)
+    # profile_h[~cond] = 1000.0 + (MI_GLOB * 7 / 8 - I[~cond]) * 1000.0 / (MI_GLOB / 8.0)
+    #
+    # profile_h = np.maximum(profile_h, 0.0)
+    # profile_idx = np.argmin(np.abs(profile_h[:, None] - z_up[None, :]), axis=1)
+    # topo_idx[:] = profile_idx
     
     return topo_idx
 
 def get_ideal_vegtype_data(ny, nx):
     vegtype = np.ones((ny, nx), dtype='i4')
     # sea_urban_mountain
-    vegtype[:, :nx//2] = 17         # IGBP 17 = Water Bodies (Aligned with standard)
-    vegtype[:, nx//2:nx//4*3] = 13  # IGBP 13 = Urban
-    vegtype[:, nx//4*3:] = 2        # IGBP 2 = Evergreen Broadleaf
+    # vegtype[:, :nx//2] = 17         # IGBP 17 = Water Bodies (Aligned with standard)
+    # vegtype[:, nx//2:nx//4*3] = 13  # IGBP 13 = Urban
+    # vegtype[:, nx//4*3:] = 2        # IGBP 2 = Evergreen Broadleaf
 
     # sea_grass_mountain
     # vegtype[:, :nx//2] = 17         # IGBP 17 = Water Bodies (Aligned with standard)
@@ -148,14 +148,23 @@ def get_ideal_vegtype_data(ny, nx):
     # rcemip
     # vegtype[:, :] = 17         # IGBP 17 = Water Bodies (Aligned with standard)
 
+    # grass
+    vegtype[:, :] = 10         # IGBP 10 = Grass
+
+    # urban
+    # vegtype[:, :] = 13         # IGBP 13 = Urban
+
+    # evergreen
+    # vegtype[:, :] = 2         # IGBP 2 = evergreen
+
     return vegtype
 
 def get_ideal_soiltype_data(ny, nx):
     soiltype = np.ones((ny, nx), dtype='i4') # STATSGO 1 = Sand
     # sea_urban_mountain
-    soiltype[:, :nx//2] = 14                 # STATSGO 14 = Water
-    soiltype[:, nx//2:nx//4*3] = 13          # STATSGO 13 = Organic Material
-    soiltype[:, nx//4*3:] = 13               # STATSGO 13 = Organic Material
+    # soiltype[:, :nx//2] = 14                 # STATSGO 14 = Water
+    # soiltype[:, nx//2:nx//4*3] = 13          # STATSGO 13 = Organic Material
+    # soiltype[:, nx//4*3:] = 13               # STATSGO 13 = Organic Material
 
     # sea_grass_mountain
     # soiltype[:, :nx//2] = 14                 # STATSGO 14 = Water
@@ -164,6 +173,9 @@ def get_ideal_soiltype_data(ny, nx):
 
     # rcemip
     # soiltype[:, :] = 14                 # STATSGO 14 = Water
+
+    # organic material
+    soiltype[:, :] = 13
     return soiltype
 
 def get_ideal_slopetype_data(ny, nx):
@@ -177,9 +189,9 @@ def get_ideal_tg_data(ny, nx, value=300.0):
 def get_albedo_data(ny, nx):
     albedo = np.zeros((ny, nx), dtype='f8')
     # sea_urban_mountain
-    albedo[:, :nx//2] = 8
-    albedo[:, nx//2:nx//4*3] = 15
-    albedo[:, nx//4*3:] = 12
+    # albedo[:, :nx//2] = 8
+    # albedo[:, nx//2:nx//4*3] = 15
+    # albedo[:, nx//4*3:] = 12
 
     # sea_grass_mountain
     # albedo[:, :nx//2] = 8
@@ -188,14 +200,23 @@ def get_albedo_data(ny, nx):
 
     # rcemip
     # albedo[:, :] = 8
+
+    # grass
+    albedo[:, :] = 19
+
+    # urban
+    # albedo[:, :] = 15
+
+    # evergreen
+    # albedo[:, :] = 12
     return albedo
 
 def get_gvf_data(ny, nx):
     gvf = np.zeros((ny, nx), dtype='f8')
     # sea_urban_mountain
-    gvf[:, :nx//2] = 0
-    gvf[:, nx//2:nx//4*3] = 10
-    gvf[:, nx//4*3:] = 95
+    # gvf[:, :nx//2] = 0
+    # gvf[:, nx//2:nx//4*3] = 10
+    # gvf[:, nx//4*3:] = 95
 
     # sea_grass_mountain
     # gvf[:, :nx//2] = 0
@@ -204,14 +225,23 @@ def get_gvf_data(ny, nx):
 
     # rcemip
     # gvf[:, :] = 0
+
+    # grass
+    gvf[:, :] = 80
+
+    # urban
+    # gvf[:, :] = 10
+
+    # evergreen
+    # gvf[:, :] = 95
     return gvf
 
 def get_lai_data(ny, nx):
     lai = np.zeros((ny, nx), dtype='f8')
     # sea_urban_mountain
-    lai[:, :nx//2] = 0
-    lai[:, nx//2:nx//4*3] = 1
-    lai[:, nx//4*3:] = 6.48
+    # lai[:, :nx//2] = 0
+    # lai[:, nx//2:nx//4*3] = 1
+    # lai[:, nx//4*3:] = 6.48
 
     # sea_grass_mountain
     # lai[:, :nx//2] = 0
@@ -220,6 +250,15 @@ def get_lai_data(ny, nx):
 
     # rcemip
     # lai[:, :] = 0
+
+    # grass
+    lai[:, :] = 4
+
+    # urban
+    # lai[:, :] = 1
+
+    # evergreen
+    # lai[:, :] = 6.48
     return lai
 
 
