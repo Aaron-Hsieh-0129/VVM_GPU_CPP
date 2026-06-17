@@ -80,8 +80,8 @@ public:
     size_t m_col_chunk_size;
     std::vector<int> m_col_chunk_beg;
     size_t m_nlay;
-    Kokkos::View<double*> m_lat;
-    Kokkos::View<double*> m_lon;
+    Kokkos::View<Real*> m_lat;
+    Kokkos::View<Real*> m_lon;
 
     // Configuration Flags
     // Whether we use aerosol forcing in radiation

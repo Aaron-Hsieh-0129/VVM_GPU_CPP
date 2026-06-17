@@ -207,8 +207,8 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
     if (rank == 0) std::cout << "(lon, lat): (" << lon_h(0,0) << ", " << lat_h(0,0) << ")" << std::endl;
 
 
-    m_lat = Kokkos::View<double*>("m_lat", m_ncol);
-    m_lon = Kokkos::View<double*>("m_lon", m_ncol);
+    m_lat = Kokkos::View<Real*>("m_lat", m_ncol);
+    m_lon = Kokkos::View<Real*>("m_lon", m_ncol);
     auto m_lat_view = m_lat; 
     auto m_lon_view = m_lon;
 
