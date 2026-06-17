@@ -1,6 +1,6 @@
 # Quick Start
 
-This guide covers dependencies, building GVVM, and running the `vvm` executable.
+This guide covers dependencies, building GPUVVM, and running jobs through the recommended `submit.py` wrapper.
 
 ## Requirements
 
@@ -16,7 +16,7 @@ This guide covers dependencies, building GVVM, and running the `vvm` executable.
 
 ### Libraries
 
-This guide covers dependencies, building GVVM, and running the `vvm` executable. For detailed instructions on building the full dependency stack from source, please refer to the **[Environment Installation Guide](user-guides/environment.md)**.
+This guide covers dependencies, building GPUVVM, and running the `vvm` executable. For detailed instructions on building the full dependency stack from source, please refer to the **[Environment Installation Guide](user-guides/environment.md)**.
 
 | Library | Minimum (tested) | Role |
 | ------- | ------------------ | ---- |
@@ -39,7 +39,18 @@ git clone https://github.com/Aaron-Hsieh-0129/VVM_GPU_CPP.git
 cd VVM_GPU_CPP
 ```
 
-### 2. Configure CMake presets
+### 2. Environment setup
+
+Define `VVM_ROOT` for convenient build and run commands:
+
+```bash
+export VVM_ROOT=/absolute/path/to/your/VVM_GPU_CPP
+cd $VVM_ROOT
+```
+
+`submit.py` also auto-detects the project root when launched from the repository.
+
+### 3. Configure CMake presets
 
 Edit `CMakePresets.json` (or pass cache variables on the command line) so that:
 
@@ -49,7 +60,7 @@ Edit `CMakePresets.json` (or pass cache variables on the command line) so that:
 
 `find_package(ADIOS2 REQUIRED CXX MPI)` must succeed using your `CMAKE_PREFIX_PATH` or install layout.
 
-### 3. Configure and compile
+### 4. Configure and compile
 
 ```bash
 cmake --preset <your_preset_name> -DBUILD_TESTS=ON
@@ -66,35 +77,68 @@ The main binary is **`build/vvm`** (`RUNTIME_OUTPUT_DIRECTORY` is the build root
 
 3. Point **`initial_conditions.source_file`** at a profile under `rundata/initial_conditions/profiles/` (or your own file).
 
-4. For spatial NetCDF (topography, land), set **`netcdf_reader.source_file`** and run `scripts/generate_init_nc.py` if you need to generate that file.
+4. For spatial NetCDF (topography, land), set **`netcdf_reader.source_file`** and run `tools/generate_init_nc.py` if you need to generate that file.
 
 5. Optional: pass a different config path as the **first non-option argument**:
 
    ```bash
-   mpirun -np 1 ./vvm /path/to/my_config.json
+   ./submit.py --local --preset <your_preset_name> -c /path/to/my_config.json --compute 1
    ```
 
 Full key reference: [Model configuration](user-guides/configuration.md).
 
 ## Run
 
-From the **build directory** (so relative paths like `../rundata/...` resolve):
+Use `submit.py` from the project root. It safely handles SLURM resource allocation, local execution, MPI task counts, GPU assignment, directory creation, and asynchronous I/O task separation.
+
+**Recommended for all normal runs:** Direct `mpirun` commands are advanced/debugging commands. Use `submit.py` for performance runs because CPU/GPU assignment and I/O-rank allocation strongly affect speed.
+
+### Interactive setup
 
 ```bash
-cd build
-mpirun -np 1 ./vvm
+./submit.py
+```
+
+The interactive phase shows which fields you need to fill in, explains the run options, and prints an equivalent command-line invocation at the end so you can reuse it for future runs.
+
+### Command-line execution
+
+```bash
+# Local test run without SLURM (4 MPI tasks)
+./submit.py --local --preset <your_preset_name> -c ./rundata/input_configs/default_config.json --compute 4
+
+# Submit to SLURM (16 Compute tasks, 1 Node)
+./submit.py --preset <your_preset_name> -c ./rundata/input_configs/default_config.json --compute 16 --nodes 1 --gpus 16
+```
+
+### Asynchronous I/O (optional)
+If you configure `output.engine` as `SST` in your JSON, ADIOS2 requires dedicated I/O tasks. `submit.py` detects the SST engine and prompts for I/O tasks in interactive mode, or you can specify them directly:
+
+```bash
+# 16 simulation tasks + 4 I/O tasks across 4 nodes, 20 gpus in total
+./submit.py --preset <your_preset_name> -c my_config.json --compute 16 --io 4 --nodes 4 --gpus 5
+```
+
+More detail: [Job submission](user-guides/job-submission.md).
+
+## Direct MPI (advanced)
+
+Manual MPI is useful for small debug sessions after the environment has already been prepared. It bypasses the wrapper's resource checks, so verify rank placement, GPU visibility, CPU binding, and OpenMP settings yourself.
+
+```bash
+mpirun -np 1 ./build/vvm ./rundata/input_configs/default_config.json
 ```
 
 ### Asynchronous I/O (optional)
 
-Reserve ranks for dedicated I/O servers that consume an ADIOS2 **SST** stream and write HDF5 (`output.engine` must be `SST`). Example:
+Reserve ranks for dedicated I/O servers that consume an ADIOS2 **SST** stream and write HDF5 (`output.engine` must be `SST`):
 
 ```bash
 # 1 simulation rank + 1 I/O rank
-mpirun -np 2 ./vvm --io-tasks 1
+mpirun -np 2 ./build/vvm ./rundata/input_configs/default_config.json --io-tasks 1
 
 # 2 simulation ranks + 2 I/O ranks
-mpirun -np 4 ./vvm --io-tasks 2
+mpirun -np 4 ./build/vvm ./rundata/input_configs/default_config.json --io-tasks 2
 ```
 
 Details: [I/O management](user-guides/io-management.md).
@@ -109,4 +153,3 @@ mkdocs serve
 ```
 
 Use `requirements-docs.txt` so your local MkDocs/Material versions match GitHub Actions. Then open the served URL in your browser.
-

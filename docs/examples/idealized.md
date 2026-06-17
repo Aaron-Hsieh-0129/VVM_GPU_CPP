@@ -32,14 +32,14 @@ Registered tests include:
 
 Each test config sets `simulation.idealized_test` and other options to match the scenario. Variables verified are listed in `add_vvm_test` (e.g. `u`, `v`, `w`, `th`, `xi`, `eta`, `zeta`).
 
-To run a test manually:
+To run a small case manually through the normal wrapper path:
 
 ```bash
-cd build
-mpirun -np 1 ./vvm ../tests/configs/advection_u.json
+cd $VVM_ROOT
+./submit.py --local --preset <your_preset_name> -c ./tests/configs/advection_u.json --compute 1
 ```
 
-Ensure the working directory and paths inside the test JSON resolve to your `rundata` and output locations.
+For low-level debugging you may still call `mpirun` directly, but check the working directory and paths inside the test JSON carefully.
 
 ## Profiles and initial conditions
 
@@ -50,4 +50,4 @@ Sample **column profiles** live under `rundata/initial_conditions/profiles/` (e.
 1. Copy `tests/configs/<case>.json` or `rundata/input_configs/default_config.json` to a new file.
 2. Set `simulation.idealized_test` and shorten `total_time_s` / `output_interval_s` for debugging.
 3. Turn off expensive physics (`physics.p3.enable_p3`, `physics.rrtmgp.enable_rrtmgp`, etc.) when isolating dynamics.
-4. Run from `build/` and inspect HDF5 under your configured `output.output_dir`.
+4. Run with `submit.py --local` and inspect HDF5 under your configured `output.output_dir`.

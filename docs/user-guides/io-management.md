@@ -1,6 +1,6 @@
 # I/O management
 
-GVVM writes simulation fields through **ADIOS2**. The configuration file (`output` section) selects the engine, directory, filename prefix, and which fields to write.
+GPUVVM writes simulation fields through **ADIOS2**. The configuration file (`output` section) selects the engine, directory, filename prefix, and which fields to write.
 
 ## Synchronous I/O (typical)
 
@@ -12,19 +12,28 @@ With `output.engine` set to `HDF5` and **no** dedicated I/O ranks, the simulatio
 
 When `output.engine` is `SST`, the model streams data over an ADIOS2 **SST** stream. You can run dedicated **I/O server** ranks that read SST and write HDF5 to disk, overlapping compute and I/O.
 
+**Submit SST jobs with the wrapper:** Use `submit.py --io N` for SST jobs so compute ranks, I/O ranks, CPU cores, and GPU allocation are requested together. Direct `mpirun` examples below are for advanced debugging.
+
 ### Rank layout
 
 - Total MPI ranks = **simulation ranks** + **I/O ranks**.
 - Pass `--io-tasks N` so that **N** ranks join the I/O communicator; the remainder run the dynamical core.
 
-Examples (from the project README):
+Wrapper example:
+
+```bash
+cd $VVM_ROOT
+./submit.py -c ./rundata/input_configs/default_config.json --compute 16 --io 4 --nodes 4 --gpus 5
+```
+
+Manual MPI examples:
 
 ```bash
 # 1 simulation rank, 1 I/O rank
-mpirun -np 2 ./vvm --io-tasks 1
+mpirun -np 2 ./build/vvm ./rundata/input_configs/default_config.json --io-tasks 1
 
 # 2 simulation ranks, 2 I/O ranks
-mpirun -np 4 ./vvm --io-tasks 2
+mpirun -np 4 ./build/vvm ./rundata/input_configs/default_config.json --io-tasks 2
 ```
 
 The first `world_size - N` ranks run `Grid`, `Model`, and `OutputManager` on the simulation communicator. The last `N` ranks execute `VVM::IO::run_io_server()` (`src/io/IOServer.cpp`), which opens the SST stream named from `output_dir` and `output_filename_prefix`, then writes collective HDF5 on the I/O side.
@@ -45,4 +54,4 @@ On global rank 0, if the engine is `SST`, the main program removes an existing d
 
 ## NetCDF and preprocessing
 
-Reading spatial inputs (topography, land) uses **NetCDF** via the `netcdf_reader` block in the JSON file. Writing may include NetCDF-related options depending on build flags (`enable_netcdf` in `output`). Preprocessing scripts under `scripts/` (for example `generate_init_nc.py`) produce NetCDF aligned with `netcdf_reader` and land-surface needs.
+Reading spatial inputs (topography, land) uses **NetCDF** via the `netcdf_reader` block in the JSON file. Writing may include NetCDF-related options depending on build flags (`enable_netcdf` in `output`). Preprocessing tools under `tools/` (for example `generate_init_nc.py`) produce NetCDF aligned with `netcdf_reader` and land-surface needs.
