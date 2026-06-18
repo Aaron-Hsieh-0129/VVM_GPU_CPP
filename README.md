@@ -1,4 +1,4 @@
-# GVVM (GPU-accelerated Vector Vorticity Model)
+# GPUVVM (GPU-accelerated Vector Vorticity Model)
 
 [![C++](https://img.shields.io/badge/C++-17%2B-blue.svg)](https://isocpp.org/)
 [![Kokkos](https://img.shields.io/badge/Kokkos-Performance_Portability-blueviolet.svg)](https://kokkos.org/)
@@ -61,55 +61,99 @@ git clone https://github.com/Aaron-Hsieh-0129/VVM_GPU_CPP.git
 cd VVM_GPU_CPP
 ```
 
-### Step 2: Configure CMake Presets
+### Step 2: Environment Setup (Required)
+You must define the project root directory using the `VVM_ROOT` environment variable before compiling or running the model. Add this to your session or `~/.bashrc`:
 
-Add your library installation paths to `CMakePresets.json`. You can follow the existing configurations inside the file to specify your local environment paths.
+```bash
+export VVM_ROOT=/absolute/path/to/your/VVM_GPU_CPP
+```
 
-### Step 3: Build the Project
+### Step 3: Configure CMake Presets
+
+Open `CMakePresets.json` and configure or add a preset matching your machine cluster. Update the environment paths (`NVHPC_DIR`, `CMAKE_CXX_COMPILER`, `HDF5_DIR`, etc.) to match your build prefix.
+
+At runtime, the submission wrapper (`submit.py`) will automatically scan this file, extract the parameters, and set up your execution environment (including `LD_LIBRARY_PATH` and `hpcx-init.sh`) dynamically. No separate environment script or manual variable export is required.
+
+
+### Step 4: Build the Project
 
 Compile the project from the root directory. Replace `<your_preset_name>` with your configured preset and `<core_number>` with the number of CPU cores for parallel building:
 
 ```bash
+cd $VVM_ROOT
 cmake --preset <your_preset_name> -DBUILD_TESTS=ON
 cmake --build build -j<core_number>
 ```
 
-### Step 4: Configure the Experiment
+### Step 5: Configure the Experiment
 
 - **Main Settings**: Modify `rundata/input_configs/default_config.json` to design your experiment. Each physical process has its own toggle switch.
     
 - **Initial Conditions**:
     
-    - Generate initial input files using the Python scripts located under `scripts/`.
+    - Generate initial input files using the Python scripts located under `tools/`.
         
     - Specify your generated spatial file path (typically placed in `rundata/initial_conditions/spatial/`) within `default_config.json`.
         
     - Initial profiles should be placed under `rundata/initial_conditions/profiles/`.
 
-### Step 5: Execute
+### Step 6: Execute
 
-Run the model from the `build` directory:
+We provide a user-friendly wrapper script (submit.py) located in the root directory to handle both local execution and SLURM job submission. It automatically manages MPI tasks, GPU allocations, and directory creation.
+
+#### Option A: Using the Submission Wrapper (Recommended)
+
+**Interactive Mode:**
+
+Simply run the script without any arguments and follow the guided prompts:
 
 ```bash
-cd build
-mpirun -np 1 ./vvm
+$VVM_ROOT/submit.py
+```
+
+**Command-Line Mode (Quick Start)**
+
+For automated workflows or quick executions, you can pass arguments directly.
+
+- Local Execution (HDF5 Engine):
+
+```bash
+cd $VVM_ROOT
+./submit.py -c ./rundata/input_configs/default_config.json --compute 4 --local
+```
+
+- SLURM Submission (SST Engine with Asynchronous I/O):
+
+```bash
+cd $VVM_ROOT
+./submit.py -c ./rundata/input_configs/default_config.json --compute 16 --io 4 --nodes 4 --gpus 5 -t 24:00:00
 ```
 
 
-#### Asynchronous I/O (Optional)
+#### Option B: Manual Execution (Advanced)
+Run the model from the `build` directory:
+
+```bash
+cd $VVM_ROOT
+mpirun -np 1 ./build/vvm
+```
+
+##### Asynchronous I/O (Optional)
 
 To use asynchronous output, specify the SST engine in `default_config.json`. You can then allocate dedicated tasks for I/O.
 
 For example, to use **1 GPU/CPU for the model** and **1 CPU for I/O**:
 
 ```bash
-mpirun -np 2 ./vvm --io-tasks 1
+cd $VVM_ROOT
+mpirun -np 2 ./build/vvm --io-tasks 1
 ```
 
 To use **2 GPUs/CPUs for the model** and **2 CPUs for I/O**:
 
 ```bash
-mpirun -np 4 ./vvm --io-tasks 2
+cd $VVM_ROOT
+mpirun -np 4 ./build/vvm --io-tasks 2
 ```
 
 

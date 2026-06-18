@@ -65,13 +65,16 @@
         "fields_to_output": [
             "thbar", "pibar", "rhobar", "rhobar_up",
             "u", "v", "w", "th", "xi", "eta", "zeta",
-            "qv", "qc", "qr", "qi",
+            "qv", "qc", "qr", "qi", "nc", "ni", "nr", "bm",
             "sw_heating", "lw_heating", "swdn", "lwdn", "lwup",
             "swup_toa", "swdn_toa", "lwup_toa", "lwdn_toa",
             "swup_sfc", "swdn_sfc", "lwup_sfc", "lwdn_sfc",            
             "precip_liq_surf_mass", "precip_ice_surf_mass",
             "Tg", "sfc_flux_th", "sfc_flux_qv", "sfc_flux_u", "sfc_flux_v", "le", "hfx",
-            "st1", "st2", "st3", "st4", "gfx", "topo"
+            "st1", "st2", "st3", "st4", "gfx", "topo",
+            "sm1", "sm2", "sm3", "sm4",
+            "sl1", "sl2", "sl3", "sl4", "sfemis", "zorl",
+            "chx", "cmx"
         ],
         "output_grid": {
             "x_start": 0,
@@ -349,6 +352,14 @@
 
             "__mode_explaination1": "If noahlsm is turned on, it will call Fortran land model (src/physics/land) with ocean/land/ice model inside.", 
             "__mode_explaination2": "However, by changing ocean_scheme options to sflux_2d or sflux_tc_2d, it uses the C++ surface flux (original VVM surface flux, src/physics/surface) and the ocean model in LandProcess will be turned off."
+        }
+    },
+    "performance": {
+        "timing": {
+            "enable": true,
+            "warmup_steps": 0,
+            "print_interval_steps": 7200,
+            "reset_after_interval_print": false
         }
     },
     "optimization": {
