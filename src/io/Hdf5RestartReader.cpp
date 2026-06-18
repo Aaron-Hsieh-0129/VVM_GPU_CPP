@@ -162,8 +162,36 @@ std::vector<std::string> Hdf5RestartReader::get_variables_to_read(const Core::St
         result.push_back(var_name);
     }
 
+    // u/v/w are diagnostic rather than prognostic,
+    // but they are still needed for a physically consistent restart.
+    // They are written to the restart/output file, so include them explicitly.
+    const std::vector<std::string> diagnostic_velocity_fields = {"u", "v", "w"};
+
+    for (const auto& var_name : diagnostic_velocity_fields) {
+        if (!state.has_field(var_name)) {
+            continue;
+        }
+
+        if (!output_fields.empty() && output_fields.count(var_name) == 0) {
+            skipped_output_fields.push_back(var_name);
+            continue;
+        }
+
+        bool already_in_result = false;
+        for (const auto& selected_name : result) {
+            if (selected_name == var_name) {
+                already_in_result = true;
+                break;
+            }
+        }
+
+        if (!already_in_result) {
+            result.push_back(var_name);
+        }
+    }
+
     if (rank_ == 0 && !skipped_output_fields.empty()) {
-        std::cout << "  [Hdf5RestartReader] Skipping prognostic variables not listed in output.fields_to_output: "
+        std::cout << "  [Hdf5RestartReader] Skipping restart variables not listed in output.fields_to_output: "
                   << join_variable_names(skipped_output_fields) << std::endl;
     }
     return result;

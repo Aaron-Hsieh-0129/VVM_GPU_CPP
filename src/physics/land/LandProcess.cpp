@@ -88,13 +88,18 @@ LandProcess::LandProcess(const Utils::ConfigurationManager& config,
     if (!state.has_field("albedo")) state.add_field<2>("albedo", {ny, nx});
     if (!state.has_field("gvf")) state.add_field<2>("gvf", {ny, nx});
     if (!state.has_field("lai")) state.add_field<2>("lai", {ny, nx});
-    if (!state.has_field("stc")) state.add_field<3>("stc", {m_nsoil, ny, nx});
     if (!state.has_field("st1")) state.add_field<2>("st1", {ny, nx});
     if (!state.has_field("st2")) state.add_field<2>("st2", {ny, nx});
     if (!state.has_field("st3")) state.add_field<2>("st3", {ny, nx});
     if (!state.has_field("st4")) state.add_field<2>("st4", {ny, nx});
-    if (!state.has_field("smc")) state.add_field<3>("smc", {m_nsoil, ny, nx});
-    if (!state.has_field("slc")) state.add_field<3>("slc", {m_nsoil, ny, nx});
+    if (!state.has_field("sm1")) state.add_field<2>("sm1", {ny, nx});
+    if (!state.has_field("sm2")) state.add_field<2>("sm2", {ny, nx});
+    if (!state.has_field("sm3")) state.add_field<2>("sm3", {ny, nx});
+    if (!state.has_field("sm4")) state.add_field<2>("sm4", {ny, nx});
+    if (!state.has_field("sl1")) state.add_field<2>("sl1", {ny, nx});
+    if (!state.has_field("sl2")) state.add_field<2>("sl2", {ny, nx});
+    if (!state.has_field("sl3")) state.add_field<2>("sl3", {ny, nx});
+    if (!state.has_field("sl4")) state.add_field<2>("sl4", {ny, nx});
     if (!state.has_field("sfemis")) state.add_field<2>("sfemis", {ny, nx});
 
 
@@ -275,13 +280,18 @@ void LandProcess::postprocessing_and_unpacking() {
     auto& canopy_v = state_.get_field<2>("canopy").get_mutable_device_data();
     auto& snwdph_v = state_.get_field<2>("snwdph").get_mutable_device_data();
     auto& sneqv_v = state_.get_field<2>("sneqv").get_mutable_device_data();
-    auto& stc_v    = state_.get_field<3>("stc").get_mutable_device_data();
     auto& st1_v    = state_.get_field<2>("st1").get_mutable_device_data();
     auto& st2_v    = state_.get_field<2>("st2").get_mutable_device_data();
     auto& st3_v    = state_.get_field<2>("st3").get_mutable_device_data();
     auto& st4_v    = state_.get_field<2>("st4").get_mutable_device_data();
-    auto& smc_v    = state_.get_field<3>("smc").get_mutable_device_data();
-    auto& slc_v    = state_.get_field<3>("slc").get_mutable_device_data();
+    auto& sm1_v    = state_.get_field<2>("sm1").get_mutable_device_data();
+    auto& sm2_v    = state_.get_field<2>("sm2").get_mutable_device_data();
+    auto& sm3_v    = state_.get_field<2>("sm3").get_mutable_device_data();
+    auto& sm4_v    = state_.get_field<2>("sm4").get_mutable_device_data();
+    auto& sl1_v    = state_.get_field<2>("sl1").get_mutable_device_data();
+    auto& sl2_v    = state_.get_field<2>("sl2").get_mutable_device_data();
+    auto& sl3_v    = state_.get_field<2>("sl3").get_mutable_device_data();
+    auto& sl4_v    = state_.get_field<2>("sl4").get_mutable_device_data();
     auto& Tg = state_.get_field<2>("Tg").get_mutable_device_data(); 
     auto& zorl = state_.get_field<2>("zorl").get_mutable_device_data(); 
     auto& cmx = state_.get_field<2>("cmx").get_mutable_device_data(); 
@@ -309,15 +319,18 @@ void LandProcess::postprocessing_and_unpacking() {
             // sneqv_v(vj, vi) = m_sneqv(i, j);
             zorl(vj, vi) = m_zorl(i, j);
             sfemis(vj, vi) = m_sfemis(i, j);
-            for(int k=0; k<m_nsoil; ++k) {
-                stc_v(k, vj, vi) = m_stc(i, k, j);
-            //     smc_v(k, vj, vi) = m_smc(i, k, j);
-            //     slc_v(k, vj, vi) = m_slc(i, k, j);
-            }
             st1_v(vj, vi) = m_stc(i, 0, j);
             st2_v(vj, vi) = m_stc(i, 1, j);
             st3_v(vj, vi) = m_stc(i, 2, j);
             st4_v(vj, vi) = m_stc(i, 3, j);
+            sm1_v(vj, vi) = m_smc(i, 0, j);
+            sm2_v(vj, vi) = m_smc(i, 1, j);
+            sm3_v(vj, vi) = m_smc(i, 2, j);
+            sm4_v(vj, vi) = m_smc(i, 3, j);
+            sl1_v(vj, vi) = m_slc(i, 0, j);
+            sl2_v(vj, vi) = m_slc(i, 1, j);
+            sl3_v(vj, vi) = m_slc(i, 2, j);
+            sl4_v(vj, vi) = m_slc(i, 3, j);
         }
     );
 }
