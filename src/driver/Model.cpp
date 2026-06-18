@@ -128,7 +128,7 @@ void Model::init() {
     // if (config_.get_value<bool>("restart.enable", false)) {
     //     dycore_->compute_wind_fields();
     // }
-    // dycore_->compute_diagnostic_fields();
+    dycore_->compute_diagnostic_fields();
     if (config_.get_value<bool>("restart.enable", false)) {
         dycore_->initialize_restart_history();
     }
