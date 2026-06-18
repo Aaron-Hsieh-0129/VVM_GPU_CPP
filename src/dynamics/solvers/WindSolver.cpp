@@ -54,8 +54,6 @@ WindSolver::WindSolver(const Core::Grid& grid, const Utils::ConfigurationManager
 }
 
 void WindSolver::solve_w(Core::State& state) {
-    VVM::Utils::Timer solve_w_timer("SOLVE_W");
-
     const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
     const int nx = grid_.get_local_total_points_x();
@@ -222,8 +220,6 @@ void WindSolver::solve_w(Core::State& state) {
 
 
 void WindSolver::solve_uv(Core::State& state) {
-    VVM::Utils::Timer solve_uv_timer("SOLVE_UV");
-
     const int nz = grid_.get_local_total_points_z();
     const int ny = grid_.get_local_total_points_y();
     const int nx = grid_.get_local_total_points_x();

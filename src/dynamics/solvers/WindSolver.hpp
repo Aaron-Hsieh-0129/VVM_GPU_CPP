@@ -7,8 +7,6 @@
 #include "core/vvm_types.hpp"
 #include "dynamics/spatial_schemes/SpatialScheme.hpp"
 #include "utils/ConfigurationManager.hpp"
-#include "utils/Timer.hpp"
-#include "utils/TimingManager.hpp"
 #include "core/HaloExchanger.hpp"
 #include <memory>
 #include <map>

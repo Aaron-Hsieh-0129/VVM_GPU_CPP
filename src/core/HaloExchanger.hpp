@@ -5,8 +5,6 @@
 #include <algorithm>
 #include <vector>
 #include <Kokkos_Core.hpp>
-#include "utils/Timer.hpp"
-#include "utils/TimingManager.hpp"
 
 
 #if defined(ENABLE_NCCL)
@@ -38,7 +36,6 @@ public:
 
     template<size_t Dim>
     void exchange_halos(Field<Dim>& field, int depth = -1) const {
-        VVM::Utils::Timer exchange_halos_timer("Exchnage_halos");
         exchange_halos_impl(field, depth);
         
         cudaStreamCaptureStatus capture_status;
@@ -757,7 +754,6 @@ public:
 
     template<size_t Dim>
     void exchange_halos(Field<Dim>& field, int depth = -1) const {
-        VVM::Utils::Timer exchange_halos_timer("Exchnage_halos");
         if constexpr (Dim >= 2) {
             auto reqs_y = post_exchange_halo_y(field, depth);
             wait_exchange_halo_y(field, reqs_y, depth);

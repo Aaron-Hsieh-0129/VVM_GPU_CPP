@@ -162,8 +162,23 @@ int main(int argc, char *argv[]) {
 #endif
 
     {
-        VVM::Utils::Timer total_timer("total vvm");
-        VVM::Utils::TimingManager::get_instance().start_timer("initialize");
+        auto& timing = VVM::Utils::TimingManager::get_instance();
+
+        timing.configure(
+            config.get_value<bool>("performance.timing.enable", true),
+            config.get_value<bool>("performance.timing.fence_gpu", false),
+            config.get_value<int>("performance.timing.warmup_steps", 0)
+        );
+
+        const int timing_print_interval_steps =
+            config.get_value<int>("performance.timing.print_interval_steps", 0);
+
+        const bool timing_reset_after_interval_print =
+            config.get_value<bool>("performance.timing.reset_after_interval_print", false);
+
+        timing.start_timer("total_vvm");
+
+        timing.start_timer("initialize");
 
         if (split_rank == 0) std::cout << "VVM Model Simulation Started." << std::endl;
 
@@ -187,14 +202,18 @@ int main(int argc, char *argv[]) {
         VVM::Driver::Model model(config, parameters, grid, state, halo_exchanger);
         model.init();
 
-        VVM::Utils::TimingManager::get_instance().stop_timer("initialize");
+        timing.stop_timer("initialize");
 
         auto output_manager = std::make_unique<VVM::IO::OutputManager>(
             config, grid, parameters, state, split_comm
         );
 
         const bool restart_enabled = config.get_value<bool>("restart.enable", false);
-        output_manager->write(0, 0.0); // Do this even at restart mode because the SST enigine might lost control if not called at first
+        {
+            VVM::Utils::Timer timer("io");
+            // Do this even at restart mode because the SST enigine might lost control if not called at first
+            output_manager->write(0, 0.0);
+        }
         // output_manager->write_static_topo_file();
 
         // Simulation loop parameters
@@ -217,14 +236,21 @@ int main(int argc, char *argv[]) {
 
              // Output data at specified intervals
             if (state.get_time() >= next_output_time) {
-                output_manager->write(state.get_step(), state.get_time());
+                {
+                    VVM::Utils::Timer timer("io");
+                    output_manager->write(state.get_step(), state.get_time());
+                }
                 next_output_time += output_interval;
             }
+            if (timing_print_interval_steps > 0 &&
+                state.get_step() % static_cast<size_t>(timing_print_interval_steps) == 0) {
+                timing.print_timings(split_comm, timing_reset_after_interval_print);
+            }
         }
-        VVM::Utils::TimingManager::get_instance().stop_timer("total vvm");
-        VVM::Utils::TimingManager::get_instance().print_timings(split_comm);
-        model.finalize();
+        timing.stop_timer("total_vvm");
+        timing.print_timings(split_comm, false);
 
+        model.finalize();
         Kokkos::fence();
     }
     Kokkos::finalize();

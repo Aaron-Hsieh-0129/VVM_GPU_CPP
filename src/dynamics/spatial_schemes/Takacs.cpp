@@ -12,8 +12,6 @@ void Takacs::calculate_flux_convergence_x(
     const Core::Field<3>& scalar, const Core::Field<3>& u_field,
     const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency, const std::string& var_name) const {
 
-    VVM::Utils::Timer advection_x_timer("ADVECTION_X");
-
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
@@ -86,8 +84,6 @@ void Takacs::calculate_flux_convergence_y(
     const Core::Field<3>& scalar, const Core::Field<3>& v_field,
     const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency, const std::string& var_name) const {
 
-    VVM::Utils::Timer advection_x_timer("ADVECTION_Y");
-
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();
     const int nx = grid.get_local_total_points_x();
@@ -159,8 +155,6 @@ void Takacs::calculate_flux_convergence_y(
 void Takacs::calculate_flux_convergence_z(
     const Core::Field<3>& scalar, const Core::Field<3>& w_field,
     const Core::Grid& grid, const Core::Parameters& params, Core::Field<3>& out_tendency, const std::string& var_name) const {
-
-    VVM::Utils::Timer advection_x_timer("ADVECTION_Z");
 
     const int nz = grid.get_local_total_points_z();
     const int ny = grid.get_local_total_points_y();

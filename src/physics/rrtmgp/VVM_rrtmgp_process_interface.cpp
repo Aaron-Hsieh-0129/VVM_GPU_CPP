@@ -4,7 +4,6 @@
 #include "share/physics/eamxx_trcmix.hpp"
 #include "share/util/eamxx_column_ops.hpp"
 #include "share/util/eamxx_utils.hpp"
-#include "utils/Timer.hpp"
 
 #include <ekat_assert.hpp>
 #include <ekat_units.hpp>
@@ -388,7 +387,6 @@ void RRTMGPRadiation::finalize() {
 }
 
 void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
-    VVM::Utils::Timer rrtmgp_timer("RRTMGP_timer");
     const int nx = m_grid.get_local_physical_points_x();
     const int halo = m_grid.get_halo_cells();
     const int nlay = m_nlay;

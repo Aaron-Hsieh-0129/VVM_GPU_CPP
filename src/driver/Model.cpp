@@ -1,4 +1,5 @@
 #include "Model.hpp"
+#include "utils/Timer.hpp"
 
 namespace VVM {
 namespace Driver {
@@ -139,16 +140,22 @@ void Model::run_step(VVM::Real dt) {
     VVM::Real current_time = state_.get_time();
 
     if (lateral_boundary_nudging_) {
+        VVM::Utils::Timer timer("lateral_boundary_nudging");
         lateral_boundary_nudging_->update_large_scale_forcing(state_, current_time);
     }
 
     // Caculate tendencies of thermodynamics variables
-    dycore_->calculate_thermo_tendencies();
+    {
+        VVM::Utils::Timer timer("dynamics_thermo");
+        dycore_->calculate_thermo_tendencies();
+    }
 
     // Calculate radiation based on t
     if (radiation_) {
+        VVM::Utils::Timer timer("radiation");
+
         // Update net heating used for calculating th tendency
-        // FIXME: If the grid size (nx, ny) can't be divided by core number, it will cause kokkos copy errors here.
+        // WARNING: If the grid size (nx, ny) can't be divided by core number, it will cause kokkos copy errors here.
         if (state_.get_step() % rad_freq_in_steps_ == 0) {
             radiation_->run(state_, dt); 
         }
@@ -159,19 +166,25 @@ void Model::run_step(VVM::Real dt) {
     }
 
     // Update thermodynamics variables using tendencies above
-    dycore_->update_thermodynamics(dt);
+    {
+        VVM::Utils::Timer timer("dynamics_thermo");
+        dycore_->update_thermodynamics(dt);
+    }
 
     if (random_forcing_) {
+        VVM::Utils::Timer timer("random_perturbation");
         random_forcing_->apply(state_);
     }
 
     // P3 Microphysics based on (t+1) thermodynamics variables
     if (microphysics_) {
+        VVM::Utils::Timer timer("microphysics");
         microphysics_->run(state_, dt);
     }
 
     // Turbulence diffusion on thermodynamics variables
     if (turbulence_) {
+        VVM::Utils::Timer timer("turbulence");
         turbulence_->compute_coefficients(state_, dt);
         for (const auto& var_name : turbulence_->get_thermodynamics_vars()) {
             std::string fe_name = "fe_tendency_" + var_name;
@@ -187,8 +200,15 @@ void Model::run_step(VVM::Real dt) {
         if (is_compute_step) {
             // NOTE: Even the configuration specified tco_ocean model which is not from surface_, surface_ stil calculates surface friction for xi and eta. 
             // note that the dt for land module should be calling time step because the soil T needs to be updated
-            if (land_) land_->run(surface_process_s_);
-            surface_->compute_coefficients(state_);
+            if (land_) {
+                VVM::Utils::Timer timer("land");
+                land_->run(surface_process_s_);
+            }
+
+            {
+                VVM::Utils::Timer timer("surface");
+                surface_->compute_coefficients(state_);
+            }
         }
 
         for (const auto& var_name : sfc_thermodynamics_vars_) {
@@ -196,15 +216,18 @@ void Model::run_step(VVM::Real dt) {
             auto& fe_tend_field = state_.get_field<3>(fe_name);
             if (!turbulence_) fe_tend_field.set_to_zero(); 
             if (surface_) {
+                VVM::Utils::Timer timer("surface");
                 surface_->calculate_tendencies(state_, var_name, fe_tend_field);
             }
             if (land_) {
+                VVM::Utils::Timer timer("land");
                 land_->calculate_tendencies(var_name, fe_tend_field);
             }
         }
     }
 
     if (turbulence_ || enable_surface_process_) {
+        VVM::Utils::Timer timer("time_integrator_thermo");
         for (const auto& var_name : (turbulence_ ? turbulence_->get_thermodynamics_vars() : sfc_thermodynamics_vars_) ) {
             std::string fe_name = "fe_tendency_" + var_name;
             auto& fe_tend_field = state_.get_field<3>(fe_name);
@@ -214,6 +237,7 @@ void Model::run_step(VVM::Real dt) {
 
     // Apply sponge layer
     if (sponge_layer_) {
+        VVM::Utils::Timer timer("sponge_layer");
         for (const auto& var_name : sponge_layer_->get_thermodynamics_vars()) {
             std::string fe_name = "fe_tendency_" + var_name;
             auto& fe_tend_field = state_.get_field<3>(fe_name);
@@ -226,6 +250,7 @@ void Model::run_step(VVM::Real dt) {
     
     // Apply lateral boundary nudge
     if (lateral_boundary_nudging_) {
+        VVM::Utils::Timer timer("lateral_boundary_nudging");
         for (const auto& var_name : lateral_boundary_nudging_->get_target_vars()) {
             std::string fe_name = "fe_tendency_" + var_name;
             auto& fe_tend_field = state_.get_field<3>(fe_name);
@@ -237,6 +262,7 @@ void Model::run_step(VVM::Real dt) {
     }
 
     if (turbulence_ || sponge_layer_ || enable_surface_process_ || lateral_boundary_nudging_) {
+        VVM::Utils::Timer timer("halo_exchange");
         halo_exchanger_.exchange_multiple_halos(thermodynamics_vars_, state_);
         for (const auto& var_name : thermodynamics_vars_) {
             if (var_name == "th" || var_name == "qv") {
@@ -252,13 +278,17 @@ void Model::run_step(VVM::Real dt) {
     // dycore_->update_buoyancy_term(state_);
     // This is included in calculate vorticity tendencies 
 
-    // Caulcate vorticity tendencies using variables at t 
-    dycore_->calculate_vorticity_tendencies();
-    // Update vorticity to t+1
-    dycore_->update_vorticity(dt);
+    {
+        VVM::Utils::Timer timer("dynamics_vorticity");
+        // Caulcate vorticity tendencies using variables at t 
+        dycore_->calculate_vorticity_tendencies();
+        // Update vorticity to t+1
+        dycore_->update_vorticity(dt);
+    }
 
     // Vorticity diffusion
     if (turbulence_) {
+        VVM::Utils::Timer timer("turbulence");
         for (const auto& var_name : turbulence_->get_dynamics_vars()) {
             std::string fe_name = "fe_tendency_" + var_name;
             
@@ -276,6 +306,7 @@ void Model::run_step(VVM::Real dt) {
     }
 
     if (enable_surface_process_) {
+        VVM::Utils::Timer timer("surface");
         for (const auto& var_name : sfc_dynamics_vars_) {
             std::string fe_name = "fe_tendency_" + var_name;
             auto& fe_tend_field = state_.get_field<3>(fe_name);
@@ -285,6 +316,7 @@ void Model::run_step(VVM::Real dt) {
     }
 
     if (turbulence_ || enable_surface_process_) {
+        VVM::Utils::Timer timer("time_integrator_vorticity");
         for (const auto& var_name : (turbulence_ ? turbulence_->get_dynamics_vars() : sfc_dynamics_vars_)) {
             std::string fe_name = "fe_tendency_" + var_name;
             if (var_name == "zeta") {
@@ -298,6 +330,7 @@ void Model::run_step(VVM::Real dt) {
     }
 
     if (sponge_layer_) {
+        VVM::Utils::Timer timer("sponge_layer");
         for (const auto& var_name : sponge_layer_->get_dynamics_vars()) {
             if (var_name == "zeta") {
                 std::string fe_name = "fe_tendency_" + var_name;
@@ -317,10 +350,12 @@ void Model::run_step(VVM::Real dt) {
     }
 
     if (area_mean_nudging_) {
+        VVM::Utils::Timer timer("area_mean_nudging");
         area_mean_nudging_->apply_vorticity(state_, dt);
     }
 
     if (turbulence_ || sponge_layer_ || enable_surface_process_ || area_mean_nudging_) {
+        VVM::Utils::Timer timer("halo_exchange");
         halo_exchanger_.exchange_multiple_halos(dynamics_vars_, state_);
         for (const auto& var_name : dynamics_vars_) {
             bc_manager_.apply_vorticity_bc(state_.get_field<3>(var_name));
@@ -329,11 +364,15 @@ void Model::run_step(VVM::Real dt) {
     }
 
     if (wind_solver_) {
+        VVM::Utils::Timer timer("dynamics_wind_total");
         if (predict_uvtopmn_) dycore_->compute_uvtopmn();
         if (area_mean_nudging_) area_mean_nudging_->apply_uvtopmn(state_, dt);
         dycore_->compute_wind_fields();
     }
-    dycore_->compute_diagnostic_fields();
+    {
+        VVM::Utils::Timer timer("dynamics_diagnostics");
+        dycore_->compute_diagnostic_fields();
+    }
 }
 
 void Model::finalize() {

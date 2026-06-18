@@ -348,7 +348,6 @@ void TurbulenceProcess::calculate_tendencies(Core::State& state,
                                              const std::string& var_name, 
                                              Core::Field<Dim>& out_tendency) 
 {
-    VVM::Utils::Timer turbulence_timer("Turbulence");
     const auto& RKM = state.get_field<3>("RKM").get_device_data();
     const auto& RKH = state.get_field<3>("RKH").get_device_data();
     const auto& var = state.get_field<3>(var_name).get_device_data();

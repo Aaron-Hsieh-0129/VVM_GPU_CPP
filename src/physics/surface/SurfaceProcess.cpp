@@ -477,7 +477,6 @@ template<size_t Dim>
 void SurfaceProcess::calculate_tendencies(Core::State& state, 
                                           const std::string& var_name, 
                                           Core::Field<Dim>& out_tendency) {
-    VVM::Utils::Timer surface_timer("Surface");
     if (var_name != "th" && var_name != "qv" && var_name != "xi" && var_name != "eta") return;
 
     auto tend = out_tendency.get_mutable_device_data();

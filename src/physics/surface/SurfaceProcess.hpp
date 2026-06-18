@@ -12,8 +12,6 @@
 #include "core/Field.hpp"
 #include "core/vvm_types.hpp"
 #include "utils/ConfigurationManager.hpp"
-#include "utils/Timer.hpp"
-#include "utils/TimingManager.hpp"
 
 namespace VVM {
 namespace Physics {

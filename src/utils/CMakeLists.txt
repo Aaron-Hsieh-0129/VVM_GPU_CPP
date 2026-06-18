@@ -18,5 +18,6 @@ add_library(vvm_utils STATIC
 target_link_libraries(vvm_utils
     PUBLIC
         Kokkos::kokkos
+        MPI::MPI_CXX
 )
 

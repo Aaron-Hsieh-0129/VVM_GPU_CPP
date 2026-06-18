@@ -5,7 +5,6 @@
 #include <ekat_units.hpp>
 
 #include <array>
-#include "utils/Timer.hpp"
 #include "physics_functions.hpp" // for ETI only but harmless for GPU
 
 using Real = scream::Real;
@@ -925,8 +924,6 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
 
 
 void VVM_P3_Interface::run(VVM::Core::State &state, const VVM::Real dt) {
-    VVM::Utils::Timer p3_timer("P3_timer");
-
     if (m_need_reset_precip) {
         this->reset_precip_accumulation(state);
         m_need_reset_precip = false;
