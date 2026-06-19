@@ -12,10 +12,12 @@ namespace VVM {
 namespace Physics {
 namespace RRTMGP {
 
-using Real = scream::Real;
+using VVMReal = VVM::Real;
+using RadReal = RRTMGPRadiation::RadReal;
+using Real = RadReal;
 using Int = scream::Int;
-using PC = scream::physics::Constants<Real>;
-using CO = scream::ColumnOps<DefaultDevice, Real>;
+using PC = scream::physics::Constants<RadReal>;
+using CO = scream::ColumnOps<DefaultDevice, RadReal>;
 
 bool is_leap_year(int year) {
     return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
@@ -111,7 +113,7 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
     if (!state.has_field("lwup_sfc")) state.add_field<2>("lwup_sfc", {ny_total, nx_total});
     if (!state.has_field("lwdn_sfc")) state.add_field<2>("lwdn_sfc", {ny_total, nx_total});
 
-    using PC = scream::physics::Constants<Real>;
+    using PC = scream::physics::Constants<RadReal>;
 
     // Determine rad timestep, specified as number of atm steps
 
@@ -125,9 +127,9 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
     m_orbital_minute = m_config.get_value<int>("physics.rrtmgp.time.minute", -9999);
     m_orbital_second = m_config.get_value<int>("physics.rrtmgp.time.second", -9999);
     // Get orbital parameters from yaml file
-    m_orbital_eccen = m_config.get_value<VVM::Real>("physics.rrtmgp.orbital_eccentricity", -9999.0);
-    m_orbital_obliq = m_config.get_value<VVM::Real>("physics.rrtmgp.orbital_obliquity", -9999.0);
-    m_orbital_mvelp = m_config.get_value<VVM::Real>("physics.rrtmgp.orbital_mvelp", -9999.0);
+    m_orbital_eccen = m_config.get_value<double>("physics.rrtmgp.orbital_eccentricity", -9999.0);
+    m_orbital_obliq = m_config.get_value<double>("physics.rrtmgp.orbital_obliquity", -9999.0);
+    m_orbital_mvelp = m_config.get_value<double>("physics.rrtmgp.orbital_mvelp", -9999.0);
 
     // Value for prescribing an invariant solar constant (i.e. total solar irradiance at
     // TOA).  Used for idealized experiments such as RCE. Disabled when value is less than 0.
@@ -233,7 +235,7 @@ void RRTMGPRadiation::initialize(VVM::Core::State& state) {
     auto h_n2o = Kokkos::create_mirror_view(m_n2o_profile);
     auto h_o2  = Kokkos::create_mirror_view(m_o2_profile);
 
-    VVM::Real g1 = 3.6478, g2 = 0.83209, g3 = 11.3515;
+    Real g1 = 3.6478, g2 = 0.83209, g3 = 11.3515;
     const auto& h_pbar = state.get_field<1>("pbar").get_host_data(); 
     const int nz = m_grid.get_local_physical_points_z();
     // NOTE: The gas should be upside down, which means low index representing high level.
@@ -408,8 +410,8 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
     const auto& diag_eff_radius_qi = state.get_field<3>("diag_eff_radius_qi").get_device_data();
     const auto& albedo = state.get_field<2>("albedo").get_device_data();
 
-    VVM::Real Rd = m_config.get_value<VVM::Real>("constants.Rd");
-    VVM::Real g = m_config.get_value<VVM::Real>("constants.gravity");
+    Real Rd = m_config.get_value<double>("constants.Rd");
+    Real g = m_config.get_value<double>("constants.gravity");
 
     // Output fields
     auto& sw_heating = state.get_field<3>("sw_heating").get_mutable_device_data();
@@ -533,26 +535,26 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                         // original TOA process
                         buffer.p_lay_k(i, 0) = 0.5 * (buffer.p_lev_k(i, 0) + buffer.p_lev_k(i, 1));
                         buffer.p_del_k(i, 0) = buffer.p_lev_k(i, 1) - buffer.p_lev_k(i, 0);
-                        buffer.d_dz(i, 0) = 0.0;
+                        buffer.d_dz(i, 0) = VVMReal(0.0);
                         int top_vvm = h + nz - 1;
                         int subtop_vvm = h + nz - 2;
                         buffer.t_lay_k(i, 0) = 2.0 * th(top_vvm, iy+h, ix+h) * pibar(top_vvm) - th(subtop_vvm, iy+h, ix+h) * pibar(subtop_vvm);
-                        buffer.qc_k(i, 0) = 0.0;
-                        buffer.qi_k(i, 0) = 0.0;
+                        buffer.qc_k(i, 0) = VVMReal(0.0);
+                        buffer.qi_k(i, 0) = VVMReal(0.0);
                         buffer.eff_radius_qc_k(i, 0) = 10.0;
                         buffer.eff_radius_qi_k(i, 0) = 50.0;
-                        buffer.cldfrac_tot_k(i, 0) = 0.0;
+                        buffer.cldfrac_tot_k(i, 0) = VVMReal(0.0);
                     } 
                     else if (k <= num_dummy) {
                         // pseudo grid for topo
                         buffer.p_lay_k(i, k) = 0.5 * (buffer.p_lev_k(i, k) + buffer.p_lev_k(i, k+1));
                         buffer.p_del_k(i, k) = buffer.p_lev_k(i, k+1) - buffer.p_lev_k(i, k);
-                        buffer.d_dz(i, k) = 0.0;
-                        buffer.qc_k(i, k) = 0.0;
-                        buffer.qi_k(i, k) = 0.0;
+                        buffer.d_dz(i, k) = VVMReal(0.0);
+                        buffer.qc_k(i, k) = VVMReal(0.0);
+                        buffer.qi_k(i, k) = VVMReal(0.0);
                         buffer.eff_radius_qc_k(i, k) = 10.0;
                         buffer.eff_radius_qi_k(i, k) = 50.0;
-                        buffer.cldfrac_tot_k(i, k) = 0.0;
+                        buffer.cldfrac_tot_k(i, k) = VVMReal(0.0);
                     } 
                     else {
                         // real atmosphere move downward
@@ -568,8 +570,8 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                         Real re_qc_microns = diag_eff_radius_qc(k_vvm, iy+h, ix+h);
                         Real re_qi_microns = diag_eff_radius_qi(k_vvm, iy+h, ix+h);
 
-                        buffer.eff_radius_qc_k(i, k) = Kokkos::max(real(2.5), Kokkos::min(real(60.0), re_qc_microns));
-                        buffer.eff_radius_qi_k(i, k) = Kokkos::max(real(5.0), Kokkos::min(real(140.0), re_qi_microns));
+                        buffer.eff_radius_qc_k(i, k) = Kokkos::max(Real(2.5), Kokkos::min(Real(60.0), re_qc_microns));
+                        buffer.eff_radius_qi_k(i, k) = Kokkos::max(Real(5.0), Kokkos::min(Real(140.0), re_qi_microns));
 
                         // radiation_rrtmg.f90 floors qcl/qci before rad_full.
                         // rad_driver then sets cloudFrac where the resulting LWP/IWP is positive.
@@ -587,12 +589,12 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
 
                 for(int k=0; k < nlay; ++k) {
                     for(int b=0; b<nswbands; ++b) {
-                        buffer.aero_tau_sw_k(i,k,b) = 0.0;
-                        buffer.aero_ssa_sw_k(i,k,b) = 0.0;
-                        buffer.aero_g_sw_k(i,k,b) = 0.0;
+                        buffer.aero_tau_sw_k(i,k,b) = VVMReal(0.0);
+                        buffer.aero_ssa_sw_k(i,k,b) = VVMReal(0.0);
+                        buffer.aero_g_sw_k(i,k,b) = VVMReal(0.0);
                     }
                     for(int b=0; b<nlwbands; ++b) {
-                        buffer.aero_tau_lw_k(i,k,b) = 0.0;
+                        buffer.aero_tau_lw_k(i,k,b) = VVMReal(0.0);
                     }
                 }
             });
@@ -621,10 +623,10 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
             KOKKOS_LAMBDA(int i) {
                 for(int k=0; k<nlay; ++k) {
                     Real layer_mass = buffer.p_del_k(i,k) / g;
-                    buffer.lwp_k(i,k) = buffer.qc_k(i,k) * real(1e3) * layer_mass;
-                    buffer.iwp_k(i,k) = buffer.qi_k(i,k) * real(1e3) * layer_mass;
-                    if (buffer.lwp_k(i,k) < 0) buffer.lwp_k(i,k) = 0.0;
-                    if (buffer.iwp_k(i,k) < 0) buffer.iwp_k(i,k) = 0.0;
+                    buffer.lwp_k(i,k) = buffer.qc_k(i,k) * Real(1e3) * layer_mass;
+                    buffer.iwp_k(i,k) = buffer.qi_k(i,k) * Real(1e3) * layer_mass;
+                    if (buffer.lwp_k(i,k) < 0) buffer.lwp_k(i,k) = VVMReal(0.0);
+                    if (buffer.iwp_k(i,k) < 0) buffer.iwp_k(i,k) = VVMReal(0.0);
                 }
             }
         );
@@ -663,12 +665,12 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                         for (int k = 1; k < nlay; ++k) {
                             if (k <= num_dummy) {
                                 int k_vvm_top = h + nz - 1;
-                                Real qv_val = Kokkos::max(qv(k_vvm_top, iy + h, ix + h), real(1e-6));
+                                Real qv_val = Kokkos::max(static_cast<Real>(qv(k_vvm_top, iy + h, ix + h)), Real(1e-6));
                                 vmr_view(i, k) = (mwdry / mwh2o) * qv_val;
                             } 
                             else {
                                 int k_vvm = h + nz - k + num_dummy;
-                                Real qv_val = Kokkos::max(qv(k_vvm, iy + h, ix + h), real(1e-6));
+                                Real qv_val = Kokkos::max(static_cast<Real>(qv(k_vvm, iy + h, ix + h)), Real(1e-6));
                                 vmr_view(i, k) = (mwdry / mwh2o) * qv_val;
                             }
                         }
@@ -678,7 +680,7 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
             else {
                 bool is_profile = false;
                 Kokkos::View<Real*, DefaultDevice> profile;
-                Real scalar_val = 0.0;
+                Real scalar_val = VVMReal(0.0);
 
                 if      (name == "co2") { is_profile = true; profile = m_co2_profile; }
                 else if (name == "ch4") { is_profile = true; profile = m_ch4_profile; }
@@ -927,49 +929,49 @@ void RRTMGPRadiation::run(VVM::Core::State& state, const double dt) {
                 int hx = topo(iy + h, ix + h); 
                 int num_dummy = hx - 1;
 
-                swdn_sfc(iy + h, ix + h) = buffer.sw_flux_dn_k(i, nz + 1);
-                swup_sfc(iy + h, ix + h) = buffer.sw_flux_up_k(i, nz + 1);
-                lwdn_sfc(iy + h, ix + h) = buffer.lw_flux_dn_k(i, nz + 1);
-                lwup_sfc(iy + h, ix + h) = buffer.lw_flux_up_k(i, nz + 1);
+                swdn_sfc(iy + h, ix + h) = static_cast<VVMReal>(buffer.sw_flux_dn_k(i, nz + 1));
+                swup_sfc(iy + h, ix + h) = static_cast<VVMReal>(buffer.sw_flux_up_k(i, nz + 1));
+                lwdn_sfc(iy + h, ix + h) = static_cast<VVMReal>(buffer.lw_flux_dn_k(i, nz + 1));
+                lwup_sfc(iy + h, ix + h) = static_cast<VVMReal>(buffer.lw_flux_up_k(i, nz + 1));
 
-                swup_toa(iy + h, ix + h) = buffer.sw_flux_up_k(i, 0);
-                swdn_toa(iy + h, ix + h) = buffer.sw_flux_dn_k(i, 0);
-                lwup_toa(iy + h, ix + h) = buffer.lw_flux_up_k(i, 0);
-                lwdn_toa(iy + h, ix + h) = buffer.lw_flux_dn_k(i, 0);
+                swup_toa(iy + h, ix + h) = static_cast<VVMReal>(buffer.sw_flux_up_k(i, 0));
+                swdn_toa(iy + h, ix + h) = static_cast<VVMReal>(buffer.sw_flux_dn_k(i, 0));
+                lwup_toa(iy + h, ix + h) = static_cast<VVMReal>(buffer.lw_flux_up_k(i, 0));
+                lwdn_toa(iy + h, ix + h) = static_cast<VVMReal>(buffer.lw_flux_dn_k(i, 0));
 
                 for (int k_vvm = h; k_vvm <= h + nz - 1; ++k_vvm) {
                     if (k_vvm < h + hx - 1) {
-                        sw_heating(k_vvm, iy + h, ix + h) = 0.0;
-                        lw_heating(k_vvm, iy + h, ix + h) = 0.0;
-                        net_heating(k_vvm, iy + h, ix + h) = 0.0;
+                        sw_heating(k_vvm, iy + h, ix + h) = VVMReal(0.0);
+                        lw_heating(k_vvm, iy + h, ix + h) = VVMReal(0.0);
+                        net_heating(k_vvm, iy + h, ix + h) = VVMReal(0.0);
                     } 
                     else {
                         int k = h + nz - k_vvm + num_dummy;
                         Real net_heating_val = buffer.sw_heating_k(i, k) + buffer.lw_heating_k(i, k); 
-                        sw_heating(k_vvm, iy + h, ix + h) = buffer.sw_heating_k(i, k);
-                        lw_heating(k_vvm, iy + h, ix + h) = buffer.lw_heating_k(i, k);
-                        net_heating(k_vvm, iy + h, ix + h) = net_heating_val;
+                        sw_heating(k_vvm, iy + h, ix + h) = static_cast<VVMReal>(buffer.sw_heating_k(i, k));
+                        lw_heating(k_vvm, iy + h, ix + h) = static_cast<VVMReal>(buffer.lw_heating_k(i, k));
+                        net_heating(k_vvm, iy + h, ix + h) = static_cast<VVMReal>(net_heating_val);
                     }
                 }
 
                 for (int k_vvm = h - 1; k_vvm <= h + nz - 1; ++k_vvm) {
                     if (k_vvm < h + hx - 2) {
-                        net_sw_flux(k_vvm, iy+h, ix+h) = 0.0;
-                        net_lw_flux(k_vvm, iy+h, ix+h) = 0.0;
-                        swdn(k_vvm, iy+h, ix+h) = 0.0;
-                        lwdn(k_vvm, iy+h, ix+h) = 0.0;
-                        lwup(k_vvm, iy+h, ix+h) = 0.0;
+                        net_sw_flux(k_vvm, iy+h, ix+h) = VVMReal(0.0);
+                        net_lw_flux(k_vvm, iy+h, ix+h) = VVMReal(0.0);
+                        swdn(k_vvm, iy+h, ix+h) = VVMReal(0.0);
+                        lwdn(k_vvm, iy+h, ix+h) = VVMReal(0.0);
+                        lwup(k_vvm, iy+h, ix+h) = VVMReal(0.0);
                     } 
                     else {
                         int k = h + nz - k_vvm + num_dummy;
                         Real net_sw = buffer.sw_flux_dn_k(i, k) - buffer.sw_flux_up_k(i, k);
                         Real net_lw = buffer.lw_flux_dn_k(i, k) - buffer.lw_flux_up_k(i, k);
 
-                        net_sw_flux(k_vvm, iy+h, ix+h) = net_sw;
-                        net_lw_flux(k_vvm, iy+h, ix+h) = net_lw;
-                        swdn(k_vvm, iy+h, ix+h) = buffer.sw_flux_dn_k(i, k);
-                        lwdn(k_vvm, iy+h, ix+h) = buffer.lw_flux_dn_k(i, k);
-                        lwup(k_vvm, iy+h, ix+h) = buffer.lw_flux_up_k(i, k);
+                        net_sw_flux(k_vvm, iy+h, ix+h) = static_cast<VVMReal>(net_sw);
+                        net_lw_flux(k_vvm, iy+h, ix+h) = static_cast<VVMReal>(net_lw);
+                        swdn(k_vvm, iy+h, ix+h) = static_cast<VVMReal>(buffer.sw_flux_dn_k(i, k));
+                        lwdn(k_vvm, iy+h, ix+h) = static_cast<VVMReal>(buffer.lw_flux_dn_k(i, k));
+                        lwup(k_vvm, iy+h, ix+h) = static_cast<VVMReal>(buffer.lw_flux_up_k(i, k));
                     }
                 }
             }

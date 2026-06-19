@@ -281,7 +281,7 @@ static void rrtmgp_main(
   const real2dk &lw_clnsky_flux_up, const real2dk &lw_clnsky_flux_dn,
   const real3dk &sw_bnd_flux_up, const real3dk &sw_bnd_flux_dn, const real3dk &sw_bnd_flux_dn_dir,
   const real3dk &lw_bnd_flux_up, const real3dk &lw_bnd_flux_dn,
-  const Real tsi_scaling,
+  const RealT tsi_scaling,
   const std::shared_ptr<spdlog::logger>& logger,
   const bool extra_clnclrsky_diag = false, const bool extra_clnsky_diag = false)
 {
@@ -523,7 +523,7 @@ static void rrtmgp_sw(
   const creal2dk &sfc_alb_dir, const creal2dk &sfc_alb_dif, const real1dk &mu0,
   optical_props2_t &aerosol, optical_props2_t &clouds,
   fluxes_t &fluxes, fluxes_broadband_t &clnclrsky_fluxes, fluxes_broadband_t &clrsky_fluxes, fluxes_broadband_t &clnsky_fluxes,
-  const Real tsi_scaling,
+  const RealT tsi_scaling,
   const std::shared_ptr<spdlog::logger>& logger,
   const bool extra_clnclrsky_diag, const bool extra_clnsky_diag)
 {
@@ -990,6 +990,7 @@ static void rrtmgp_lw(
 
 #ifdef SCREAM_RRTMGP_DEBUG
   // Check gas optics
+  check_range_k(col_gas,     0, std::numeric_limits<RealT>::max(), "rrtmgp_lw:col_gas");
   check_range_k(optics.tau,  0, std::numeric_limits<RealT>::max(), "rrtmgp_lw:optics.tau");
 #endif
 
@@ -1279,7 +1280,7 @@ static void mixing_ratio_to_cloud_mass(
 {
   int ncol = mixing_ratio.extent(0);
   int nlay = mixing_ratio.extent(1);
-  using physconst = scream::physics::Constants<Real>;
+  using physconst = scream::physics::Constants<RealT>;
   TIMED_KERNEL(FLATTEN_MD_KERNEL2(ncol, nlay, icol, ilay,
     // Compute in-cloud mixing ratio (mixing ratio of the cloudy part of the layer)
     // NOTE: these thresholds (from E3SM) seem arbitrary, but included here for consistency

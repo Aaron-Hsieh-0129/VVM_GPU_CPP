@@ -25,7 +25,8 @@ void compute_heating_rate (
   View3 const &pdel   ,
   View4 const &heating_rate)
 {
-  using physconst = scream::physics::Constants<Real>;
+  using value_type = typename View1::non_const_value_type;
+  using physconst = scream::physics::Constants<value_type>;
   using LayoutT = typename View1::array_layout;
   const int ncol = (int)flux_up.extent(0);
   const int nlay = (int)flux_up.extent(1)-1;

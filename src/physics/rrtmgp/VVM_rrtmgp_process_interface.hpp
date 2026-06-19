@@ -30,7 +30,13 @@ using ekat::Unmanaged;
 class RRTMGPRadiation {
 public:
     using DefaultDevice = scream::DefaultDevice;
-    using Real = scream::Real;
+    using VVMReal = VVM::Real;
+#ifdef VVM_RRTMGP_USE_DOUBLE_PRECISION
+    using RadReal = double;
+#else
+    using RadReal = float;
+#endif
+    using Real = RadReal;
     using Int = scream::Int;
     using KT = ekat::KokkosTypes<DefaultDevice>;
 
@@ -58,7 +64,7 @@ public:
     using lrreal2dk   = typename KT::template view_2d<Real>;
     using ulrreal2dk  = Unmanaged<lrreal2dk>;
 
-    using interface_t = scream::rrtmgp::rrtmgp_interface<Real, layout_t, DefaultDevice>;
+    using interface_t = scream::rrtmgp::rrtmgp_interface<RadReal, layout_t, DefaultDevice>;
 
     // Constructors
     RRTMGPRadiation(const VVM::Utils::ConfigurationManager& config, const VVM::Core::Grid& grid, const VVM::Core::Parameters& params, VVM::Core::State& state);
