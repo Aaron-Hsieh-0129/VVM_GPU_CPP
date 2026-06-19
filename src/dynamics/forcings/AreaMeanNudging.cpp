@@ -89,18 +89,18 @@ void AreaMeanNudging::initialize(Core::State& state) {
     cudaStream_t stream = state.get_cuda_stream();
 
     ncclGroupStart();
-    ncclAllReduce(l_sum_xi.data(), g_sum_xi.data(), nz, ncclDouble, ncclSum, comm, stream);
-    ncclAllReduce(l_sum_eta.data(), g_sum_eta.data(), nz, ncclDouble, ncclSum, comm, stream);
-    ncclAllReduce(l_sum_zeta.data(), g_sum_zeta.data(), 1, ncclDouble, ncclSum, comm, stream);
-    ncclAllReduce(l_sum_u.data(), g_sum_u.data(), 1, ncclDouble, ncclSum, comm, stream);
-    ncclAllReduce(l_sum_v.data(), g_sum_v.data(), 1, ncclDouble, ncclSum, comm, stream);
+    ncclAllReduce(l_sum_xi.data(), g_sum_xi.data(), nz, VVM_NCCL_REAL, ncclSum, comm, stream);
+    ncclAllReduce(l_sum_eta.data(), g_sum_eta.data(), nz, VVM_NCCL_REAL, ncclSum, comm, stream);
+    ncclAllReduce(l_sum_zeta.data(), g_sum_zeta.data(), 1, VVM_NCCL_REAL, ncclSum, comm, stream);
+    ncclAllReduce(l_sum_u.data(), g_sum_u.data(), 1, VVM_NCCL_REAL, ncclSum, comm, stream);
+    ncclAllReduce(l_sum_v.data(), g_sum_v.data(), 1, VVM_NCCL_REAL, ncclSum, comm, stream);
     ncclGroupEnd();
 #else
-    MPI_Allreduce(l_sum_xi.data(), g_sum_xi.data(), nz, MPI_DOUBLE, MPI_SUM, grid_.get_cart_comm());
-    MPI_Allreduce(l_sum_eta.data(), g_sum_eta.data(), nz, MPI_DOUBLE, MPI_SUM, grid_.get_cart_comm());
-    MPI_Allreduce(l_sum_zeta.data(), g_sum_zeta.data(), 1, MPI_DOUBLE, MPI_SUM, grid_.get_cart_comm());
-    MPI_Allreduce(l_sum_u.data(), g_sum_u.data(), 1, MPI_DOUBLE, MPI_SUM, grid_.get_cart_comm());
-    MPI_Allreduce(l_sum_v.data(), g_sum_v.data(), 1, MPI_DOUBLE, MPI_SUM, grid_.get_cart_comm());
+    MPI_Allreduce(l_sum_xi.data(), g_sum_xi.data(), nz, VVM_MPI_REAL, MPI_SUM, grid_.get_cart_comm());
+    MPI_Allreduce(l_sum_eta.data(), g_sum_eta.data(), nz, VVM_MPI_REAL, MPI_SUM, grid_.get_cart_comm());
+    MPI_Allreduce(l_sum_zeta.data(), g_sum_zeta.data(), 1, VVM_MPI_REAL, MPI_SUM, grid_.get_cart_comm());
+    MPI_Allreduce(l_sum_u.data(), g_sum_u.data(), 1, VVM_MPI_REAL, MPI_SUM, grid_.get_cart_comm());
+    MPI_Allreduce(l_sum_v.data(), g_sum_v.data(), 1, VVM_MPI_REAL, MPI_SUM, grid_.get_cart_comm());
 #endif
 
     auto& xi0 = state.get_field<1>("areamn_xi0").get_mutable_device_data();
@@ -171,14 +171,14 @@ void AreaMeanNudging::apply_vorticity(Core::State& state, VVM::Real dt) {
     cudaStream_t stream = state.get_cuda_stream();
 
     ncclGroupStart();
-    ncclAllReduce(l_sum_xi.data(), g_sum_xi.data(), nz, ncclDouble, ncclSum, comm, stream);
-    ncclAllReduce(l_sum_eta.data(), g_sum_eta.data(), nz, ncclDouble, ncclSum, comm, stream);
-    ncclAllReduce(l_sum_zeta.data(), g_sum_zeta.data(), 1, ncclDouble, ncclSum, comm, stream);
+    ncclAllReduce(l_sum_xi.data(), g_sum_xi.data(), nz, VVM_NCCL_REAL, ncclSum, comm, stream);
+    ncclAllReduce(l_sum_eta.data(), g_sum_eta.data(), nz, VVM_NCCL_REAL, ncclSum, comm, stream);
+    ncclAllReduce(l_sum_zeta.data(), g_sum_zeta.data(), 1, VVM_NCCL_REAL, ncclSum, comm, stream);
     ncclGroupEnd();
 #else
-    MPI_Allreduce(l_sum_xi.data(), g_sum_xi.data(), nz, MPI_DOUBLE, MPI_SUM, grid_.get_cart_comm());
-    MPI_Allreduce(l_sum_eta.data(), g_sum_eta.data(), nz, MPI_DOUBLE, MPI_SUM, grid_.get_cart_comm());
-    MPI_Allreduce(l_sum_zeta.data(), g_sum_zeta.data(), 1, MPI_DOUBLE, MPI_SUM, grid_.get_cart_comm());
+    MPI_Allreduce(l_sum_xi.data(), g_sum_xi.data(), nz, VVM_MPI_REAL, MPI_SUM, grid_.get_cart_comm());
+    MPI_Allreduce(l_sum_eta.data(), g_sum_eta.data(), nz, VVM_MPI_REAL, MPI_SUM, grid_.get_cart_comm());
+    MPI_Allreduce(l_sum_zeta.data(), g_sum_zeta.data(), 1, VVM_MPI_REAL, MPI_SUM, grid_.get_cart_comm());
 #endif
 
     const auto& xi0 = state.get_field<1>("areamn_xi0").get_device_data();
