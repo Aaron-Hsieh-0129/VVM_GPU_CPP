@@ -47,6 +47,7 @@ DY = config['grid']['dy']
 DZ = config['grid']['dz']
 DZ1 = config['grid']['dz1']
 HALO = config['grid']['n_halo_cells']
+NSOIL = 4
 
 FILENAME = config['netcdf_reader']['source_file']
 os.makedirs(os.path.dirname(FILENAME), exist_ok=True)
@@ -261,6 +262,9 @@ def get_lai_data(ny, nx):
     # lai[:, :] = 6.48
     return lai
 
+SM_INIT = [0.3054033, 0.3054033, 0.3054033, 0.3054033] # soil moisture for winter
+# SM_INIT = [0.3415875, 0.3415875, 0.3415875, 0.3415875] # soil moisture for summer
+
 
 # Initialize default surface arrays (Using IGBP classification standard)
 topo   = np.zeros((NY, NX), dtype='i4')
@@ -273,6 +277,16 @@ lai    = np.zeros((NY, NX), dtype='f8')
 shdmax = np.zeros((NY, NX), dtype='f8')
 shdmin = np.zeros((NY, NX), dtype='f8')
 Tg     = np.full((NY, NX), 300.0, dtype='f8')
+
+sm1 = np.full((NY, NX), SM_INIT[0], dtype='f8')
+sm2 = np.full((NY, NX), SM_INIT[1], dtype='f8')
+sm3 = np.full((NY, NX), SM_INIT[2], dtype='f8')
+sm4 = np.full((NY, NX), SM_INIT[3], dtype='f8')
+
+sl1 = sm1.copy()
+sl2 = sm2.copy()
+sl3 = sm3.copy()
+sl4 = sm4.copy()
 
 # ==============================================================================
 # Logic Branching: Real Topography vs. Idealized Simulation
@@ -519,6 +533,38 @@ variables_config = {
     'shdmin': {
         'data': shdmin, 'dims': ('ny', 'nx'), 'units': '%', 'dtype': 'f8',  
         'long_name': 'Minimum areal fractional coverage of green vegetation'
+    },
+    'sm1': {
+        'data': sm1, 'dims': ('ny', 'nx'), 'units': 'm3/m3', 'dtype': 'f8',
+        'long_name': 'Noah layer 1 volumetric soil moisture'
+    },
+    'sm2': {
+        'data': sm2, 'dims': ('ny', 'nx'), 'units': 'm3/m3', 'dtype': 'f8',
+        'long_name': 'Noah layer 2 volumetric soil moisture'
+    },
+    'sm3': {
+        'data': sm3, 'dims': ('ny', 'nx'), 'units': 'm3/m3', 'dtype': 'f8',
+        'long_name': 'Noah layer 3 volumetric soil moisture'
+    },
+    'sm4': {
+        'data': sm4, 'dims': ('ny', 'nx'), 'units': 'm3/m3', 'dtype': 'f8',
+        'long_name': 'Noah layer 4 volumetric soil moisture'
+    },
+    'sl1': {
+        'data': sl1, 'dims': ('ny', 'nx'), 'units': 'm3/m3', 'dtype': 'f8',
+        'long_name': 'Noah layer 1 liquid soil moisture'
+    },
+    'sl2': {
+        'data': sl2, 'dims': ('ny', 'nx'), 'units': 'm3/m3', 'dtype': 'f8',
+        'long_name': 'Noah layer 2 liquid soil moisture'
+    },
+    'sl3': {
+        'data': sl3, 'dims': ('ny', 'nx'), 'units': 'm3/m3', 'dtype': 'f8',
+        'long_name': 'Noah layer 3 liquid soil moisture'
+    },
+    'sl4': {
+        'data': sl4, 'dims': ('ny', 'nx'), 'units': 'm3/m3', 'dtype': 'f8',
+        'long_name': 'Noah layer 4 liquid soil moisture'
     }
 }
 

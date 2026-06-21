@@ -26,14 +26,14 @@
         "NETCDF_Fortran_DIR": "/home/mog/libs_GPUVVM",
         "PNETCDF_DIR": "/home/mog/libs_GPUVVM",
 
-        "VVM_USE_DOUBLE_PRECISION": "OFF",
+        "VVM_USE_DOUBLE_PRECISION": "ON",
         "ENABLE_NCCL": "ON",
         "EAMXX_ENABLE_GPU": "ON",
         "Kokkos_ENABLE_CUDA": "ON",
-        "SCREAM_DOUBLE_PRECISION": "OFF",
+        "SCREAM_DOUBLE_PRECISION": "ON",
         "RRTMGP_USE_DOUBLE_PRECISION": "ON",
         "SCREAM_PACK_SIZE": "1",
-        "SCREAM_P3_SMALL_KERNELS": "OFF",
+        "SCREAM_P3_SMALL_KERNELS": "ON",
         "SCREAM_SMALL_PACK_SIZE": "1"
       }
     },

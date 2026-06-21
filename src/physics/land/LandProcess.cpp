@@ -115,8 +115,15 @@ void LandProcess::init() {
     auto& pibar_v = state_.get_field<1>("pibar").get_device_data();
     auto& topo_v = state_.get_field<2>("topo").get_device_data();
     auto& Tg = state_.get_field<2>("Tg").get_mutable_device_data(); 
-    // auto& smc = state_.get_field<3>("smc").get_mutable_device_data(); 
-    // auto& slc = state_.get_field<3>("slc").get_mutable_device_data(); 
+    auto& sm1_v = state_.get_field<2>("sm1").get_device_data();
+    auto& sm2_v = state_.get_field<2>("sm2").get_device_data();
+    auto& sm3_v = state_.get_field<2>("sm3").get_device_data();
+    auto& sm4_v = state_.get_field<2>("sm4").get_device_data();
+
+    auto& sl1_v = state_.get_field<2>("sl1").get_device_data();
+    auto& sl2_v = state_.get_field<2>("sl2").get_device_data();
+    auto& sl3_v = state_.get_field<2>("sl3").get_device_data();
+    auto& sl4_v = state_.get_field<2>("sl4").get_device_data();
     
     Kokkos::parallel_for("InitLandStates", 
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {m_nx, m_ny}),
@@ -125,8 +132,6 @@ void LandProcess::init() {
             const int vj = j + m_halo_y;
             int hx = topo_v(vj, vi);
             int hxp = topo_v(vj, vi) + 1;
-
-
 
             // NOTE: These values will be overwritten in preprocessing_and_packing
             m_islimsk(i, j) = 1;
@@ -144,15 +149,18 @@ void LandProcess::init() {
             m_t1(i, j) = th_v(hx, vj, vi) * pibar_v(hx);
             m_tskin(i, j) = m_t1(i, j); // It it supposed to be equal to Tg but Fortran VVM use m_t1 so we follow it.
 
+            m_smc(i, 0, j) = sm1_v(vj, vi);
+            m_smc(i, 1, j) = sm2_v(vj, vi);
+            m_smc(i, 2, j) = sm3_v(vj, vi);
+            m_smc(i, 3, j) = sm4_v(vj, vi);
+
+            m_slc(i, 0, j) = sl1_v(vj, vi);
+            m_slc(i, 1, j) = sl2_v(vj, vi);
+            m_slc(i, 2, j) = sl3_v(vj, vi);
+            m_slc(i, 3, j) = sl4_v(vj, vi);
+
             for(int k=0; k<m_nsoil; ++k) {
                 m_stc(i, k, j) = m_t1(i, j); // soil temperature
-                // m_smc(i, k, j) = smc(vj, vi) / real(100.); // volumetric soil moisture content
-                // m_slc(i, k, j) = slc(vj, vi) / real(100.); // liquid soil moisture
-                // m_smc(i, k, j) = 0.3415875; // volumetric soil moisture content
-                // m_slc(i, k, j) = 0.3415875; // liquid soil moisture
-                m_smc(i, k, j) = 0.3054033; // volumetric soil moisture content
-                m_slc(i, k, j) = 0.3054033; // liquid soil moisture
-
             }
         }
     );
