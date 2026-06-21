@@ -24,6 +24,42 @@ def get_available_presets(vvm_root):
     except Exception:
         return []
 
+def stage_runtime_library(lib_name, candidates, destination_dir):
+    """Copy a system runtime library into the shared workspace if available."""
+    for candidate in candidates:
+        if not os.path.exists(candidate):
+            continue
+
+        real_source = os.path.realpath(candidate)
+        if not os.path.isfile(real_source):
+            continue
+
+        os.makedirs(destination_dir, exist_ok=True)
+        real_dest = os.path.join(destination_dir, os.path.basename(real_source))
+        shutil.copy2(real_source, real_dest)
+
+        link_dest = os.path.join(destination_dir, lib_name)
+        try:
+            if os.path.lexists(link_dest):
+                os.remove(link_dest)
+            os.symlink(os.path.basename(real_dest), link_dest)
+        except OSError:
+            shutil.copy2(real_source, link_dest)
+
+        if ".so." in lib_name:
+            unversioned_name = lib_name.split(".so.", 1)[0] + ".so"
+            unversioned_dest = os.path.join(destination_dir, unversioned_name)
+            try:
+                if os.path.lexists(unversioned_dest):
+                    os.remove(unversioned_dest)
+                os.symlink(os.path.basename(real_dest), unversioned_dest)
+            except OSError:
+                shutil.copy2(real_source, unversioned_dest)
+
+        return destination_dir
+
+    return None
+
 def setup_environment(preset_name):
     """Parse CMakePresets.json and inject paths into the environment natively."""
     env = os.environ.copy()
@@ -51,10 +87,13 @@ def setup_environment(preset_name):
              
         print(f"[Info] Successfully loaded environment from CMake Preset: '{preset_name}'")
 
+        lib_dirs = []
+
         # 1. Dynamically extract HPCX_HOME from the CXX Compiler path
         cxx_compiler = cache_vars.get("CMAKE_CXX_COMPILER", "")
         if "/ompi/bin/" in cxx_compiler:
             hpcx_home = cxx_compiler.split("/ompi/bin/")[0]
+            comm_libs_root = hpcx_home.split("/hpcx/")[0]
             my_plugin_path = f"{hpcx_home}/nccl_rdma_sharp_plugin/lib"
             sharp_lib_path = f"{hpcx_home}/sharp/lib"
              
@@ -65,16 +104,53 @@ def setup_environment(preset_name):
             env["VVM_PRE_RUN_CMD"] = f"source {hpcx_home}/hpcx-init.sh"
             env["PATH"] = f"{hpcx_home}/ompi/bin:" + env.get("PATH", "")
 
+            lib_dirs.extend([
+                f"{hpcx_home}/ompi/lib",
+                f"{hpcx_home}/ucx/lib",
+                f"{hpcx_home}/ucc/lib",
+                f"{hpcx_home}/hcoll/lib",
+                sharp_lib_path,
+                my_plugin_path,
+                f"{comm_libs_root}/libfabric/lib",
+                f"{comm_libs_root}/libfabric/lib64",
+            ])
+
         # 2. Extract I/O Library Paths
-        lib_dirs = []
         for key in ["HDF5_DIR", "NETCDF_C_DIR", "NETCDF_Fortran_DIR", "PNETCDF_DIR"]:
             val = cache_vars.get(key, "")
             if val:
                 lib_dirs.append(f"{val}/lib")
                 lib_dirs.append(f"{val}/lib64")
+
+        # libfabric is sometimes provided by the base OS on compute nodes rather
+        # than by the NVHPC/HPC-X tree. Add the common system locations
+        # unconditionally because the login-node filesystem may not match the
+        # allocated GPU nodes.
+        staged_lib_dir = stage_runtime_library(
+            "libfabric.so.1",
+            [
+                "/usr/lib64/libfabric.so.1",
+                "/lib64/libfabric.so.1",
+                "/usr/lib/x86_64-linux-gnu/libfabric.so.1",
+                "/lib/x86_64-linux-gnu/libfabric.so.1",
+            ],
+            os.path.join(vvm_root, ".vvm_runtime_libs"),
+        )
+        if staged_lib_dir:
+            lib_dirs.insert(0, staged_lib_dir)
+
+        lib_dirs.extend([
+            "/usr/lib64",
+            "/usr/lib",
+            "/usr/lib/x86_64-linux-gnu",
+            "/lib64",
+            "/lib/x86_64-linux-gnu",
+        ])
          
         if lib_dirs:
-            env["LD_LIBRARY_PATH"] = ":".join(lib_dirs) + ":" + env.get("LD_LIBRARY_PATH", "")
+            unique_lib_dirs = list(dict.fromkeys(lib_dirs))
+            env["VVM_EXTRA_LD_LIBRARY_PATH"] = ":".join(unique_lib_dirs)
+            env["LD_LIBRARY_PATH"] = env["VVM_EXTRA_LD_LIBRARY_PATH"] + ":" + env.get("LD_LIBRARY_PATH", "")
 
     except Exception as e:
         print(f"[Warning] Error parsing CMakePresets.json: {e}")
@@ -116,7 +192,7 @@ def create_code_snapshot(repo_root, snapshot_dir, config_path, prof_path, spat_p
         out_base = "output"   
          
     ignore_patterns = shutil.ignore_patterns(
-        '.git', 'build', 'log', 'rundata', 'tests', 'docs', 'externals', 'tags', '*.o', 'output', out_base
+        '.git', '.vvm_runtime_libs', 'build', 'log', 'rundata', 'tests', 'docs', 'externals', 'tags', '*.o', 'output', out_base
     )
     shutil.copytree(repo_root, snapshot_dir, ignore=ignore_patterns)
 
@@ -126,7 +202,7 @@ def create_code_snapshot(repo_root, snapshot_dir, config_path, prof_path, spat_p
     if spat_path and os.path.isfile(spat_path):
         shutil.copy2(spat_path, snapshot_dir)
 
-    gitignore_content = f"rundata/\ntests/\ndocs/\nexternals/\nbuild/\nlog/\noutput/\n{out_base}/\n"
+    gitignore_content = f".vvm_runtime_libs/\nrundata/\ntests/\ndocs/\nexternals/\nbuild/\nlog/\noutput/\n{out_base}/\n"
     with open(os.path.join(snapshot_dir, ".gitignore"), "w") as f:
         f.write(gitignore_content)
 
@@ -386,9 +462,11 @@ def main():
             f"--ntasks-per-node={tasks_per_node}",
             f"--gpus-per-node={args.gpus}",
             f"--exclusive",
+            f"--export=ALL",
             f"--time={args.time}",
             f"--output={os.path.abspath(args.out)}",
-            f"--error={os.path.abspath(args.err)}"
+            f"--error={os.path.abspath(args.err)}",
+            f"--exclude=25a-hgpn062"
         ]
         if args.account:
             cmd.append(f"--account={args.account}")

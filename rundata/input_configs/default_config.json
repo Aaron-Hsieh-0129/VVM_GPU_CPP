@@ -59,6 +59,7 @@
         "queue_limit": 20,
         "data_transport": "ucx",
         "control_transport": "sockets",
+        "output_initial_step": true,
         "__data_transport": "ucx (it will choose automatically), RDMA (for machines with infinite band), WAN (using network), and empty (for single node auto design by ADIOS2) ",
         "enable_netcdf": true,
         "output_filename_prefix": "vvm_output",
@@ -376,4 +377,3 @@
         "PI": 3.14159265
     }
 }
-

@@ -7,12 +7,25 @@
 #include <iomanip>
 #include <map>
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <adios2.h>
 #include <sys/stat.h>
 
 namespace VVM {
 namespace IO {
+
+namespace {
+std::string uppercase_transport_name(std::string value) {
+    std::transform(
+        value.begin(),
+        value.end(),
+        value.begin(),
+        [](unsigned char c) { return static_cast<char>(std::toupper(c)); }
+    );
+    return value;
+}
+} // namespace
 
 std::string format_six_digits(int number) {
     std::stringstream ss;
@@ -56,11 +69,30 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
     // -------------------------
     adios2::IO inIO = adios.DeclareIO("InputSST");
     inIO.SetEngine("SST");
+    const std::string data_transport =
+        uppercase_transport_name(config.get_value<std::string>("output.data_transport", "WAN"));
+    const std::string control_transport =
+        config.get_value<std::string>("output.control_transport", "sockets");
 
-    // Force the same SST path every time. Do not let ADIOS2 auto-select RDMA.
-    inIO.SetParameter("DataTransport", "WAN");
-    inIO.SetParameter("WANDataTransport", "sockets");
-    inIO.SetParameter("ControlTransport", "sockets");
+    if (rank == 0) {
+        std::cout << "  [IO-Server] SST DataTransport: "
+                  << ((data_transport.empty() || data_transport == "AUTO")
+                          ? "AUTO"
+                          : data_transport)
+                  << std::endl;
+        std::cout << "  [IO-Server] SST ControlTransport: "
+                  << control_transport << std::endl;
+    }
+
+    if (!data_transport.empty() && data_transport != "AUTO") {
+        inIO.SetParameter("DataTransport", data_transport);
+    }
+    if (data_transport == "WAN") {
+        inIO.SetParameter("WANDataTransport", "sockets");
+    }
+    if (!control_transport.empty()) {
+        inIO.SetParameter("ControlTransport", control_transport);
+    }
 
     // Restart startup can be long before the writer opens.
     inIO.SetParameter("OpenTimeoutSecs", "14400");
@@ -113,6 +145,7 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
 
         const int step = reader.CurrentStep();
         VVM::Real step_time = static_cast<VVM::Real>(step) * output_interval_s;
+        bool has_time_variable = false;
 
         const auto& varTypeMap = inIO.AvailableVariables();
 
@@ -146,11 +179,10 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
                 if (shape.empty()) {
                     data_buffers[name].resize(1);
 
-                    // Safe mode: synchronous get. Avoid large deferred PerformGets bursts.
-                    reader.Get(varIn, data_buffers[name].data(), adios2::Mode::Sync);
+                    reader.Get(varIn, data_buffers[name].data(), adios2::Mode::Deferred);
 
                     if (name == "time") {
-                        step_time = data_buffers[name][0];
+                        has_time_variable = true;
                     }
                     continue;
                 }
@@ -178,8 +210,16 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
 
                 data_buffers[name].resize(elements);
 
-                // Safe mode: synchronous get.
-                reader.Get(varIn, data_buffers[name].data(), adios2::Mode::Sync);
+                reader.Get(varIn, data_buffers[name].data(), adios2::Mode::Deferred);
+            }
+
+            reader.PerformGets();
+
+            if (has_time_variable) {
+                auto timeIt = data_buffers.find("time");
+                if (timeIt != data_buffers.end() && !timeIt->second.empty()) {
+                    step_time = timeIt->second[0];
+                }
             }
 
             reader.EndStep();
@@ -221,7 +261,7 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
 
                 // Scalar
                 if (varOut.Shape().empty()) {
-                    writer.Put(varOut, buffer.data(), adios2::Mode::Sync);
+                    writer.Put(varOut, buffer.data(), adios2::Mode::Deferred);
                     continue;
                 }
 
@@ -243,9 +283,10 @@ void run_io_server(MPI_Comm io_comm, const VVM::Utils::ConfigurationManager& con
 
                 varOut.SetSelection({start, count});
 
-                writer.Put(varOut, buffer.data(), adios2::Mode::Sync);
+                writer.Put(varOut, buffer.data(), adios2::Mode::Deferred);
             }
 
+            writer.PerformPuts();
             writer.EndStep();
             writer.Close();
 

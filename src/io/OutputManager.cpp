@@ -3,6 +3,7 @@
 #include <cerrno>
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
@@ -24,6 +25,16 @@ std::string format_grads_axis_number(VVM::Real value) {
         formatted.erase(0, 1);
     }
     return formatted;
+}
+
+std::string uppercase_transport_name(std::string value) {
+    std::transform(
+        value.begin(),
+        value.end(),
+        value.begin(),
+        [](unsigned char c) { return static_cast<char>(std::toupper(c)); }
+    );
+    return value;
 }
 } // namespace
 
@@ -87,21 +98,34 @@ OutputManager::OutputManager(const Utils::ConfigurationManager& config, const VV
     } 
     else if (engine_type_ == "SST") {
         const int queue_limit = config.get_value<int>("output.queue_limit", 1);
+        const std::string data_transport =
+            uppercase_transport_name(config.get_value<std::string>("output.data_transport", "WAN"));
+        const std::string control_transport =
+            config.get_value<std::string>("output.control_transport", "sockets");
 
         if (rank_ == 0) {
-            std::cout << "  [OutputManager] Engine: SST (WAN sockets safe mode)." << std::endl;
-            std::cout << "  [OutputManager] SST DataTransport: WAN" << std::endl;
-            std::cout << "  [OutputManager] SST WANDataTransport: sockets" << std::endl;
-            std::cout << "  [OutputManager] SST ControlTransport: sockets" << std::endl;
+            std::cout << "  [OutputManager] Engine: SST" << std::endl;
+            std::cout << "  [OutputManager] SST DataTransport: "
+                      << ((data_transport.empty() || data_transport == "AUTO")
+                              ? "AUTO"
+                              : data_transport)
+                      << std::endl;
+            std::cout << "  [OutputManager] SST ControlTransport: "
+                      << control_transport << std::endl;
             std::cout << "  [OutputManager] SST QueueLimit: " << queue_limit << std::endl;
         }
 
         io_.SetParameter("MarshalMethod", "BP5");
 
-        // Safe fallback path: EVPath/WAN over sockets.
-        io_.SetParameter("DataTransport", "WAN");
-        io_.SetParameter("WANDataTransport", "sockets");
-        io_.SetParameter("ControlTransport", "sockets");
+        if (!data_transport.empty() && data_transport != "AUTO") {
+            io_.SetParameter("DataTransport", data_transport);
+        }
+        if (data_transport == "WAN") {
+            io_.SetParameter("WANDataTransport", "sockets");
+        }
+        if (!control_transport.empty()) {
+            io_.SetParameter("ControlTransport", control_transport);
+        }
 
         io_.SetParameter("RendezvousReaderCount", "1");
         io_.SetParameter("QueueLimit", std::to_string(queue_limit));
@@ -210,7 +234,7 @@ void OutputManager::write(int step, VVM::Real time) {
     writer_.BeginStep();
 
     auto var_time = io_.InquireVariable<VVM::Real>("time");
-    writer_.Put<VVM::Real>(var_time, &time, adios2::Mode::Sync);
+    writer_.Put<VVM::Real>(var_time, &time, adios2::Mode::Deferred);
     write_static_data();
 
     const size_t h = grid_.get_halo_cells();
@@ -249,7 +273,7 @@ void OutputManager::write(int step, VVM::Real time) {
                             auto& host_view = host_buffers_1d_[field_name];
                             
                             Kokkos::deep_copy(host_view, subview);
-                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Sync);
+                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Deferred);
                         }
                         else if constexpr (T::DimValue == 2) {
                             size_t ny = adios_var.Count()[0];
@@ -273,7 +297,7 @@ void OutputManager::write(int step, VVM::Real time) {
                             Kokkos::deep_copy(host_view, dev_contig);
                             
                             // UNCONDITIONAL PUT: Even if ny*nx is 0, we pass the pointer (which is valid/empty)
-                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Sync);
+                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Deferred);
                         }
                         else if constexpr (T::DimValue == 3) {
                             size_t nz = adios_var.Count()[0];
@@ -298,7 +322,7 @@ void OutputManager::write(int step, VVM::Real time) {
                             auto& host_view = host_buffers_3d_[field_name];
                             Kokkos::deep_copy(host_view, dev_contig);
                             
-                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Sync);
+                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Deferred);
                         }
                         else if constexpr (T::DimValue == 4) {
                             size_t d4 = adios_var.Count()[0];
@@ -324,7 +348,7 @@ void OutputManager::write(int step, VVM::Real time) {
                             auto& host_view = host_buffers_4d_[field_name];
                             Kokkos::deep_copy(host_view, dev_contig);
                             
-                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Sync);
+                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Deferred);
                         }
                     }
                 }, it->second);

@@ -5,6 +5,49 @@
 # ==============================================================================
 set -e
 
+prepend_ld_library_path() {
+    local paths="$1"
+    if [ -n "$paths" ]; then
+        export LD_LIBRARY_PATH="${paths}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+    fi
+}
+
+append_existing_lib_dirs() {
+    local dir
+    for dir in "$@"; do
+        if [ -d "$dir" ]; then
+            export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+${LD_LIBRARY_PATH}:}${dir}"
+        fi
+    done
+}
+
+dedupe_ld_library_path() {
+    local old_ifs="${IFS}"
+    local dir
+    local result=""
+
+    IFS=:
+    for dir in ${LD_LIBRARY_PATH:-}; do
+        [ -n "$dir" ] || continue
+        case ":$result:" in
+            *":$dir:"*) ;;
+            *) result="${result:+${result}:}${dir}" ;;
+        esac
+    done
+    IFS="${old_ifs}"
+
+    export LD_LIBRARY_PATH="$result"
+}
+
+prepend_ld_library_path "${VVM_EXTRA_LD_LIBRARY_PATH:-}"
+append_existing_lib_dirs \
+    /usr/lib64 \
+    /usr/lib \
+    /usr/lib/x86_64-linux-gnu \
+    /lib64 \
+    /lib/x86_64-linux-gnu
+dedupe_ld_library_path
+
 TASKS_PER_NODE=$(( VVM_COMPUTE_PER_NODE + VVM_IO_PER_NODE ))
 
 if [ -n "$SLURM_JOB_ID" ]; then
@@ -39,6 +82,40 @@ if [ -f "$VVM_ENV_SCRIPT" ]; then
     source "$VVM_ENV_SCRIPT"
 fi
 
+if [ -n "$VVM_EXTRA_LD_LIBRARY_PATH" ]; then
+    export LD_LIBRARY_PATH="${VVM_EXTRA_LD_LIBRARY_PATH}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+fi
+
+for dir in /usr/lib64 /usr/lib /usr/lib/x86_64-linux-gnu /lib64 /lib/x86_64-linux-gnu; do
+    if [ -d "$dir" ]; then
+        export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+${LD_LIBRARY_PATH}:}${dir}"
+    fi
+done
+
+old_ifs="${IFS}"
+deduped_ld_library_path=""
+IFS=:
+for dir in ${LD_LIBRARY_PATH:-}; do
+    [ -n "$dir" ] || continue
+    case ":$deduped_ld_library_path:" in
+        *":$dir:"*) ;;
+        *) deduped_ld_library_path="${deduped_ld_library_path:+${deduped_ld_library_path}:}${dir}" ;;
+    esac
+done
+IFS="${old_ifs}"
+export LD_LIBRARY_PATH="$deduped_ld_library_path"
+
+LDD_VVM_OUTPUT=$(LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" ldd ./build/vvm 2>&1 || true)
+if printf "%s\n" "$LDD_VVM_OUTPUT" | grep -q "=> not found"; then
+    if [ "${OMPI_COMM_WORLD_LOCAL_RANK:-0}" = "0" ]; then
+        echo "[VVM launch] ERROR: unresolved shared libraries on host=$(hostname)." >&2
+        echo "[VVM launch] VVM_EXTRA_LD_LIBRARY_PATH=${VVM_EXTRA_LD_LIBRARY_PATH:-<unset>}" >&2
+        echo "[VVM launch] LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-<unset>}" >&2
+        printf "%s\n" "$LDD_VVM_OUTPUT" | grep -E "=> not found" >&2 || true
+    fi
+    exit 127
+fi
+
 export CUDA_VISIBLE_DEVICES=$(( OMPI_COMM_WORLD_LOCAL_RANK % VVM_GPUS ))
 
 exec ./build/vvm "$@"
@@ -52,6 +129,7 @@ mpirun -np $VVM_TOTAL_TASKS \
  -x HDF5_USE_FILE_LOCKING=FALSE \
  -x VVM_GPUS \
  -x VVM_COMPUTE_PER_NODE \
+ -x VVM_EXTRA_LD_LIBRARY_PATH \
  -x PATH \
  -x LD_LIBRARY_PATH \
  bash -c "$INLINE_WRAPPER" -- "$VVM_CONFIG_FILE" $VVM_ARGS

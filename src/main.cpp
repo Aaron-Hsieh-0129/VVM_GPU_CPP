@@ -1,6 +1,7 @@
 #include <Kokkos_Core.hpp>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <iostream>
 #include <mpi.h>
 #include <omp.h>
@@ -108,50 +109,55 @@ int main(int argc, char *argv[]) {
     MPI_Comm_rank(split_comm, &split_rank);
     MPI_Comm_size(split_comm, &split_size);
 
-    // Phase 1: Compute ranks claim their GPU devices BEFORE IO server starts.
-    // IO server ranks co-located on the same node would otherwise race with
-    // compute ranks for GPU contexts via ADIOS2's internal KokkosInit.
-    // The barrier below ensures compute ranks have established CUDA contexts
-    // before IO server creates adios2::ADIOS, which triggers KokkosInit.
-    if (color == 0) {
-        int threads_per_rank = 1;
-        if (const char* env_p = std::getenv("OMP_NUM_THREADS")) {
-            threads_per_rank = std::stoi(env_p);
-        }
-        omp_set_num_threads(threads_per_rank);
-        if (split_rank == 0) {
-            std::cout << "[System] CPU Threads per Rank set to: " << threads_per_rank << std::endl;
-        }
+    int threads_per_rank = 1;
+    if (const char* env_p = std::getenv("OMP_NUM_THREADS")) {
+        threads_per_rank = std::stoi(env_p);
+    }
+    omp_set_num_threads(threads_per_rank);
 
-        MPI_Comm compute_node_comm;
-        MPI_Comm_split_type(split_comm, MPI_COMM_TYPE_SHARED, split_rank, MPI_INFO_NULL, &compute_node_comm);
-        int compute_node_rank, compute_node_size;
-        MPI_Comm_rank(compute_node_comm, &compute_node_rank);
-        MPI_Comm_size(compute_node_comm, &compute_node_size);
-        MPI_Comm_free(&compute_node_comm);
-
-        if (split_rank == 0) {
-            std::cout << "[System] Compute Ranks per Node: " << compute_node_size << std::endl;
-        }
-
-        int num_gpus = 0;
-        cudaError_t cuda_err = cudaGetDeviceCount(&num_gpus);
-        if (cuda_err != cudaSuccess || num_gpus == 0) num_gpus = 1;
-
-        int gpu_id = compute_node_rank % num_gpus;
-        Kokkos::InitializationSettings args;
-        args.set_device_id(gpu_id);
-        Kokkos::initialize(args);
+    int num_gpus = 0;
+    cudaError_t cuda_err = cudaGetDeviceCount(&num_gpus);
+    if (cuda_err != cudaSuccess || num_gpus <= 0) {
+        std::cerr << "[Rank " << world_rank
+                  << "] ERROR: no visible CUDA device. CUDA_VISIBLE_DEVICES="
+                  << (std::getenv("CUDA_VISIBLE_DEVICES")
+                          ? std::getenv("CUDA_VISIBLE_DEVICES")
+                          : "<unset>")
+                  << " cudaGetDeviceCount error="
+                  << cudaGetErrorString(cuda_err)
+                  << std::endl;
+        MPI_Abort(MPI_COMM_WORLD, 2);
     }
 
-    // All compute ranks have now initialized Kokkos/CUDA.
-    // IO server ranks wait here, then proceed to run_io_server below.
+    Kokkos::InitializationSettings args;
+    // core_run.sh constrains each process to one intended GPU.
+    args.set_device_id(0);
+    Kokkos::initialize(args);
+
+    if (world_rank == 0) {
+        std::cout << "[System] CPU Threads per Rank set to: "
+                  << threads_per_rank << std::endl;
+    }
+    std::cout << "[KokkosInit]"
+              << " world_rank=" << world_rank
+              << " role=" << ((color == 0) ? "compute" : "io")
+              << " CUDA_VISIBLE_DEVICES="
+              << (std::getenv("CUDA_VISIBLE_DEVICES")
+                      ? std::getenv("CUDA_VISIBLE_DEVICES")
+                      : "<unset>")
+              << " visible_num_gpus=" << num_gpus
+              << " kokkos_device_id=0"
+              << std::endl;
+
+    // All ranks have now initialized Kokkos/CUDA before ADIOS2 starts SST.
     MPI_Barrier(MPI_COMM_WORLD);
 
     // Phase 2: IO server branch.
     if (color == 1) {
         VVM::IO::run_io_server(split_comm, config);
         MPI_Comm_free(&split_comm);
+        Kokkos::fence();
+        Kokkos::finalize();
         MPI_Finalize();
         return 0;
     }
@@ -209,10 +215,13 @@ int main(int argc, char *argv[]) {
         );
 
         const bool restart_enabled = config.get_value<bool>("restart.enable", false);
-        {
+        const bool output_initial_step =
+            config.get_value<bool>("output.output_initial_step", true);
+        if (output_initial_step) {
             VVM::Utils::Timer timer("io");
-            // Do this even at restart mode because the SST enigine might lost control if not called at first
             output_manager->write(0, 0.0);
+        } else if (split_rank == 0) {
+            std::cout << "[Output] Skipping initial full output." << std::endl;
         }
         // output_manager->write_static_topo_file();
 
