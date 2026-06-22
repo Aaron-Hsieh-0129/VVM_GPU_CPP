@@ -155,8 +155,11 @@ inline HaloExchanger::HaloExchanger(const Utils::ConfigurationManager& config, c
         buffer_size_slice_x_ = static_cast<size_t>(h) * ny;
         buffer_size_slice_y_ = static_cast<size_t>(h) * nx;
 
-        size_t max_x = std::max({buffer_size_x_2d_, buffer_size_x_3d_, buffer_size_x_4d_, buffer_size_slice_x_});
-        size_t max_y = std::max({buffer_size_y_2d_, buffer_size_y_3d_, buffer_size_y_4d_, buffer_size_slice_y_});
+        // A periodic dimension split over exactly two ranks has one remote rank
+        // on both sides. NCCL has no tags, so those directions use a combined
+        // ordered payload below.
+        size_t max_x = 2 * std::max({buffer_size_x_2d_, buffer_size_x_3d_, buffer_size_x_4d_, buffer_size_slice_x_});
+        size_t max_y = 2 * std::max({buffer_size_y_2d_, buffer_size_y_3d_, buffer_size_y_4d_, buffer_size_slice_y_});
 
         if (max_x > 0) {
             send_x_left_  = Kokkos::View<VVM::Real*, ExecSpace>("sxl", max_x);
@@ -190,13 +193,28 @@ inline void HaloExchanger::exchange_multiple_halos(const std::vector<std::string
     size_t count_x_total = num_fields * buffer_size_x_3d_;
     size_t count_y_total = num_fields * buffer_size_y_3d_;
 
-    if (send_x_left_.extent(0) < count_x_total) {
-        Kokkos::resize(send_x_left_, count_x_total); Kokkos::resize(recv_x_left_, count_x_total);
-        Kokkos::resize(send_x_right_, count_x_total); Kokkos::resize(recv_x_right_, count_x_total);
+    const int my_rank = grid_ref_.get_mpi_rank();
+
+    const int neighbor_left = neighbor_left_;
+    const int neighbor_right = neighbor_right_;
+    const int neighbor_bottom = neighbor_bottom_;
+    const int neighbor_top = neighbor_top_;
+    const bool is_single = is_single_rank_;
+    const bool same_remote_x =
+        neighbor_left != MPI_PROC_NULL && neighbor_left == neighbor_right && neighbor_left != my_rank;
+    const bool same_remote_y =
+        neighbor_bottom != MPI_PROC_NULL && neighbor_bottom == neighbor_top && neighbor_bottom != my_rank;
+
+    const size_t required_x_total = same_remote_x ? 2 * count_x_total : count_x_total;
+    const size_t required_y_total = same_remote_y ? 2 * count_y_total : count_y_total;
+
+    if (send_x_left_.extent(0) < required_x_total) {
+        Kokkos::resize(send_x_left_, required_x_total); Kokkos::resize(recv_x_left_, required_x_total);
+        Kokkos::resize(send_x_right_, required_x_total); Kokkos::resize(recv_x_right_, required_x_total);
     }
-    if (send_y_bottom_.extent(0) < count_y_total) {
-        Kokkos::resize(send_y_bottom_, count_y_total); Kokkos::resize(recv_y_bottom_, count_y_total);
-        Kokkos::resize(send_y_top_, count_y_total); Kokkos::resize(recv_y_top_, count_y_total);
+    if (send_y_bottom_.extent(0) < required_y_total) {
+        Kokkos::resize(send_y_bottom_, required_y_total); Kokkos::resize(recv_y_bottom_, required_y_total);
+        Kokkos::resize(send_y_top_, required_y_total); Kokkos::resize(recv_y_top_, required_y_total);
     }
 
     const int nx_phys = grid_ref_.get_local_physical_points_x();
@@ -205,13 +223,6 @@ inline void HaloExchanger::exchange_multiple_halos(const std::vector<std::string
     const int ny = grid_ref_.get_local_total_points_y();
     const int nx = grid_ref_.get_local_total_points_x();
     const int halo_start_offset = h;
-    const int my_rank = grid_ref_.get_mpi_rank();
-
-    const int neighbor_left = neighbor_left_;
-    const int neighbor_right = neighbor_right_;
-    const int neighbor_bottom = neighbor_bottom_;
-    const int neighbor_top = neighbor_top_;
-    const bool is_single = is_single_rank_;
 
     if (count_x_total > 0) {
         for (size_t f = 0; f < num_fields; ++f) {
@@ -231,6 +242,20 @@ inline void HaloExchanger::exchange_multiple_halos(const std::vector<std::string
         if (is_single || (neighbor_left == my_rank && neighbor_right == my_rank)) {
             Kokkos::deep_copy(exec_space_, Kokkos::subview(recv_x_left_, std::make_pair((size_t)0, count_x_total)), Kokkos::subview(send_x_right_, std::make_pair((size_t)0, count_x_total)));
             Kokkos::deep_copy(exec_space_, Kokkos::subview(recv_x_right_, std::make_pair((size_t)0, count_x_total)), Kokkos::subview(send_x_left_, std::make_pair((size_t)0, count_x_total)));
+        } else if (same_remote_x) {
+            Kokkos::deep_copy(exec_space_,
+                Kokkos::subview(send_x_right_, std::make_pair(count_x_total, 2 * count_x_total)),
+                Kokkos::subview(send_x_left_, std::make_pair((size_t)0, count_x_total)));
+            ncclGroupStart();
+            ncclSend(send_x_right_.data(), 2 * count_x_total, VVM_NCCL_REAL, neighbor_right, nccl_comm_, stream_);
+            ncclRecv(recv_x_right_.data(), 2 * count_x_total, VVM_NCCL_REAL, neighbor_left, nccl_comm_, stream_);
+            ncclGroupEnd();
+            Kokkos::deep_copy(exec_space_,
+                Kokkos::subview(recv_x_left_, std::make_pair((size_t)0, count_x_total)),
+                Kokkos::subview(recv_x_right_, std::make_pair((size_t)0, count_x_total)));
+            Kokkos::deep_copy(exec_space_,
+                Kokkos::subview(recv_x_right_, std::make_pair((size_t)0, count_x_total)),
+                Kokkos::subview(recv_x_right_, std::make_pair(count_x_total, 2 * count_x_total)));
         } else {
             ncclGroupStart();
             if(neighbor_right != MPI_PROC_NULL) ncclSend(send_x_right_.data(), count_x_total, VVM_NCCL_REAL, neighbor_right, nccl_comm_, stream_);
@@ -273,6 +298,20 @@ inline void HaloExchanger::exchange_multiple_halos(const std::vector<std::string
         if (is_single || (neighbor_bottom == my_rank && neighbor_top == my_rank)) {
             Kokkos::deep_copy(exec_space_, Kokkos::subview(recv_y_bottom_, std::make_pair((size_t)0, count_y_total)), Kokkos::subview(send_y_top_, std::make_pair((size_t)0, count_y_total)));
             Kokkos::deep_copy(exec_space_, Kokkos::subview(recv_y_top_, std::make_pair((size_t)0, count_y_total)), Kokkos::subview(send_y_bottom_, std::make_pair((size_t)0, count_y_total)));
+        } else if (same_remote_y) {
+            Kokkos::deep_copy(exec_space_,
+                Kokkos::subview(send_y_top_, std::make_pair(count_y_total, 2 * count_y_total)),
+                Kokkos::subview(send_y_bottom_, std::make_pair((size_t)0, count_y_total)));
+            ncclGroupStart();
+            ncclSend(send_y_top_.data(), 2 * count_y_total, VVM_NCCL_REAL, neighbor_top, nccl_comm_, stream_);
+            ncclRecv(recv_y_top_.data(), 2 * count_y_total, VVM_NCCL_REAL, neighbor_bottom, nccl_comm_, stream_);
+            ncclGroupEnd();
+            Kokkos::deep_copy(exec_space_,
+                Kokkos::subview(recv_y_bottom_, std::make_pair((size_t)0, count_y_total)),
+                Kokkos::subview(recv_y_top_, std::make_pair((size_t)0, count_y_total)));
+            Kokkos::deep_copy(exec_space_,
+                Kokkos::subview(recv_y_top_, std::make_pair((size_t)0, count_y_total)),
+                Kokkos::subview(recv_y_top_, std::make_pair(count_y_total, 2 * count_y_total)));
         } else {
             ncclGroupStart();
             if(neighbor_top != MPI_PROC_NULL) ncclSend(send_y_top_.data(), count_y_total, VVM_NCCL_REAL, neighbor_top, nccl_comm_, stream_);
@@ -429,6 +468,10 @@ void HaloExchanger::exchange_halos_impl(Field<Dim>& field, int depth) const {
     const int neighbor_top = neighbor_top_;
 
     const int my_rank = grid_ref_.get_mpi_rank();
+    const bool same_remote_x =
+        neighbor_left != MPI_PROC_NULL && neighbor_left == neighbor_right && neighbor_left != my_rank;
+    const bool same_remote_y =
+        neighbor_bottom != MPI_PROC_NULL && neighbor_bottom == neighbor_top && neighbor_bottom != my_rank;
 
     size_t count_x = 0;
     size_t count_y = 0;
@@ -485,6 +528,19 @@ void HaloExchanger::exchange_halos_impl(Field<Dim>& field, int depth) const {
         if (neighbor_left != MPI_PROC_NULL && neighbor_left == my_rank && neighbor_right == my_rank) {
             Kokkos::deep_copy(exec_space_, recv_l, send_r);
             Kokkos::deep_copy(exec_space_, recv_r, send_l);
+        }
+        else if (same_remote_x) {
+            Kokkos::deep_copy(exec_space_,
+                Kokkos::subview(send_x_right_, std::make_pair(count_x, 2 * count_x)),
+                send_l);
+            ncclGroupStart();
+            ncclSend(send_x_right_.data(), 2 * count_x, VVM_NCCL_REAL, neighbor_right, nccl_comm_, stream_);
+            ncclRecv(recv_x_right_.data(), 2 * count_x, VVM_NCCL_REAL, neighbor_left, nccl_comm_, stream_);
+            ncclGroupEnd();
+            Kokkos::deep_copy(exec_space_, recv_l,
+                Kokkos::subview(recv_x_right_, std::make_pair((size_t)0, count_x)));
+            Kokkos::deep_copy(exec_space_, recv_r,
+                Kokkos::subview(recv_x_right_, std::make_pair(count_x, 2 * count_x)));
         }
         else {
             // NCCL Communication
@@ -574,6 +630,19 @@ void HaloExchanger::exchange_halos_impl(Field<Dim>& field, int depth) const {
              Kokkos::deep_copy(exec_space_, recv_b, send_t);
              Kokkos::deep_copy(exec_space_, recv_t, send_b);
         }
+        else if (same_remote_y) {
+             Kokkos::deep_copy(exec_space_,
+                 Kokkos::subview(send_y_top_, std::make_pair(count_y, 2 * count_y)),
+                 send_b);
+             ncclGroupStart();
+             ncclSend(send_y_top_.data(), 2 * count_y, VVM_NCCL_REAL, neighbor_top, nccl_comm_, stream_);
+             ncclRecv(recv_y_top_.data(), 2 * count_y, VVM_NCCL_REAL, neighbor_bottom, nccl_comm_, stream_);
+             ncclGroupEnd();
+             Kokkos::deep_copy(exec_space_, recv_b,
+                 Kokkos::subview(recv_y_top_, std::make_pair((size_t)0, count_y)));
+             Kokkos::deep_copy(exec_space_, recv_t,
+                 Kokkos::subview(recv_y_top_, std::make_pair(count_y, 2 * count_y)));
+        }
         else {
             // NCCL
             ncclGroupStart();
@@ -643,6 +712,11 @@ inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) co
     const int neighbor_right = neighbor_right_;
     const int neighbor_bottom = neighbor_bottom_;
     const int neighbor_top = neighbor_top_;
+    const int my_rank = grid_ref_.get_mpi_rank();
+    const bool same_remote_x =
+        neighbor_left != MPI_PROC_NULL && neighbor_left == neighbor_right && neighbor_left != my_rank;
+    const bool same_remote_y =
+        neighbor_bottom != MPI_PROC_NULL && neighbor_bottom == neighbor_top && neighbor_bottom != my_rank;
 
     // Kokkos::fence(); 
 
@@ -662,12 +736,29 @@ inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) co
                     send_t(idx) = data(k_layer, halo_start_offset + ny_phys - h + j_h, i);
             });
 
-            ncclGroupStart();
-            if(neighbor_top != MPI_PROC_NULL) ncclSend(send_t.data(), count, VVM_NCCL_REAL, neighbor_top, nccl_comm_, stream_);
-            if(neighbor_bottom != MPI_PROC_NULL) ncclRecv(recv_b.data(), count, VVM_NCCL_REAL, neighbor_bottom, nccl_comm_, stream_);
-            if(neighbor_bottom != MPI_PROC_NULL) ncclSend(send_b.data(), count, VVM_NCCL_REAL, neighbor_bottom, nccl_comm_, stream_);
-            if(neighbor_top != MPI_PROC_NULL) ncclRecv(recv_t.data(), count, VVM_NCCL_REAL, neighbor_top, nccl_comm_, stream_);
-            ncclGroupEnd();
+            if (neighbor_bottom == my_rank && neighbor_top == my_rank) {
+                Kokkos::deep_copy(exec_space_, recv_b, send_t);
+                Kokkos::deep_copy(exec_space_, recv_t, send_b);
+            } else if (same_remote_y) {
+                Kokkos::deep_copy(exec_space_,
+                    Kokkos::subview(send_y_top_, std::make_pair(count, 2 * count)),
+                    send_b);
+                ncclGroupStart();
+                ncclSend(send_y_top_.data(), 2 * count, VVM_NCCL_REAL, neighbor_top, nccl_comm_, stream_);
+                ncclRecv(recv_y_top_.data(), 2 * count, VVM_NCCL_REAL, neighbor_bottom, nccl_comm_, stream_);
+                ncclGroupEnd();
+                Kokkos::deep_copy(exec_space_, recv_b,
+                    Kokkos::subview(recv_y_top_, std::make_pair((size_t)0, count)));
+                Kokkos::deep_copy(exec_space_, recv_t,
+                    Kokkos::subview(recv_y_top_, std::make_pair(count, 2 * count)));
+            } else {
+                ncclGroupStart();
+                if(neighbor_top != MPI_PROC_NULL) ncclSend(send_t.data(), count, VVM_NCCL_REAL, neighbor_top, nccl_comm_, stream_);
+                if(neighbor_bottom != MPI_PROC_NULL) ncclRecv(recv_b.data(), count, VVM_NCCL_REAL, neighbor_bottom, nccl_comm_, stream_);
+                if(neighbor_bottom != MPI_PROC_NULL) ncclSend(send_b.data(), count, VVM_NCCL_REAL, neighbor_bottom, nccl_comm_, stream_);
+                if(neighbor_top != MPI_PROC_NULL) ncclRecv(recv_t.data(), count, VVM_NCCL_REAL, neighbor_top, nccl_comm_, stream_);
+                ncclGroupEnd();
+            }
 
             Kokkos::parallel_for("unpack_y_slice", Kokkos::MDRangePolicy<Kokkos::Rank<2>, ExecSpace>(exec_space_, {0, 0}, {nx, h}),
                 KOKKOS_LAMBDA(int i, int j_h) {
@@ -694,12 +785,29 @@ inline void HaloExchanger::exchange_halos_slice(Field<3>& field, int k_layer) co
                     send_r(idx) = data(k_layer, j, halo_start_offset + nx_phys - h + i_h);
             });
 
-            ncclGroupStart();
-            if(neighbor_right != MPI_PROC_NULL) ncclSend(send_r.data(), count, VVM_NCCL_REAL, neighbor_right, nccl_comm_, stream_);
-            if(neighbor_left != MPI_PROC_NULL) ncclRecv(recv_l.data(), count, VVM_NCCL_REAL, neighbor_left, nccl_comm_, stream_);
-            if(neighbor_left != MPI_PROC_NULL) ncclSend(send_l.data(), count, VVM_NCCL_REAL, neighbor_left, nccl_comm_, stream_);
-            if(neighbor_right != MPI_PROC_NULL) ncclRecv(recv_r.data(), count, VVM_NCCL_REAL, neighbor_right, nccl_comm_, stream_);
-            ncclGroupEnd();
+            if (neighbor_left == my_rank && neighbor_right == my_rank) {
+                Kokkos::deep_copy(exec_space_, recv_l, send_r);
+                Kokkos::deep_copy(exec_space_, recv_r, send_l);
+            } else if (same_remote_x) {
+                Kokkos::deep_copy(exec_space_,
+                    Kokkos::subview(send_x_right_, std::make_pair(count, 2 * count)),
+                    send_l);
+                ncclGroupStart();
+                ncclSend(send_x_right_.data(), 2 * count, VVM_NCCL_REAL, neighbor_right, nccl_comm_, stream_);
+                ncclRecv(recv_x_right_.data(), 2 * count, VVM_NCCL_REAL, neighbor_left, nccl_comm_, stream_);
+                ncclGroupEnd();
+                Kokkos::deep_copy(exec_space_, recv_l,
+                    Kokkos::subview(recv_x_right_, std::make_pair((size_t)0, count)));
+                Kokkos::deep_copy(exec_space_, recv_r,
+                    Kokkos::subview(recv_x_right_, std::make_pair(count, 2 * count)));
+            } else {
+                ncclGroupStart();
+                if(neighbor_right != MPI_PROC_NULL) ncclSend(send_r.data(), count, VVM_NCCL_REAL, neighbor_right, nccl_comm_, stream_);
+                if(neighbor_left != MPI_PROC_NULL) ncclRecv(recv_l.data(), count, VVM_NCCL_REAL, neighbor_left, nccl_comm_, stream_);
+                if(neighbor_left != MPI_PROC_NULL) ncclSend(send_l.data(), count, VVM_NCCL_REAL, neighbor_left, nccl_comm_, stream_);
+                if(neighbor_right != MPI_PROC_NULL) ncclRecv(recv_r.data(), count, VVM_NCCL_REAL, neighbor_right, nccl_comm_, stream_);
+                ncclGroupEnd();
+            }
 
             Kokkos::parallel_for("unpack_x_slice", Kokkos::MDRangePolicy<Kokkos::Rank<2>, ExecSpace>(exec_space_, {0, 0}, {ny, h}),
                 KOKKOS_LAMBDA(int j, int i_h) {

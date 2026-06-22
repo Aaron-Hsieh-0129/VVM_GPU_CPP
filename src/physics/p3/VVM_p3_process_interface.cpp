@@ -261,6 +261,8 @@ void VVM_P3_Interface::initialize(VVM::Core::State& state) {
     bool make_lookup_table = config_.get_value<bool>("physics.p3.make_lookup_table", false);
     m_lookup_tables = P3F::p3_init(make_lookup_table, is_root);
 
+    Kokkos::fence();
+
 
     // This section ties the variables in m_prog_state/m_diag_inputs/m_diag_outputs with m_variables --Prognostic State Variables: m_prog_state.qc = m_qc_view; m_prog_state.nc = m_nc_view; m_prog_state.qr = m_qr_view;
     m_prog_state.qc = m_qc_view;
@@ -599,9 +601,12 @@ void VVM_P3_Interface::pack_2d_to_1d(const VVMViewType& vvm_view, const P3ViewTy
 void VVM_P3_Interface::preprocessing_and_packing(VVM::Core::State& state) {
     const int nz_phys = m_num_levs;
     const int nx_phys = grid_.get_local_physical_points_x();
-    // const int ny_phys = grid_.get_local_physical_points_y();
+    const int ny_phys = grid_.get_local_physical_points_y();
     const int nlev_packs = m_num_lev_packs;
     const int halo = grid_.get_halo_cells();
+
+    EKAT_REQUIRE_MSG(nx_phys * ny_phys == m_num_cols,
+                     "P3 pack column count must be nx_phys * ny_phys.");
 
     auto qc_3d = state.get_field<3>("qc").get_mutable_device_data();
     auto nc_3d = state.get_field<3>("nc").get_mutable_device_data();
@@ -641,6 +646,8 @@ void VVM_P3_Interface::preprocessing_and_packing(VVM::Core::State& state) {
 
     Kokkos::parallel_for("Fused_PreProc_Pack", m_policy,
         KOKKOS_LAMBDA(const MemberType& team) {
+            // P3 buffers are allocated for physical columns only. Keep icol
+            // derived from physical ix/iy, never total-grid halo indices.
             const int icol = team.league_rank();
             const int ix = icol % nx_phys;
             const int iy = icol / nx_phys;
@@ -759,9 +766,13 @@ void VVM_P3_Interface::preprocessing_and_packing(VVM::Core::State& state) {
 void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
     const int nz_phys = m_num_levs;
     const int nx_phys = grid_.get_local_physical_points_x();
+    const int ny_phys = grid_.get_local_physical_points_y();
     const int nlev_packs = m_num_lev_packs;
     const int halo = grid_.get_halo_cells();
     auto dt = m_infrastructure.dt;
+
+    EKAT_REQUIRE_MSG(nx_phys * ny_phys == m_num_cols,
+                     "P3 unpack column count must be nx_phys * ny_phys.");
 
     auto qc_3d = state.get_field<3>("qc").get_mutable_device_data();
     auto nc_3d = state.get_field<3>("nc").get_mutable_device_data();
@@ -816,6 +827,8 @@ void VVM_P3_Interface::postprocessing_and_unpacking(VVM::Core::State& state) {
 
     Kokkos::parallel_for("Fused_PostProc_Unpack", m_policy,
         KOKKOS_LAMBDA(const MemberType& team) {
+            // P3 buffers are allocated for physical columns only. Keep icol
+            // derived from physical ix/iy, never total-grid halo indices.
             const int icol = team.league_rank();
             const int ix = icol % nx_phys;
             const int iy = icol / nx_phys;
