@@ -57,9 +57,11 @@ A GPU-accelerated (Kokkos-based) C++ implementation of the **Vector Vorticity eq
 ### Step 1: Clone the Repository
 After installing the required libraries, clone the project from GitHub:
 ```bash
-git clone https://github.com/Aaron-Hsieh-0129/VVM_GPU_CPP.git
+git clone --recursive https://github.com/Aaron-Hsieh-0129/VVM_GPU_CPP.git
 cd VVM_GPU_CPP
 ```
+
+- Noted that if you can't successfully clone the repo, make sure you can access the github by setting the SSH key in github.
 
 ### Step 2: Environment Setup (Required)
 You must define the project root directory using the `VVM_ROOT` environment variable before compiling or running the model. Add this to your session or `~/.bashrc`:
