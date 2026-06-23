@@ -66,37 +66,30 @@ fi
 PE=$(( TOTAL_CORES / TASKS_PER_NODE ))
 if [ "$PE" -lt 1 ]; then PE=1; fi
 
-export OMP_NUM_THREADS=${PE}
-export OMP_PROC_BIND=${OMP_PROC_BIND:-false}
+# Preserve original CPU/OpenMP behavior.
+# Do not add taskset, bind-to-core, or PE mapping here.
 export CUDA_DEVICE_ORDER=${CUDA_DEVICE_ORDER:-PCI_BUS_ID}
 
 # Preserve the parent GPU namespace before the per-rank wrapper changes it.
+# This is useful when SLURM already exposes a GPU list for the allocation.
 export VVM_PARENT_CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-}"
-export VVM_PARENT_SLURM_JOB_GPUS="${SLURM_JOB_GPUS:-}"
-export VVM_PARENT_SLURM_STEP_GPUS="${SLURM_STEP_GPUS:-}"
 
-# Optional local/manual override, e.g. VVM_GPU_LIST=4,5 ./submit.py --local ...
-# For SLURM production runs, normally leave this unset.
+# Optional manual override.
+# Example:
+#   VVM_GPU_LIST=4,5 ./submit.py --local ...
 export VVM_GPU_LIST="${VVM_GPU_LIST:-}"
 
 echo "========================================================="
 echo "[$RUN_MODE]"
 echo " Nodes: ${SLURM_JOB_NUM_NODES:-1} | Tasks/Node: $TASKS_PER_NODE"
 echo " Total Cores Used/Node: $TOTAL_CORES | Allocated Cores/Task (PE): $PE"
-echo " VVM_GPUS: ${VVM_GPUS}"
+echo "========================================================="
 if [ -n "$VVM_GPU_LIST" ]; then
-    echo " GPU list override: $VVM_GPU_LIST"
+    echo "[GPUMap] Using explicit VVM_GPU_LIST=$VVM_GPU_LIST"
 fi
 if [ -n "$VVM_PARENT_CUDA_VISIBLE_DEVICES" ]; then
-    echo " Parent CUDA_VISIBLE_DEVICES: $VVM_PARENT_CUDA_VISIBLE_DEVICES"
+    echo "[GPUMap] Parent CUDA_VISIBLE_DEVICES=$VVM_PARENT_CUDA_VISIBLE_DEVICES"
 fi
-if [ -n "$VVM_PARENT_SLURM_JOB_GPUS" ]; then
-    echo " SLURM_JOB_GPUS: $VVM_PARENT_SLURM_JOB_GPUS"
-fi
-if [ -n "$VVM_PARENT_SLURM_STEP_GPUS" ]; then
-    echo " SLURM_STEP_GPUS: $VVM_PARENT_SLURM_STEP_GPUS"
-fi
-echo "========================================================="
 
 VVM_ARGS=""
 if [ "$VVM_IO_ENGINE" == "SST" ]; then
@@ -135,8 +128,8 @@ LDD_VVM_OUTPUT=$(LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" ldd ./build/vvm 2>&1 || 
 if printf "%s\n" "$LDD_VVM_OUTPUT" | grep -q "=> not found"; then
     if [ "${OMPI_COMM_WORLD_LOCAL_RANK:-0}" = "0" ]; then
         echo "[VVM launch] ERROR: unresolved shared libraries on host=$(hostname)." >&2
-        echo "[VVM launch] VVM_EXTRA_LD_LIBRARY_PATH=${VVM_EXTRA_LD_LIBRARY_PATH:-}" >&2
-        echo "[VVM launch] LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}" >&2
+        echo "[VVM launch] VVM_EXTRA_LD_LIBRARY_PATH=${VVM_EXTRA_LD_LIBRARY_PATH:-<unset>}" >&2
+        echo "[VVM launch] LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-<unset>}" >&2
         printf "%s\n" "$LDD_VVM_OUTPUT" | grep -E "=> not found" >&2 || true
     fi
     exit 127
@@ -153,7 +146,10 @@ parse_gpu_list() {
     local end
     local i
 
+    GPU_ARRAY=()
+
     spec="${spec//[[:space:]]/}"
+    [ -n "$spec" ] || return 1
 
     IFS=,
     for part in $spec; do
@@ -162,95 +158,111 @@ parse_gpu_list() {
         if [[ "$part" =~ ^[0-9]+-[0-9]+$ ]]; then
             start="${part%-*}"
             end="${part#*-}"
+
+            if [ "$end" -lt "$start" ]; then
+                IFS="${old_ifs}"
+                return 1
+            fi
+
             for ((i=start; i<=end; i++)); do
-                echo "$i"
+                GPU_ARRAY+=("$i")
             done
         else
-            echo "$part"
+            GPU_ARRAY+=("$part")
         fi
     done
     IFS="${old_ifs}"
+
+    [ "${#GPU_ARRAY[@]}" -gt 0 ] || return 1
+    return 0
 }
 
-select_gpu_from_list() {
-    local source_name="$1"
-    local source_list="$2"
+pick_gpu_from_array() {
     local idx
     local selected
     local gpu_count
 
-    mapfile -t GPU_ARRAY < <(parse_gpu_list "$source_list")
-
     gpu_count="${#GPU_ARRAY[@]}"
-    if [ "$gpu_count" -lt 1 ]; then
-        return 1
-    fi
+    [ "$gpu_count" -gt 0 ] || return 1
 
     idx=$(( LOCAL_RANK % gpu_count ))
     selected="${GPU_ARRAY[$idx]}"
 
-    if [ -z "$selected" ]; then
-        return 1
-    fi
+    [ -n "$selected" ] || return 1
 
     export CUDA_VISIBLE_DEVICES="$selected"
-    export VVM_GPU_SOURCE="$source_name"
     return 0
 }
 
 # ------------------------------------------------------------------------------
 # GPU mapping
 #
-# Priority:
-#   1. VVM_GPU_LIST
-#      Manual override for local or debug runs, e.g. VVM_GPU_LIST=4,5.
+# Original behavior:
+#   CUDA_VISIBLE_DEVICES = local_rank % VVM_GPUS
 #
-#   2. Parent CUDA_VISIBLE_DEVICES
-#      This is the Slurm allocated GPU namespace, if Slurm set it.
+# Added behavior:
+#   1. If VVM_GPU_LIST is specified, select from that list.
+#      Example:
+#        VVM_GPU_LIST=4,5
+#        local_rank 0 -> GPU 4
+#        local_rank 1 -> GPU 5
 #
-#   3. SLURM_STEP_GPUS or SLURM_JOB_GPUS
-#      Fallback if CUDA_VISIBLE_DEVICES is empty but Slurm provides GPU IDs.
+#   2. In SLURM mode, if parent CUDA_VISIBLE_DEVICES contains enough GPUs,
+#      select from the parent list instead of assuming physical IDs.
 #
-#   4. Numeric fallback 0..VVM_GPUS-1
-#      Keeps the original behavior when Slurm gives no GPU namespace.
+# Safety:
+#   If parent CUDA_VISIBLE_DEVICES contains only one GPU, do not use it for
+#   the 64-GPU layout. Fall back to original local_rank % VVM_GPUS behavior.
 #
-# Each rank still sees exactly one CUDA device.
-# Kokkos should therefore use logical CUDA device 0 inside the process.
+# Each rank sees one CUDA device.
+# Kokkos should use logical device 0 inside each rank.
 # ------------------------------------------------------------------------------
 
+GPU_SOURCE="numeric_fallback"
+
 if [ -n "${VVM_GPU_LIST:-}" ]; then
-    if ! select_gpu_from_list "VVM_GPU_LIST" "$VVM_GPU_LIST"; then
+    if ! parse_gpu_list "$VVM_GPU_LIST"; then
         echo "[VVM launch] ERROR: failed to parse VVM_GPU_LIST=${VVM_GPU_LIST}" >&2
         exit 2
     fi
-elif [ -n "${VVM_PARENT_CUDA_VISIBLE_DEVICES:-}" ] && \
+
+    if ! pick_gpu_from_array; then
+        echo "[VVM launch] ERROR: failed to select GPU from VVM_GPU_LIST=${VVM_GPU_LIST}" >&2
+        exit 2
+    fi
+
+    GPU_SOURCE="VVM_GPU_LIST"
+
+elif [ -n "${SLURM_JOB_ID:-}" ] && \
+     [ -n "${VVM_PARENT_CUDA_VISIBLE_DEVICES:-}" ] && \
      [ "${VVM_PARENT_CUDA_VISIBLE_DEVICES}" != "NoDevFiles" ] && \
      [ "${VVM_PARENT_CUDA_VISIBLE_DEVICES}" != "void" ]; then
-    if ! select_gpu_from_list "parent_CUDA_VISIBLE_DEVICES" "$VVM_PARENT_CUDA_VISIBLE_DEVICES"; then
-        echo "[VVM launch] ERROR: failed to parse parent CUDA_VISIBLE_DEVICES=${VVM_PARENT_CUDA_VISIBLE_DEVICES}" >&2
-        exit 2
-    fi
-elif [ -n "${VVM_PARENT_SLURM_STEP_GPUS:-}" ]; then
-    if ! select_gpu_from_list "SLURM_STEP_GPUS" "$VVM_PARENT_SLURM_STEP_GPUS"; then
-        echo "[VVM launch] ERROR: failed to parse SLURM_STEP_GPUS=${VVM_PARENT_SLURM_STEP_GPUS}" >&2
-        exit 2
-    fi
-elif [ -n "${VVM_PARENT_SLURM_JOB_GPUS:-}" ]; then
-    if ! select_gpu_from_list "SLURM_JOB_GPUS" "$VVM_PARENT_SLURM_JOB_GPUS"; then
-        echo "[VVM launch] ERROR: failed to parse SLURM_JOB_GPUS=${VVM_PARENT_SLURM_JOB_GPUS}" >&2
-        exit 2
-    fi
-else
-    if [ -z "${VVM_GPUS:-}" ] || [ "$VVM_GPUS" -lt 1 ]; then
-        echo "[VVM launch] ERROR: VVM_GPUS is invalid: ${VVM_GPUS:-<unset>}" >&2
-        exit 2
+
+    if parse_gpu_list "$VVM_PARENT_CUDA_VISIBLE_DEVICES"; then
+        PARENT_GPU_COUNT="${#GPU_ARRAY[@]}"
+
+        if [ "$PARENT_GPU_COUNT" -ge "${VVM_GPUS:-1}" ]; then
+            if ! pick_gpu_from_array; then
+                echo "[VVM launch] ERROR: failed to select GPU from parent CUDA_VISIBLE_DEVICES=${VVM_PARENT_CUDA_VISIBLE_DEVICES}" >&2
+                exit 2
+            fi
+
+            GPU_SOURCE="parent_CUDA_VISIBLE_DEVICES"
+        else
+            export CUDA_VISIBLE_DEVICES=$(( LOCAL_RANK % VVM_GPUS ))
+            GPU_SOURCE="numeric_fallback_parent_list_too_small"
+        fi
+    else
+        export CUDA_VISIBLE_DEVICES=$(( LOCAL_RANK % VVM_GPUS ))
+        GPU_SOURCE="numeric_fallback_parent_parse_failed"
     fi
 
+else
     export CUDA_VISIBLE_DEVICES=$(( LOCAL_RANK % VVM_GPUS ))
-    export VVM_GPU_SOURCE="numeric_fallback"
+    GPU_SOURCE="numeric_fallback"
 fi
 
-echo "[GPUMap] host=$(hostname) global_rank=${GLOBAL_RANK} local_rank=${LOCAL_RANK} source=${VVM_GPU_SOURCE} CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES} parent_CVD=${VVM_PARENT_CUDA_VISIBLE_DEVICES:-<unset>} SLURM_JOB_GPUS=${VVM_PARENT_SLURM_JOB_GPUS:-<unset>} SLURM_STEP_GPUS=${VVM_PARENT_SLURM_STEP_GPUS:-<unset>}" >&2
+echo "[GPUMap] host=$(hostname) global_rank=${GLOBAL_RANK} local_rank=${LOCAL_RANK} source=${GPU_SOURCE} CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES} parent_CVD=${VVM_PARENT_CUDA_VISIBLE_DEVICES:-<unset>}" >&2
 
 exec ./build/vvm "$@"
 '
@@ -258,15 +270,13 @@ exec ./build/vvm "$@"
 mpirun -np $VVM_TOTAL_TASKS \
  --oversubscribe --map-by ppr:${TASKS_PER_NODE}:node --rank-by node --bind-to none \
  -x OMP_NUM_THREADS=${PE} \
- -x OMP_PROC_BIND=${OMP_PROC_BIND} \
+ -x OMP_PROC_BIND=false \
  -x CUDA_DEVICE_ORDER=${CUDA_DEVICE_ORDER} \
  -x NCCL_DEBUG=INFO \
  -x HDF5_USE_FILE_LOCKING=FALSE \
  -x VVM_GPUS \
  -x VVM_GPU_LIST \
  -x VVM_PARENT_CUDA_VISIBLE_DEVICES \
- -x VVM_PARENT_SLURM_JOB_GPUS \
- -x VVM_PARENT_SLURM_STEP_GPUS \
  -x VVM_COMPUTE_PER_NODE \
  -x VVM_IO_PER_NODE \
  -x VVM_COMPUTE_TASKS \
