@@ -151,8 +151,8 @@ void VVM_P3_Interface::allocate_p3_buffers() {
     const int num_wsm_vars = 64; 
 #endif
 
-    // const size_t wsm_size_in_bytes = WSM::get_total_bytes_needed(nk_pack_p1, num_wsm_vars, m_policy);
-    const size_t wsm_size_in_bytes = num_wsm_vars * static_cast<size_t>(nk_pack_p1) * static_cast<size_t>(m_policy.league_size()) * static_cast<size_t>(m_policy.team_size()) * sizeof(Spack);
+    const size_t wsm_size_in_bytes = WSM::get_total_bytes_needed(nk_pack_p1, num_wsm_vars, m_policy);
+    // const size_t wsm_size_in_bytes = num_wsm_vars * static_cast<size_t>(nk_pack_p1) * static_cast<size_t>(m_policy.league_size()) * static_cast<size_t>(m_policy.team_size()) * sizeof(Spack);
     const size_t wsm_size_in_spacks = (wsm_size_in_bytes + sizeof(Spack) - 1) / sizeof(Spack);
     m_wsm_view_storage = Kokkos::View<Spack*>("P3 WSM Storage", wsm_size_in_spacks);
     m_wsm_data = m_wsm_view_storage.data();
