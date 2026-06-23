@@ -45,111 +45,112 @@ void AdvectionTerm::compute_tendency(
     auto& u_mean_data = u_mean_field.get_mutable_device_data();
     auto& v_mean_data = v_mean_field.get_mutable_device_data();
     auto& w_mean_data = w_mean_field.get_mutable_device_data();
+
+    using TeamPolicy = Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>;
+    using MemberType = TeamPolicy::member_type;
+
+    const int num_j = ny - 2 * h;
+    const int num_i = nx - 2 * h;
+    const int league_size = num_j * num_i;
+
+
     if (variable_name_ == "xi") {
         const auto& fact1_xi_eta = params.fact1_xi_eta.get_device_data();
         const auto& fact2_xi_eta = params.fact2_xi_eta.get_device_data();
-        Kokkos::parallel_for("calculate_rhou_for_xi",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1, ny-h, nx-h}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                u_mean_data(k,j,i) = real(0.25)*(fact1_xi_eta(k) * rhobar(k+1) * ( u(k+1,j,i) + u(k+1,j+1,i))
-                                               + fact2_xi_eta(k) * rhobar(k)   * ( u(k,j,i)   + u(k,j+1,i)  )  );
-            }
-        );
 
-        Kokkos::parallel_for("calculate_rhov_for_xi",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1, ny-h, nx-h}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                v_mean_data(k,j,i) = real(0.25)*(fact1_xi_eta(k) * rhobar(k+1) * ( v(k+1,j,i) + v(k+1,j+1,i))
-                                               + fact2_xi_eta(k) * rhobar(k)   * ( v(k,j,i)   + v(k,j+1,i)  )  );
-            }
-        );
+        Kokkos::parallel_for("calculate_mean_wind_xi_team",
+            TeamPolicy(league_size, Kokkos::AUTO),
+            KOKKOS_LAMBDA(const MemberType& team) {
+                const int league_rank = team.league_rank();
+                const int j = h + league_rank / num_i;
+                const int i = h + league_rank % num_i;
 
-        // WARNING: I think the w needs to have fact but it turns out the source code doesn't have this. The code follows it for now.
-        Kokkos::parallel_for("calculate_rhow_for_xi",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1,h,h}, {nz-h-1, ny-h, nx-h}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                w_mean_data(k,j,i) = real(0.25)*(rhobar_up(k+1) * ( w(k+1,j,i) + w(k+1,j+1,i))
-                                               + rhobar_up(k)   * ( w(k,j,i)   + w(k,j+1,i)  )  );
+                Kokkos::parallel_for(Kokkos::TeamThreadRange(team, h - 1, nz - h - 1),
+                    [&](const int k) {
+                        if (k >= h) {
+                            u_mean_data(k,j,i) = real(0.25)*(fact1_xi_eta(k) * rhobar(k+1) * ( u(k+1,j,i) + u(k+1,j+1,i))
+                                                           + fact2_xi_eta(k) * rhobar(k)   * ( u(k,j,i)   + u(k,j+1,i)  )  );
+                            v_mean_data(k,j,i) = real(0.25)*(fact1_xi_eta(k) * rhobar(k+1) * ( v(k+1,j,i) + v(k+1,j+1,i))
+                                                           + fact2_xi_eta(k) * rhobar(k)   * ( v(k,j,i)   + v(k,j+1,i)  )  );
+                        }
+                        // WARNING: I think the w needs to have fact but it turns out the source code doesn't have this. The code follows it for now.
+                        w_mean_data(k,j,i) = real(0.25)*(rhobar_up(k+1) * ( w(k+1,j,i) + w(k+1,j+1,i))
+                                                       + rhobar_up(k)   * ( w(k,j,i)   + w(k,j+1,i)  )  );
+                    }
+                );
             }
         );
     }
     else if (variable_name_ == "eta") {
         const auto& fact1_xi_eta = params.fact1_xi_eta.get_device_data();
         const auto& fact2_xi_eta = params.fact2_xi_eta.get_device_data();
-        Kokkos::parallel_for("calculate_rhou_for_eta",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1, ny-h, nx-h}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                u_mean_data(k,j,i) = real(0.25)*(fact1_xi_eta(k) * rhobar(k+1) * ( u(k+1,j,i) + u(k+1,j,i+1))
-                                               + fact2_xi_eta(k) * rhobar(k)   * ( u(k,j,i)   + u(k,j,i+1)  )  );
-            }
-        );
 
-        Kokkos::parallel_for("calculate_rhov_for_eta",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h-1, ny-h, nx-h}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                v_mean_data(k,j,i) = real(0.25)*(fact1_xi_eta(k) * rhobar(k+1) * ( v(k+1,j,i) + v(k+1,j,i+1))
-                                               + fact2_xi_eta(k) * rhobar(k)   * ( v(k,j,i)   + v(k,j,i+1)  )  );
-            }
-        );
+        Kokkos::parallel_for("calculate_mean_wind_eta_team",
+            TeamPolicy(league_size, Kokkos::AUTO),
+            KOKKOS_LAMBDA(const MemberType& team) {
+                const int league_rank = team.league_rank();
+                const int j = h + league_rank / num_i;
+                const int i = h + league_rank % num_i;
 
-        // WARNING: I think the w needs to have fact but it turns out the source code doesn't have this. The code follows it for now.
-        Kokkos::parallel_for("calculate_rhow_for_eta",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h-1,h,h}, {nz-h-1, ny-h, nx-h}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                w_mean_data(k,j,i) = real(0.25)*(rhobar_up(k+1) * ( w(k+1,j,i) + w(k+1,j,i+1))
-                                               + rhobar_up(k)   * ( w(k,j,i)   + w(k,j,i+1)  )  );
+                Kokkos::parallel_for(Kokkos::TeamThreadRange(team, h - 1, nz - h - 1),
+                    [&](const int k) {
+                        if (k >= h) {
+                            u_mean_data(k,j,i) = real(0.25)*(fact1_xi_eta(k) * rhobar(k+1) * ( u(k+1,j,i) + u(k+1,j,i+1))
+                                                           + fact2_xi_eta(k) * rhobar(k)   * ( u(k,j,i)   + u(k,j,i+1)  )  );
+                            v_mean_data(k,j,i) = real(0.25)*(fact1_xi_eta(k) * rhobar(k+1) * ( v(k+1,j,i) + v(k+1,j,i+1))
+                                                           + fact2_xi_eta(k) * rhobar(k)   * ( v(k,j,i)   + v(k,j,i+1)  )  );
+                        }
+                        // WARNING: I think the w needs to have fact but it turns out the source code doesn't have this. The code follows it for now.
+                        w_mean_data(k,j,i) = real(0.25)*(rhobar_up(k+1) * ( w(k+1,j,i) + w(k+1,j,i+1))
+                                                       + rhobar_up(k)   * ( w(k,j,i)   + w(k,j,i+1)  )  );
+                    }
+                );
             }
         );
     }
     else if (variable_name_ == "zeta") {
-        Kokkos::parallel_for("calculate_rhou_for_zeta",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({nz-h-1,h,h}, {nz, ny-h, nx-h}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                u_mean_data(k,j,i) = real(0.25)*rhobar(k)*(u(k,j,i)   + u(k,j,i+1)
-                                                         + u(k,j+1,i) + u(k,j+1,i+1)   );
-            }
-        );
+        Kokkos::parallel_for("calculate_mean_wind_zeta_team",
+            TeamPolicy(league_size, Kokkos::AUTO),
+            KOKKOS_LAMBDA(const MemberType& team) {
+                const int league_rank = team.league_rank();
+                const int j = h + league_rank / num_i;
+                const int i = h + league_rank % num_i;
 
-        Kokkos::parallel_for("calculate_rhov_for_zeta",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({nz-h-1,h,h}, {nz, ny-h, nx-h}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                v_mean_data(k,j,i) = real(0.25)*rhobar(k)*(v(k,j,i)   + v(k,j,i+1)
-                                                         + v(k,j+1,i) + v(k,j+1,i+1)   );
-            }
-        );
-
-        Kokkos::parallel_for("calculate_rhow_for_zeta",
-            // The original code adopts Tackas 3rd order difference for boundary zeta, so it needs two w.
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({nz-h-3,h,h}, {nz-h, ny-h, nx-h}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                w_mean_data(k,j,i) = real(0.25)*rhobar_up(k)*(w(k,j,i)   + w(k,j,i+1) 
-                                                            + w(k,j+1,i) + w(k,j+1,i+1));
-                // w_mean_data(k,j,i) = w(k,j,i);
+                Kokkos::parallel_for(Kokkos::TeamThreadRange(team, nz - h - 3, nz),
+                    [&](const int k) {
+                        if (k >= nz - h - 1) {
+                            u_mean_data(k,j,i) = real(0.25)*rhobar(k)*(u(k,j,i)   + u(k,j,i+1)
+                                                                     + u(k,j+1,i) + u(k,j+1,i+1)   );
+                            v_mean_data(k,j,i) = real(0.25)*rhobar(k)*(v(k,j,i)   + v(k,j,i+1)
+                                                                     + v(k,j+1,i) + v(k,j+1,i+1)   );
+                        }
+                        // The original code adopts Tackas 3rd order difference for boundary zeta, so it needs two w.
+                        if (k >= nz - h - 3 && k < nz - h) {
+                            w_mean_data(k,j,i) = real(0.25)*rhobar_up(k)*(w(k,j,i)   + w(k,j,i+1) 
+                                                                        + w(k,j+1,i) + w(k,j+1,i+1));
+                        }
+                    }
+                );
             }
         );
     }
     else {
-        Kokkos::parallel_for("calculate_rhou_for_scalar",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                u_mean_data(k,j,i) = rhobar(k) * u(k,j,i);
-            }
-        );
+        Kokkos::parallel_for("calculate_mean_wind_scalar_team",
+            TeamPolicy(league_size, Kokkos::AUTO),
+            KOKKOS_LAMBDA(const MemberType& team) {
+                const int league_rank = team.league_rank();
+                const int j = h + league_rank / num_i;
+                const int i = h + league_rank % num_i;
 
-        Kokkos::parallel_for("calculate_rhov_for_scalar",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                v_mean_data(k,j,i) = rhobar(k) * v(k,j,i);
+                Kokkos::parallel_for(Kokkos::TeamThreadRange(team, h, nz - h),
+                    [&](const int k) {
+                        u_mean_data(k,j,i) = rhobar(k) * u(k,j,i);
+                        v_mean_data(k,j,i) = rhobar(k) * v(k,j,i);
+                        w_mean_data(k,j,i) = rhobar_up(k) * w(k,j,i);
+                    }
+                );
             }
         );
-
-        Kokkos::parallel_for("calculate_rhow_for_scalar",
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({h,h,h}, {nz-h, ny-h, nx-h}),
-            KOKKOS_LAMBDA(const int k, const int j, const int i) {
-                w_mean_data(k,j,i) = rhobar_up(k) * w(k,j,i);
-            }
-        );
-        // u_mean_field.print_slice_z_at_k(grid, 0, 16);
     }
 
     // No need of vertical boundary process
@@ -165,13 +166,23 @@ void AdvectionTerm::compute_tendency(
     scheme_->calculate_flux_convergence_z(advected_field, w_mean_field, grid, params, out_tendency, variable_name_);
 
     auto& tendency = out_tendency.get_mutable_device_data();
-    auto& var_data = state.get_field<3>(variable_name_).get_mutable_device_data();
+
+    // Divide rho in tendency for thermodynamics variables
     if (std::find(thermodynamics_vars_.begin(), thermodynamics_vars_.end(), variable_name_) != thermodynamics_vars_.end()) {
-        // Divide rho for tendency
-        Kokkos::parallel_for("Divide_rho_for_thermovariables", 
-            Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {nz,ny,nx}),
-            KOKKOS_LAMBDA(int k, int j, int i) {
-                tendency(k,j,i) /= rhobar(k);
+        const int full_league_size = ny * nx;
+        
+        Kokkos::parallel_for("Divide_rho_for_thermovariables_team", 
+            TeamPolicy(full_league_size, Kokkos::AUTO),
+            KOKKOS_LAMBDA(const MemberType& team) {
+                const int league_rank = team.league_rank();
+                const int j = league_rank / nx;
+                const int i = league_rank % nx;
+
+                Kokkos::parallel_for(Kokkos::TeamThreadRange(team, 0, nz),
+                    [&](const int k) {
+                        tendency(k,j,i) /= rhobar(k);
+                    }
+                );
             }
         );
     }

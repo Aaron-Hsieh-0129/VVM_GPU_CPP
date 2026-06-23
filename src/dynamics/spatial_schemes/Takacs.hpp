@@ -81,9 +81,8 @@ private:
     Core::HaloExchanger& halo_exchanger_;
     const Core::BoundaryConditionManager& bc_manager_;
 
-    mutable std::unique_ptr<Core::Field<3>> flux_field_;
-    mutable std::unique_ptr<Core::Field<3>> plus_field_;
-    mutable std::unique_ptr<Core::Field<3>> minus_field_;
+    using TeamPolicy = Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>;
+    using MemberType = TeamPolicy::member_type;
 };
 
 } // namespace Dynamics
