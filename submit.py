@@ -750,6 +750,7 @@ def main():
             f"--ntasks={total_tasks}",
             f"--ntasks-per-node={tasks_per_node}",
             f"--gpus-per-node={args.gpus}",
+            "--gpu-bind=none",
             f"--cpus-per-task={args.cpus}",
             f"--export={args.export}",
             f"--time={args.time}",
