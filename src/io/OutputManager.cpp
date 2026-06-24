@@ -2,6 +2,7 @@
 #include <sys/stat.h>
 #include <cerrno>
 #include <algorithm>
+#include <cstdlib>
 #include <array>
 #include <cctype>
 #include <cmath>
@@ -234,7 +235,7 @@ void OutputManager::write(int step, VVM::Real time) {
     writer_.BeginStep();
 
     auto var_time = io_.InquireVariable<VVM::Real>("time");
-    writer_.Put<VVM::Real>(var_time, &time, adios2::Mode::Deferred);
+    writer_.Put<VVM::Real>(var_time, &time, adios2::Mode::Sync);
     write_static_data();
 
     const size_t h = grid_.get_halo_cells();
@@ -273,7 +274,7 @@ void OutputManager::write(int step, VVM::Real time) {
                             auto& host_view = host_buffers_1d_[field_name];
                             
                             Kokkos::deep_copy(host_view, subview);
-                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Deferred);
+                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Sync);
                         }
                         else if constexpr (T::DimValue == 2) {
                             size_t ny = adios_var.Count()[0];
@@ -297,7 +298,7 @@ void OutputManager::write(int step, VVM::Real time) {
                             Kokkos::deep_copy(host_view, dev_contig);
                             
                             // UNCONDITIONAL PUT: Even if ny*nx is 0, we pass the pointer (which is valid/empty)
-                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Deferred);
+                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Sync);
                         }
                         else if constexpr (T::DimValue == 3) {
                             size_t nz = adios_var.Count()[0];
@@ -322,7 +323,7 @@ void OutputManager::write(int step, VVM::Real time) {
                             auto& host_view = host_buffers_3d_[field_name];
                             Kokkos::deep_copy(host_view, dev_contig);
                             
-                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Deferred);
+                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Sync);
                         }
                         else if constexpr (T::DimValue == 4) {
                             size_t d4 = adios_var.Count()[0];
@@ -348,7 +349,7 @@ void OutputManager::write(int step, VVM::Real time) {
                             auto& host_view = host_buffers_4d_[field_name];
                             Kokkos::deep_copy(host_view, dev_contig);
                             
-                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Deferred);
+                            writer_.Put(adios_var, host_view.data(), adios2::Mode::Sync);
                         }
                     }
                 }, it->second);
