@@ -56,8 +56,7 @@ void SpongeLayer::initialize(Core::State& state) {
 
     auto& k_start_thermo = k_start_thermo_;
     for (int k = nz-h; k > h; k--) {
-        if (z_mid_host(k) < sponge_layer_base)
-        if (sponge_layer_base >= z_mid_host(k)) {
+        if (z_mid_host(k) < sponge_layer_base) {
             k_start_thermo = k+1;
             break;
         }
@@ -65,8 +64,7 @@ void SpongeLayer::initialize(Core::State& state) {
 
     auto& k_start_vort = k_start_vort_;
     for (int k = nz-h; k > h; k--) {
-        if (z_up_host(k) < sponge_layer_base)
-        if (sponge_layer_base >= z_up_host(k)) {
+        if (z_up_host(k) < sponge_layer_base) {
             k_start_vort = k+1;
             break;
         }
